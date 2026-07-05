@@ -1,9 +1,94 @@
-import { IModelProvider } from '../abstract.js';
+import { IModelProvider, ChatMessage } from '../abstract.js';
+
+export interface OllamaOptions {
+  baseUrl?: string;
+  model?: string;
+}
 
 export class OllamaProvider implements IModelProvider {
   public name = 'ollama';
+  private baseUrl: string;
+  private model: string;
 
-  public async sendPrompt(prompt: string): Promise<string> {
-    return `Réponse simulée pour Ollama : ${prompt}`;
+  constructor(options: OllamaOptions = {}) {
+    this.baseUrl = (options.baseUrl ?? 'http://localhost:11434').replace(/\/$/, '');
+    this.model = options.model ?? 'qwen2.5-coder:7b';
+  }
+
+  public async sendPrompt(messages: ChatMessage[]): Promise<string> {
+    const response = await fetch(`${this.baseUrl}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: this.model,
+        messages: messages.map(m => ({ role: m.role, content: m.content })),
+        stream: false
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Ollama HTTP ${response.status}: ${await response.text()}`);
+    }
+
+    const data = (await response.json()) as { message?: { content?: string } };
+    return data.message?.content ?? '';
+  }
+
+  public async sendPromptStream(
+    messages: ChatMessage[],
+    onChunk: (text: string) => void,
+    onDone: () => void,
+    onError: (err: Error) => void
+  ): Promise<void> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: this.model,
+          messages: messages.map(m => ({ role: m.role, content: m.content })),
+          stream: true
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Ollama HTTP ${response.status}: ${await response.text()}`);
+      }
+      if (!response.body) {
+        throw new Error('Ollama: réponse sans corps de flux');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          try {
+            const parsed = JSON.parse(trimmed) as {
+              message?: { content?: string };
+              done?: boolean;
+            };
+            const content = parsed.message?.content;
+            if (content) onChunk(content);
+          } catch {
+            // Skip malformed NDJSON line
+          }
+        }
+      }
+
+      onDone();
+    } catch (err) {
+      onError(err instanceof Error ? err : new Error(String(err)));
+    }
   }
 }

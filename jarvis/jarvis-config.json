@@ -18,7 +18,15 @@
           { "name": "deepseek-coder-v3", "contextLength": 262144 },
           { "name": "gpt-4o", "contextLength": 131072 }
         ]
+      },
+      "lmstudio": {
+        "enabled": false,
+        "baseUrl": "http://localhost:1234/v1",
+        "models": [
+          { "name": "qwen2.5-coder:7b", "contextLength": 32768 }
+        ]
       }
     }
   }
 }
+

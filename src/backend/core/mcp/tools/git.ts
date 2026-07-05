@@ -1,11 +1,21 @@
-import * as vscode from 'vscode';
+import { executeTerminalCommand, ExecutionResult } from './terminal.js';
 
-export async function gitStatus(): Promise<void> {
-  await executeGitCommand('git status --short');
+export async function gitStatus(): Promise<string> {
+  return runGit('git status --short');
 }
 
-async function executeGitCommand(command: string): Promise<void> {
-  const terminal = vscode.window.createTerminal({ name: 'Jarvis Git' });
-  terminal.sendText(command);
-  terminal.show(true);
+export async function gitDiff(): Promise<string> {
+  return runGit('git diff');
+}
+
+export async function gitLog(limit = 10): Promise<string> {
+  return runGit(`git log --oneline -n ${limit}`);
+}
+
+async function runGit(command: string): Promise<string> {
+  const result: ExecutionResult = await executeTerminalCommand(command);
+  if (!result.success) {
+    throw new Error(result.stderr || `Échec de la commande git: ${command}`);
+  }
+  return result.stdout;
 }

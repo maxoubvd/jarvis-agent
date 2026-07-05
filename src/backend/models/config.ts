@@ -1,11 +1,2 @@
-export interface ModelConfig {
-  default: string;
-  providers: Record<string, ProviderConfig>;
-}
-
-export interface ProviderConfig {
-  enabled: boolean;
-  baseUrl: string;
-  apiKey?: string;
-  models: Array<{ name: string; contextLength: number }>;
-}
+// Type aliases kept for external consumers; canonical types live in model-config-manager.ts
+export type { ModelConfigItem, ProviderConfigItem, JarvisConfig } from '../config/model-config-manager.js';

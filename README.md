@@ -10,7 +10,7 @@ Extension VS Code "Jarvis Agent" pour l'assistance de développement et l'automa
 4. Pour tester localement, ouvrez le dossier dans VS Code, lancez `F5` et utilisez la fenêtre `Extension Development Host` qui s'ouvre.
 5. Si vous voulez générer un package VSIX, mettez à jour `publisher` dans `package.json` puis exécutez `npm run package`.
 
-> Note : en développement, `npm run build` compile le backend et le frontend. L'extension montre actuellement un message d'information `Jarvis: démarrage du chat` quand la commande est exécutée.
+> Note : en développement, `npm run build` compile le backend et le frontend. La commande `Jarvis: Start Chat` ouvre le panneau webview `Jarvis Chat` et charge le bundle Svelte depuis `dist/webview/assets/app.js`.
 
 ## Structure du projet
 
