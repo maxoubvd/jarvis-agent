@@ -1,0 +1,205 @@
+/*
+ * Jarvis design tokens — Iron Man accents (red + gold) layered over the
+ * active VS Code theme. Backgrounds/foregrounds always come from --vscode-*
+ * so both light and dark themes stay native; these tokens only add accent
+ * colors, geometry and motion.
+ */
+:root {
+  /* Accents */
+  --jarvis-accent: #c1272d;
+  --jarvis-accent-hover: #d9363c;
+  --jarvis-accent-fg: #ffffff;
+  --jarvis-accent-dim: rgba(193, 39, 45, 0.12);
+  --jarvis-gold: #e8b84b;
+  --jarvis-gold-dim: rgba(232, 184, 75, 0.15);
+
+  /* Radius scale */
+  --jarvis-radius-sm: 4px;
+  --jarvis-radius-md: 8px;
+  --jarvis-radius-lg: 12px;
+  --jarvis-radius-pill: 999px;
+
+  /* Spacing scale */
+  --jarvis-space-1: 4px;
+  --jarvis-space-2: 8px;
+  --jarvis-space-3: 12px;
+  --jarvis-space-4: 16px;
+  --jarvis-space-5: 20px;
+  --jarvis-space-6: 24px;
+
+  /* Type scale */
+  --jarvis-text-xs: 11px;
+  --jarvis-text-sm: 12px;
+  --jarvis-text-md: 13px;
+  --jarvis-text-lg: 15px;
+  --jarvis-font: var(--vscode-font-family, ui-sans-serif, system-ui, -apple-system, sans-serif);
+
+  /* Motion */
+  --jarvis-transition: 160ms cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+/*
+ * Le scroll vit dans .main-content (App.svelte), jamais sur le document :
+ * le header (bouton ☰ en mode étroit) doit rester visible en toutes
+ * circonstances.
+ */
+html,
+body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+#app {
+  height: 100%;
+}
+
+/*
+ * Shared form/layout primitives for the settings sections. Svelte scoped
+ * styles cannot be shared across components, so the section components
+ * (AgentsSection, WorkflowsSection, DocsSection, WorkspacesSection…) rely
+ * on these global classes for a consistent look.
+ */
+.j-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jarvis-space-3);
+  border: 1px solid var(--vscode-editorWidget-border);
+  border-radius: var(--jarvis-radius-lg);
+  padding: var(--jarvis-space-4);
+  background: var(--vscode-editorWidget-background);
+}
+
+.j-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jarvis-space-2);
+  border: 1px solid var(--vscode-editorWidget-border);
+  border-radius: var(--jarvis-radius-md);
+  padding: var(--jarvis-space-3);
+  background: var(--vscode-editor-background);
+}
+
+.j-card.disabled {
+  opacity: 0.6;
+}
+
+.j-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--jarvis-space-2);
+  min-width: 0;
+}
+
+.j-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jarvis-space-1);
+  min-width: 0;
+}
+
+.j-field > span {
+  font-size: var(--jarvis-text-xs);
+  color: var(--vscode-descriptionForeground);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.j-input,
+.j-select,
+.j-textarea {
+  padding: 5px 8px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border, var(--vscode-editorWidget-border));
+  border-radius: var(--jarvis-radius-sm);
+  font-size: var(--jarvis-text-sm);
+  font-family: inherit;
+  min-width: 0;
+}
+
+.j-textarea {
+  font-family: var(--vscode-editor-font-family, monospace);
+  resize: vertical;
+}
+
+.j-input:focus,
+.j-select:focus,
+.j-textarea:focus {
+  outline: 1px solid var(--jarvis-accent);
+  outline-offset: -1px;
+}
+
+.j-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--jarvis-space-1);
+  padding: 5px 12px;
+  background: var(--vscode-button-secondaryBackground, var(--vscode-editorWidget-background));
+  color: var(--vscode-button-secondaryForeground, var(--vscode-editor-foreground));
+  border: 1px solid var(--vscode-editorWidget-border);
+  border-radius: var(--jarvis-radius-pill);
+  cursor: pointer;
+  font-size: var(--jarvis-text-sm);
+  font-family: inherit;
+  white-space: nowrap;
+  transition: background var(--jarvis-transition), border-color var(--jarvis-transition);
+}
+
+.j-btn:hover:not(:disabled) {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.j-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.j-btn-primary {
+  background: var(--jarvis-accent);
+  color: var(--jarvis-accent-fg);
+  border-color: transparent;
+}
+
+.j-btn-primary:hover:not(:disabled) {
+  background: var(--jarvis-accent-hover);
+}
+
+.j-btn-danger {
+  color: var(--vscode-terminal-ansiRed);
+}
+
+.j-btn-icon {
+  padding: 5px;
+  border-radius: var(--jarvis-radius-sm);
+}
+
+.j-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--jarvis-space-1);
+  font-size: var(--jarvis-text-sm);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.j-toggle input {
+  accent-color: var(--jarvis-accent);
+}
+
+.j-empty {
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
+  font-size: var(--jarvis-text-sm);
+}
+
+.j-hint {
+  color: var(--vscode-descriptionForeground);
+  font-size: var(--jarvis-text-xs);
+}
+
+.j-grow {
+  flex: 1;
+  min-width: 0;
+}

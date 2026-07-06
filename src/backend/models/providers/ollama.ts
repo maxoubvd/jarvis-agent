@@ -3,16 +3,25 @@ import { IModelProvider, ChatMessage } from '../abstract.js';
 export interface OllamaOptions {
   baseUrl?: string;
   model?: string;
+  apiKey?: string;
+  /** Limite de tokens de complétion (`options.num_predict`), omise si non configurée. */
+  maxTokens?: number;
 }
 
 export class OllamaProvider implements IModelProvider {
   public name = 'ollama';
   private baseUrl: string;
   private model: string;
+  private maxTokens?: number;
 
   constructor(options: OllamaOptions = {}) {
     this.baseUrl = (options.baseUrl ?? 'http://localhost:11434').replace(/\/$/, '');
     this.model = options.model ?? 'qwen2.5-coder:7b';
+    this.maxTokens = options.maxTokens;
+  }
+
+  private completionOptions(): Record<string, unknown> {
+    return this.maxTokens ? { options: { num_predict: this.maxTokens } } : {};
   }
 
   public async sendPrompt(messages: ChatMessage[]): Promise<string> {
@@ -22,6 +31,7 @@ export class OllamaProvider implements IModelProvider {
       body: JSON.stringify({
         model: this.model,
         messages: messages.map(m => ({ role: m.role, content: m.content })),
+        ...this.completionOptions(),
         stream: false
       })
     });
@@ -47,6 +57,7 @@ export class OllamaProvider implements IModelProvider {
         body: JSON.stringify({
           model: this.model,
           messages: messages.map(m => ({ role: m.role, content: m.content })),
+          ...this.completionOptions(),
           stream: true
         })
       });

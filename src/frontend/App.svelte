@@ -5,8 +5,19 @@
   import CheckpointPanel from './components/CheckpointPanel.svelte';
   import AnalyticsPanel from './components/AnalyticsPanel.svelte';
   import SettingsPanel from './components/SettingsPanel.svelte';
+  import Icon from './components/Icon.svelte';
+  import { fly, fade } from 'svelte/transition';
   import { APP_NAME } from './shared/constants';
-  import type { Message, Badge, TokenUsage, AnalyticsStats, JarvisConfig } from './shared/types';
+  import type {
+    Message,
+    Badge,
+    TokenUsage,
+    AnalyticsStats,
+    JarvisConfig,
+    SettingsDefaults,
+    DocsSiteStatus,
+    McpServerStatus
+  } from './shared/types';
   import type { CommandItem } from './shared/commands';
   import vscode from './lib/vscode-api';
 
@@ -20,9 +31,15 @@
     timestamp: string;
   }
 
+  // Largeur de la webview (pas de l'écran) : dans une webview, window.innerWidth
+  // est la largeur du panneau — c'est notre breakpoint « conteneur ».
+  let innerWidth = $state(600);
+  const isNarrow = $derived(innerWidth < 500);
+  let drawerOpen = $state(false);
+
   let connectionStatus = $state('Connecting…');
   let tokensUsed = $state(0);
-  let tokensLimit = $state(32768);
+  let tokensLimit = $state<number | null>(null);
   let tokenUsage = $state<TokenUsage | null>(null);
   let messages = $state<Message[]>([]);
   let isSending = $state(false);
@@ -31,13 +48,18 @@
   let analyticsStats = $state<AnalyticsStats | null>(null);
   let availableModels = $state<string[]>([]);
   let currentModel = $state('');
-  let hitlMode = $state('moderate');
   let showThinking = $state(true);
   let settings = $state<JarvisConfig | null>(null);
+  let settingsDefaults = $state<SettingsDefaults | null>(null);
+  let docsStatuses = $state<DocsSiteStatus[]>([]);
+  let currentFolder = $state('');
+  let workspaces = $state<Array<{ id: string; name: string }>>([]);
+  let activeWorkspaceId = $state<string | null>(null);
+  let indexStatus = $state<{ indexing: boolean; fileCount: number } | null>(null);
   let needsSetup = $state(false);
   let saveStatus = $state<{ ok: boolean; error?: string } | null>(null);
   let extraCommands = $state<CommandItem[]>([]);
-  let mcpServers = $state<Array<{ name: string; enabled: boolean; connected: boolean; tools: string[]; error?: string }>>([]);
+  let mcpServers = $state<McpServerStatus[]>([]);
 
   function pushMessage(role: Message['role'], content: string, kind?: Message['kind'], badges?: Badge[]) {
     messages = [
@@ -61,11 +83,18 @@
   function onWindowMessage(event: MessageEvent) {
     const msg = event.data as {
       type: string;
+      defaults?: SettingsDefaults;
+      sites?: DocsSiteStatus[];
+      currentFolder?: string;
+      workspaces?: Array<{ id: string; name: string }>;
+      activeWorkspaceId?: string | null;
+      indexing?: boolean;
+      fileCount?: number;
       text?: string;
       error?: string;
       data?: string;
       tokensUsed?: number;
-      tokensLimit?: number;
+      tokensLimit?: number | null;
       usage?: TokenUsage;
       checkpoints?: Checkpoint[];
       stats?: AnalyticsStats | null;
@@ -84,7 +113,8 @@
       ok?: boolean;
       agents?: Array<{ mention: string; label: string }>;
       workflows?: Array<{ id: string; label: string }>;
-      servers?: Array<{ name: string; enabled: boolean; connected: boolean; tools: string[]; error?: string }>;
+      prompts?: Array<{ name: string; description: string }>;
+      servers?: McpServerStatus[];
     };
 
     switch (msg.type) {
@@ -95,7 +125,12 @@
         if (msg.needsSetup !== undefined) needsSetup = msg.needsSetup;
         break;
       case 'settings':
-        if (msg.config) settings = msg.config;
+        if (msg.config) {
+          settings = msg.config;
+          showThinking = msg.config.optimization?.showThinking ?? true;
+        }
+        if (msg.defaults) settingsDefaults = msg.defaults;
+        if (msg.currentFolder !== undefined) currentFolder = msg.currentFolder;
         if (msg.needsSetup !== undefined) needsSetup = msg.needsSetup;
         break;
       case 'settingsSaved':
@@ -114,11 +149,30 @@
           label: `/workflow ${w.id}`,
           detail: w.label
         }));
-        extraCommands = [...agentItems, ...workflowItems];
+        const promptItems: CommandItem[] = (msg.prompts ?? []).map(p => ({
+          trigger: '/' as const,
+          insert: `/${p.name} `,
+          label: `/${p.name}`,
+          detail: p.description || 'Saved prompt'
+        }));
+        extraCommands = [...agentItems, ...workflowItems, ...promptItems];
+        if (msg.workspaces) workspaces = msg.workspaces;
+        if (msg.activeWorkspaceId !== undefined) activeWorkspaceId = msg.activeWorkspaceId;
         break;
       }
+      case 'indexStatus':
+        indexStatus = { indexing: msg.indexing ?? false, fileCount: msg.fileCount ?? 0 };
+        break;
       case 'mcpStatus':
         mcpServers = msg.servers ?? [];
+        break;
+      case 'docsStatus':
+        // Fusion par id : une mise à jour partielle ne doit pas effacer les autres sites.
+        for (const site of msg.sites ?? []) {
+          const idx = docsStatuses.findIndex(s => s.id === site.id);
+          if (idx === -1) docsStatuses = [...docsStatuses, site];
+          else docsStatuses = docsStatuses.map((s, i) => (i === idx ? site : s));
+        }
         break;
       case 'tokens':
         if (msg.usage) {
@@ -143,8 +197,8 @@
         isSending = false;
         break;
       case 'chatError':
-        pushMessage('assistant', `❌ Error: ${msg.error ?? 'unknown'}`, 'text', [
-          { icon: '❌', label: 'Failed', variant: 'error' }
+        pushMessage('assistant', `Error: ${msg.error ?? 'unknown'}`, 'text', [
+          { icon: '', label: 'Failed', variant: 'error' }
         ]);
         if (msg.needsSetup !== undefined) needsSetup = msg.needsSetup;
         isSending = false;
@@ -152,7 +206,7 @@
       case 'agentThinking':
         if (msg.text) {
           pushMessage('assistant', msg.text, 'thinking', [
-            { icon: '🧠', label: 'Thinking', variant: 'info' }
+            { icon: '', label: 'Thinking', variant: 'info' }
           ]);
         }
         break;
@@ -161,7 +215,7 @@
           'assistant',
           `${msg.tool}(${JSON.stringify(msg.args ?? {})})`,
           'tool',
-          [{ icon: '🔧', label: `Tool: ${msg.tool}`, variant: 'info' }]
+          [{ icon: '', label: `Tool: ${msg.tool}`, variant: 'info' }]
         );
         break;
       case 'agentToolResult':
@@ -171,8 +225,8 @@
           'tool',
           [
             msg.success
-              ? { icon: '✅', label: 'Success', variant: 'success' }
-              : { icon: '❌', label: 'Failed', variant: 'error' }
+              ? { icon: '', label: 'Success', variant: 'success' }
+              : { icon: '', label: 'Failed', variant: 'error' }
           ]
         );
         break;
@@ -181,7 +235,7 @@
           'assistant',
           `Step ${msg.index}/${msg.total}: ${msg.step}`,
           'step',
-          [{ icon: '⏱️', label: 'Workflow', variant: 'info' }]
+          [{ icon: '', label: 'Workflow', variant: 'info' }]
         );
         break;
       case 'agentFinal':
@@ -215,6 +269,7 @@
 
   function handleTabChange(tab: string) {
     activeTab = tab as Tab;
+    drawerOpen = false;
     if (tab === 'checkpoints') {
       vscode?.postMessage({ type: 'listCheckpoints' });
     } else if (tab === 'analytics') {
@@ -223,12 +278,31 @@
       saveStatus = null;
       vscode?.postMessage({ type: 'getSettings' });
       vscode?.postMessage({ type: 'getMcpStatus' });
+      vscode?.postMessage({ type: 'getDocsStatus' });
+      vscode?.postMessage({ type: 'getIndexStatus' });
     }
   }
 
   function handleSaveSettings(config: JarvisConfig) {
     saveStatus = null;
     vscode?.postMessage({ type: 'updateSettings', scope: 'global', config });
+  }
+
+  function handleIndexDocs(id: string) {
+    vscode?.postMessage({ type: 'indexDocs', id });
+  }
+
+  function handleOpenConfig() {
+    vscode?.postMessage({ type: 'openConfigFile' });
+  }
+
+  function handleWorkspaceChange(id: string | null) {
+    activeWorkspaceId = id;
+    vscode?.postMessage({ type: 'setActiveWorkspace', id });
+  }
+
+  function handleReindex() {
+    vscode?.postMessage({ type: 'indexWorkspace' });
   }
 
   function openSettings() {
@@ -249,11 +323,6 @@
     vscode?.postMessage({ type: 'setModel', model });
   }
 
-  function handleHitlModeChange(mode: string) {
-    hitlMode = mode;
-    vscode?.postMessage({ type: 'setHitlMode', mode });
-  }
-
   function handleRefreshAnalytics() {
     vscode?.postMessage({ type: 'getAnalytics' });
   }
@@ -261,13 +330,31 @@
   function handleExportAnalytics() {
     vscode?.postMessage({ type: 'exportAnalytics' });
   }
+
+  function handleWindowKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape' && drawerOpen) {
+      drawerOpen = false;
+    }
+  }
 </script>
 
-<svelte:window onmessage={onWindowMessage} />
+<svelte:window onmessage={onWindowMessage} onkeydown={handleWindowKeydown} bind:innerWidth />
 
 <div class="app-shell">
   <header class="app-header">
-    <h1>{APP_NAME}</h1>
+    <div class="header-left">
+      {#if isNarrow}
+        <button
+          class="menu-btn"
+          title="Menu"
+          aria-label="Toggle navigation"
+          onclick={() => (drawerOpen = !drawerOpen)}
+        >
+          <Icon name={drawerOpen ? 'close' : 'menu'} />
+        </button>
+      {/if}
+      <h1>{APP_NAME}</h1>
+    </div>
     <div class="header-right">
       {#if availableModels.length > 0}
         <select class="model-select" value={currentModel} onchange={handleModelChange}>
@@ -276,19 +363,18 @@
           {/each}
         </select>
       {/if}
-      <span class="status" class:success={!needsSetup && connectionStatus.startsWith('Connected')}>{connectionStatus}</span>
+      <span
+        class="status-dot"
+        class:success={!needsSetup && connectionStatus.startsWith('Connected')}
+        title={connectionStatus}
+      ></span>
     </div>
   </header>
 
-  <div class="app-layout">
-    <Sidebar
-      {activeTab}
-      {hitlMode}
-      {showThinking}
-      onTabChange={handleTabChange}
-      onHitlModeChange={handleHitlModeChange}
-      onToggleThinking={v => (showThinking = v)}
-    />
+  <div class="app-layout" class:narrow={isNarrow}>
+    {#if !isNarrow}
+      <Sidebar {activeTab} onTabChange={handleTabChange} />
+    {/if}
     <main class="main-content">
       {#if activeTab === 'chat'}
         {#if needsSetup}
@@ -297,7 +383,16 @@
             <button onclick={openSettings}>Open Settings</button>
           </div>
         {/if}
-        <ChatPanel {messages} {isSending} {showThinking} {extraCommands} onSend={handleSend} />
+        <ChatPanel
+          {messages}
+          {isSending}
+          {showThinking}
+          {extraCommands}
+          {workspaces}
+          {activeWorkspaceId}
+          onSend={handleSend}
+          onWorkspaceChange={handleWorkspaceChange}
+        />
         <TokenGauge
           used={tokensUsed}
           limit={tokensLimit}
@@ -306,7 +401,19 @@
           history={tokenUsage?.history ?? []}
         />
       {:else if activeTab === 'settings'}
-        <SettingsPanel {settings} {saveStatus} {mcpServers} onSave={handleSaveSettings} />
+        <SettingsPanel
+          {settings}
+          defaults={settingsDefaults}
+          {saveStatus}
+          {mcpServers}
+          {docsStatuses}
+          {currentFolder}
+          {indexStatus}
+          onSave={handleSaveSettings}
+          onIndexDocs={handleIndexDocs}
+          onReindex={handleReindex}
+          onOpenConfig={handleOpenConfig}
+        />
       {:else if activeTab === 'checkpoints'}
         <CheckpointPanel
           {checkpoints}
@@ -322,13 +429,32 @@
       {/if}
     </main>
   </div>
+
+  {#if isNarrow && drawerOpen}
+    <div
+      class="drawer-backdrop"
+      transition:fade={{ duration: 120 }}
+      onclick={() => (drawerOpen = false)}
+      onkeydown={e => e.key === 'Enter' && (drawerOpen = false)}
+      role="button"
+      tabindex="-1"
+      aria-label="Close navigation"
+    ></div>
+    <div class="drawer" transition:fly={{ x: -240, duration: 180 }}>
+      <Sidebar {activeTab} onTabChange={handleTabChange} />
+    </div>
+  {/if}
 </div>
 
 <style>
   .app-shell {
     display: flex;
     flex-direction: column;
-    min-height: 100vh;
+    /* height (et non min-height) : le scroll doit vivre dans .main-content,
+       pas sur le document — sinon le header (et son bouton ☰ en mode étroit)
+       disparaît dès qu'on défile une page longue comme les Settings. */
+    height: 100vh;
+    overflow: hidden;
     color: var(--vscode-editor-foreground);
     background: var(--vscode-editor-background);
     font-family: var(--vscode-font-family, ui-sans-serif, system-ui, sans-serif);
@@ -338,40 +464,72 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.75rem 1rem;
+    gap: var(--jarvis-space-2);
+    padding: var(--jarvis-space-2) var(--jarvis-space-3);
     border-bottom: 1px solid var(--vscode-panel-border);
     background: var(--vscode-panel-background);
   }
 
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: var(--jarvis-space-2);
+    min-width: 0;
+  }
+
   .app-header h1 {
     margin: 0;
-    font-size: 1.1rem;
+    font-size: var(--jarvis-text-lg);
     font-weight: 600;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+  }
+
+  .menu-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5px;
+    background: transparent;
+    border: none;
+    border-radius: var(--jarvis-radius-sm);
+    color: inherit;
+    cursor: pointer;
+    transition: background var(--jarvis-transition);
+  }
+
+  .menu-btn:hover {
+    background: var(--vscode-list-hoverBackground);
   }
 
   .header-right {
     display: flex;
     align-items: center;
-    gap: 0.6rem;
+    gap: var(--jarvis-space-2);
+    min-width: 0;
   }
 
   .model-select {
-    padding: 0.25rem 0.4rem;
+    padding: 4px 8px;
     background: var(--vscode-dropdown-background, var(--vscode-input-background));
     color: var(--vscode-dropdown-foreground, var(--vscode-input-foreground));
     border: 1px solid var(--vscode-dropdown-border, var(--vscode-input-border));
-    border-radius: 4px;
-    font-size: 0.8rem;
+    border-radius: var(--jarvis-radius-sm);
+    font-size: var(--jarvis-text-sm);
     max-width: 12rem;
+    min-width: 0;
   }
 
-  .status {
-    font-size: 0.85rem;
-    color: var(--vscode-descriptionForeground);
+  .status-dot {
+    flex-shrink: 0;
+    width: 8px;
+    height: 8px;
+    border-radius: var(--jarvis-radius-pill);
+    background: var(--jarvis-gold);
   }
 
-  .status.success {
-    color: var(--vscode-terminal-ansiGreen);
+  .status-dot.success {
+    background: var(--vscode-terminal-ansiGreen);
   }
 
   .app-layout {
@@ -381,12 +539,40 @@
     min-height: 0;
   }
 
+  .app-layout.narrow {
+    grid-template-columns: 1fr;
+  }
+
   .main-content {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
-    padding: 1rem;
+    gap: var(--jarvis-space-3);
+    padding: var(--jarvis-space-3);
     overflow: auto;
+    min-width: 0;
+  }
+
+  .drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 20;
+  }
+
+  .drawer {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 240px;
+    max-width: 85vw;
+    z-index: 21;
+    display: flex;
+    box-shadow: 4px 0 16px rgba(0, 0, 0, 0.3);
+  }
+
+  .drawer > :global(aside) {
+    flex: 1;
   }
 
   .setup-banner {
@@ -402,23 +588,18 @@
   }
 
   .setup-banner button {
-    padding: 0.35rem 0.7rem;
-    background: var(--vscode-button-background);
-    color: var(--vscode-button-foreground);
+    padding: 5px 12px;
+    background: var(--jarvis-accent);
+    color: var(--jarvis-accent-fg);
     border: none;
-    border-radius: 4px;
+    border-radius: var(--jarvis-radius-pill);
     cursor: pointer;
-    font-size: 0.8rem;
+    font-size: var(--jarvis-text-sm);
     white-space: nowrap;
+    transition: background var(--jarvis-transition);
   }
 
   .setup-banner button:hover {
-    background: var(--vscode-button-hoverBackground);
-  }
-
-  @media (max-width: 640px) {
-    .app-layout {
-      grid-template-columns: 1fr;
-    }
+    background: var(--jarvis-accent-hover);
   }
 </style>

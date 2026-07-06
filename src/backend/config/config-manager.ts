@@ -6,16 +6,81 @@ import * as vscode from 'vscode';
 import type { Workflow } from '../services/workflows.js';
 import type { SpecializedAgent } from '../services/agents.js';
 
-export type ProviderType = 'ollama' | 'openrouter' | 'lmstudio' | 'mistral' | 'openai-compatible';
+export type ProviderType =
+  | 'ollama'
+  | 'openai'
+  | 'openrouter'
+  | 'lmstudio'
+  | 'mistral'
+  | 'openai-compatible';
 
+export const PROVIDER_TYPES: ProviderType[] = [
+  'ollama',
+  'openai',
+  'openrouter',
+  'lmstudio',
+  'mistral',
+  'openai-compatible'
+];
+
+/** Base URL par défaut de chaque provider (surchargée par `ModelItem.apiBase`). */
+export const DEFAULT_BASE_URL: Record<ProviderType, string> = {
+  ollama: 'http://localhost:11434',
+  openai: 'https://api.openai.com/v1',
+  openrouter: 'https://openrouter.ai/api/v1',
+  lmstudio: 'http://localhost:1234/v1',
+  mistral: 'https://api.mistral.ai/v1',
+  'openai-compatible': 'https://api.openai.com/v1'
+};
+
+export type ModelRole = 'chat' | 'edit' | 'apply' | 'autocomplete' | 'embed' | 'rerank' | 'summarize';
+
+export const MODEL_ROLES: ModelRole[] = [
+  'chat',
+  'edit',
+  'apply',
+  'autocomplete',
+  'embed',
+  'rerank',
+  'summarize'
+];
+
+export type ModelCapability = 'tool_use' | 'image_input';
+
+export const MODEL_CAPABILITIES: ModelCapability[] = ['tool_use', 'image_input'];
+
+/** Rôles attribués à un modèle migré depuis l'ancien schéma centré provider. */
+export const DEFAULT_MODEL_ROLES: ModelRole[] = ['chat', 'edit', 'apply'];
+
+/**
+ * Entrée de modèle centrée « modèle » (façon Continue) : chaque modèle porte
+ * son provider, sa clé API et ses rôles. `name` est l'identifiant d'affichage
+ * (unique, référencé par `models.default`), `model` l'id envoyé à l'API.
+ */
+export interface ModelItem {
+  name: string;
+  provider: ProviderType;
+  model: string;
+  apiKey?: string;
+  /** Base URL personnalisée ; défaut : `DEFAULT_BASE_URL[provider]`. */
+  apiBase?: string;
+  roles?: ModelRole[];
+  capabilities?: ModelCapability[];
+  contextLength?: number;
+  maxTokens?: number;
+  /** Défaut : true. */
+  enabled?: boolean;
+}
+
+/** @deprecated Ancien schéma centré provider — conservé pour la migration. */
 export interface ModelConfigItem {
   name: string;
   contextLength: number;
 }
 
+/** @deprecated Ancien schéma centré provider — conservé pour la migration. */
 export interface ProviderConfigItem {
   enabled: boolean;
-  /** Type de provider — déduit de la clé si absent (clé inconnue => 'openai-compatible'). */
   type?: ProviderType;
   baseUrl: string;
   apiKey?: string;
@@ -30,6 +95,22 @@ export interface McpServerConfig {
   env?: Record<string, string>;
   url?: string;
   headers?: Record<string, string>;
+  /** Tools de ce serveur désactivés individuellement (nom du tool côté serveur). */
+  disabledTools?: string[];
+}
+
+/** Override d'un serveur MCP intégré (activation + tools désactivés). */
+export interface BuiltinMcpOverride {
+  enabled?: boolean;
+  disabledTools?: string[];
+}
+
+/** Prompt enregistré, invocable via `/nom` dans le chat (section Prompts). */
+export interface PromptItem {
+  id: string;
+  name: string;
+  description?: string;
+  content: string;
 }
 
 export interface RuleItem {
@@ -45,6 +126,25 @@ export interface OptimizationConfig {
   tddMaxAttempts?: number;
   tddTestCommand?: string;
   terminalTimeout?: number;
+  /** Affichage des blocs <thinking> dans le chat (défaut : true). */
+  showThinking?: boolean;
+}
+
+/** Site de documentation externe mis en cache et indexé (section Docs). */
+export interface DocSite {
+  id: string;
+  title: string;
+  startUrl: string;
+  enabled: boolean;
+}
+
+/** Profil de workspace : instructions type CLAUDE.md injectées dans le prompt. */
+export interface WorkspaceProfile {
+  id: string;
+  name: string;
+  folder: string;
+  instructions: string;
+  enabled: boolean;
 }
 
 export interface JarvisConfig {
@@ -52,18 +152,24 @@ export interface JarvisConfig {
   models: {
     /** `null` = aucun modèle configuré (onboarding façon Continue). */
     default: string | null;
-    providers: Record<string, ProviderConfigItem>;
+    items: ModelItem[];
   };
   mcpServers?: Record<string, McpServerConfig>;
+  /** Overrides des serveurs MCP de base (définis dans le code). */
+  builtinMcp?: Record<string, BuiltinMcpOverride>;
   rules?: RuleItem[];
   workflows?: Workflow[];
   agents?: SpecializedAgent[];
+  prompts?: PromptItem[];
+  docs?: DocSite[];
+  workspaces?: WorkspaceProfile[];
+  activeWorkspaceId?: string | null;
   optimization?: OptimizationConfig;
 }
 
 export const EMPTY_CONFIG: JarvisConfig = {
   version: 1,
-  models: { default: null, providers: {} },
+  models: { default: null, items: [] },
   optimization: {}
 };
 
@@ -97,20 +203,114 @@ export function deepMerge<T>(base: T, override: unknown): T {
   return result as T;
 }
 
+/** Coercition défensive d'une entrée de modèle venue du JSON utilisateur. */
+function normalizeModelItem(raw: unknown): ModelItem | null {
+  if (!isPlainObject(raw)) return null;
+  const name = typeof raw.name === 'string' ? raw.name.trim() : '';
+  if (!name) return null;
+  const provider = PROVIDER_TYPES.includes(raw.provider as ProviderType)
+    ? (raw.provider as ProviderType)
+    : 'openai-compatible';
+  const item: ModelItem = {
+    name,
+    provider,
+    model: typeof raw.model === 'string' && raw.model.trim() ? raw.model.trim() : name
+  };
+  if (typeof raw.apiKey === 'string' && raw.apiKey) item.apiKey = raw.apiKey;
+  if (typeof raw.apiBase === 'string' && raw.apiBase) item.apiBase = raw.apiBase;
+  if (Array.isArray(raw.roles)) {
+    const roles = raw.roles.filter((r): r is ModelRole => MODEL_ROLES.includes(r as ModelRole));
+    if (roles.length > 0) item.roles = roles;
+  }
+  if (Array.isArray(raw.capabilities)) {
+    const caps = raw.capabilities.filter((c): c is ModelCapability =>
+      MODEL_CAPABILITIES.includes(c as ModelCapability)
+    );
+    if (caps.length > 0) item.capabilities = caps;
+  }
+  if (typeof raw.contextLength === 'number' && raw.contextLength > 0) {
+    item.contextLength = Math.floor(raw.contextLength);
+  }
+  if (typeof raw.maxTokens === 'number' && raw.maxTokens > 0) {
+    item.maxTokens = Math.floor(raw.maxTokens);
+  }
+  if (raw.enabled === false) item.enabled = false;
+  return item;
+}
+
+/** Type de provider déduit d'une clé de l'ancien schéma (clé inconnue => openai-compatible). */
+function inferProviderType(providerKey: string): ProviderType {
+  return PROVIDER_TYPES.includes(providerKey as ProviderType) && providerKey !== 'openai-compatible'
+    ? (providerKey as ProviderType)
+    : 'openai-compatible';
+}
+
+/** Migre l'ancien schéma centré provider (`models.providers`) vers `ModelItem[]`. */
+function migrateLegacyProviders(providers: Record<string, unknown>): ModelItem[] {
+  const items: ModelItem[] = [];
+  const usedNames = new Set<string>();
+  for (const [key, value] of Object.entries(providers)) {
+    if (!isPlainObject(value)) continue;
+    const legacy = value as Partial<ProviderConfigItem>;
+    const type = (legacy.type as ProviderType | undefined) ?? inferProviderType(key);
+    for (const model of Array.isArray(legacy.models) ? legacy.models : []) {
+      if (!isPlainObject(model) || typeof model.name !== 'string' || !model.name.trim()) continue;
+      // Le premier occupant garde le nom (models.default continue de résoudre).
+      const name = usedNames.has(model.name) ? `${model.name} (${key})` : model.name;
+      usedNames.add(name);
+      const item = normalizeModelItem({
+        name,
+        provider: type,
+        model: model.name,
+        apiKey: legacy.apiKey,
+        apiBase: legacy.baseUrl,
+        contextLength: model.contextLength,
+        enabled: legacy.enabled,
+        roles: DEFAULT_MODEL_ROLES
+      });
+      if (item) items.push(item);
+    }
+  }
+  return items;
+}
+
+/**
+ * Normalise la section `models`, en migrant l'ancienne forme `providers` vers
+ * `items` si nécessaire. Idempotent : une section déjà au nouveau format est
+ * seulement coercée, jamais re-migrée.
+ */
+export function normalizeModelsSection(raw: unknown): JarvisConfig['models'] {
+  const models = isPlainObject(raw) ? raw : {};
+  const defaultModel = typeof models.default === 'string' && models.default ? models.default : null;
+  if (Array.isArray(models.items)) {
+    return {
+      default: defaultModel,
+      items: models.items.map(normalizeModelItem).filter((m): m is ModelItem => m !== null)
+    };
+  }
+  if (isPlainObject(models.providers)) {
+    return { default: defaultModel, items: migrateLegacyProviders(models.providers) };
+  }
+  return { default: defaultModel, items: [] };
+}
+
 /** Garantit la forme complète d'un objet config (défensif face au JSON utilisateur). */
 export function normalizeConfig(input: unknown): JarvisConfig {
   const cfg = (isPlainObject(input) ? input : {}) as Partial<JarvisConfig>;
-  const models = isPlainObject(cfg.models) ? cfg.models : { default: null, providers: {} };
   return {
     version: typeof cfg.version === 'number' ? cfg.version : 1,
-    models: {
-      default: (models.default ?? null) as string | null,
-      providers: (isPlainObject(models.providers) ? models.providers : {}) as Record<string, ProviderConfigItem>
-    },
+    models: normalizeModelsSection(cfg.models),
     mcpServers: isPlainObject(cfg.mcpServers) ? cfg.mcpServers : undefined,
+    builtinMcp: isPlainObject(cfg.builtinMcp)
+      ? (cfg.builtinMcp as Record<string, BuiltinMcpOverride>)
+      : undefined,
     rules: Array.isArray(cfg.rules) ? cfg.rules : undefined,
     workflows: Array.isArray(cfg.workflows) ? cfg.workflows : undefined,
     agents: Array.isArray(cfg.agents) ? cfg.agents : undefined,
+    prompts: Array.isArray(cfg.prompts) ? cfg.prompts : undefined,
+    docs: Array.isArray(cfg.docs) ? cfg.docs : undefined,
+    workspaces: Array.isArray(cfg.workspaces) ? cfg.workspaces : undefined,
+    activeWorkspaceId: typeof cfg.activeWorkspaceId === 'string' ? cfg.activeWorkspaceId : undefined,
     optimization: isPlainObject(cfg.optimization) ? cfg.optimization : {}
   };
 }
@@ -201,7 +401,23 @@ export class ConfigManager {
 
   private computeMerged(): JarvisConfig {
     const override = this.loadWorkspaceOverride();
-    return override ? deepMerge(this.globalConfig, override) : this.globalConfig;
+    if (!override) return this.globalConfig;
+    // L'override est partiel : on ne migre que sa section models si elle est
+    // présente, sans introduire de clés fantômes (`default: null` ou `items: []`)
+    // qui écraseraient la config globale.
+    if (isPlainObject(override.models)) {
+      const rawModels = override.models as Record<string, unknown>;
+      const migrated = normalizeModelsSection(override.models);
+      const partial: Partial<JarvisConfig['models']> = {};
+      if (rawModels.items !== undefined || rawModels.providers !== undefined) {
+        partial.items = migrated.items;
+      }
+      if (rawModels.default !== undefined) {
+        partial.default = migrated.default;
+      }
+      override.models = partial as JarvisConfig['models'];
+    }
+    return deepMerge(this.globalConfig, override);
   }
 
   /** Config effective (globale + override workspace). */
@@ -212,6 +428,11 @@ export class ConfigManager {
   /** Config globale brute (à éditer dans l'onglet Settings). */
   public getGlobalConfig(): JarvisConfig {
     return this.globalConfig;
+  }
+
+  /** Chemin du fichier de config globale (~/.jarvis/config.json). */
+  public getGlobalConfigPath(): string {
+    return this.globalPath;
   }
 
   public get hasWorkspace(): boolean {

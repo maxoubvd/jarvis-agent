@@ -3,7 +3,7 @@ import { loadRules, renderRules } from '../../src/backend/services/rules.js';
 import type { JarvisConfig } from '../../src/backend/config/config-manager.js';
 
 function config(rules: JarvisConfig['rules']): JarvisConfig {
-  return { version: 1, models: { default: null, providers: {} }, rules };
+  return { version: 1, models: { default: null, items: [] }, rules };
 }
 
 describe('rules service', () => {

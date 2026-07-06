@@ -7,33 +7,43 @@ import { OpenAICompatibleProvider } from '../models/providers/openai-compatible-
 import {
   ConfigManager,
   getConfigManager,
-  ProviderType,
+  DEFAULT_BASE_URL,
   type JarvisConfig,
-  type ModelConfigItem,
-  type ProviderConfigItem
+  type ModelItem,
+  type ModelRole,
+  type ProviderType
 } from './config-manager.js';
 
 // Réexport pour compat ascendante (consommateurs dans src/backend/models/*).
-export type { JarvisConfig, ModelConfigItem, ProviderConfigItem };
+export type { JarvisConfig, ModelItem, ModelRole, ProviderType };
 
-function inferType(providerName: string): ProviderType {
-  switch (providerName) {
+const LOCAL_PROVIDERS: ProviderType[] = ['ollama', 'lmstudio'];
+
+function createProvider(item: ModelItem): IModelProvider {
+  const baseUrl = item.apiBase ?? DEFAULT_BASE_URL[item.provider];
+  const common = { baseUrl, apiKey: item.apiKey, model: item.model, maxTokens: item.maxTokens };
+  switch (item.provider) {
     case 'ollama':
+      return new OllamaProvider(common);
     case 'openrouter':
+      return new OpenRouterProvider(common);
     case 'lmstudio':
+      return new LMStudioProvider(common);
     case 'mistral':
-      return providerName;
+      return new MistralProvider(common);
     default:
-      return 'openai-compatible';
+      // 'openai' et 'openai-compatible' partagent le même protocole.
+      return new OpenAICompatibleProvider({ name: item.provider, ...common });
   }
 }
 
 /**
- * Consommateur de {@link ConfigManager} : instancie les providers activés à
- * partir de la config effective. Ne lit plus le disque et ne throw plus —
- * une config vide (aucun modèle) est un état valide (onboarding).
+ * Consommateur de {@link ConfigManager} : instancie un provider par modèle
+ * activé (schéma centré modèle, façon Continue). Ne lit plus le disque et ne
+ * throw plus — une config vide (aucun modèle) est un état valide (onboarding).
  */
 export class ModelConfigManager {
+  /** Un provider par modèle activé, indexé par `ModelItem.name`. */
   private providers: Map<string, IModelProvider> = new Map();
 
   constructor(private cfg: ConfigManager = getConfigManager()) {
@@ -44,58 +54,26 @@ export class ModelConfigManager {
     return this.cfg.getConfig();
   }
 
+  private enabledItems(): ModelItem[] {
+    return this.config.models.items.filter(m => m.enabled !== false);
+  }
+
   private initializeProviders(): void {
     this.providers.clear();
-    const providersConfig = this.config.models.providers;
-    const defaultModel = this.config.models.default;
-
-    for (const [providerName, providerConfig] of Object.entries(providersConfig)) {
-      if (!providerConfig.enabled) continue;
-
-      const providerModelNames = providerConfig.models.map(m => m.name);
-      const model =
-        defaultModel && providerModelNames.includes(defaultModel)
-          ? defaultModel
-          : providerModelNames[0];
-      if (!model) continue; // provider activé mais sans modèle
-
-      const type = providerConfig.type ?? inferType(providerName);
-      switch (type) {
-        case 'ollama':
-          this.providers.set(providerName, new OllamaProvider({ baseUrl: providerConfig.baseUrl, model }));
-          break;
-        case 'openrouter':
-          this.providers.set(
-            providerName,
-            new OpenRouterProvider({ baseUrl: providerConfig.baseUrl, apiKey: providerConfig.apiKey, model })
-          );
-          break;
-        case 'lmstudio':
-          this.providers.set(providerName, new LMStudioProvider({ baseUrl: providerConfig.baseUrl, model }));
-          break;
-        case 'mistral':
-          this.providers.set(
-            providerName,
-            new MistralProvider({ baseUrl: providerConfig.baseUrl, apiKey: providerConfig.apiKey, model })
-          );
-          break;
-        default:
-          this.providers.set(
-            providerName,
-            new OpenAICompatibleProvider({
-              name: providerName,
-              baseUrl: providerConfig.baseUrl,
-              apiKey: providerConfig.apiKey,
-              model
-            })
-          );
-          break;
-      }
+    for (const item of this.enabledItems()) {
+      this.providers.set(item.name, createProvider(item));
     }
   }
 
-  public getProvider(providerName: string): IModelProvider | undefined {
-    return this.providers.get(providerName);
+  /** Provider instancié pour le modèle donné (clé = `ModelItem.name`). */
+  public getProvider(modelName: string): IModelProvider | undefined {
+    return this.providers.get(modelName);
+  }
+
+  /** Entrée de config du modèle donné (activé ou non). */
+  public getModelItem(modelName: string | null): ModelItem | undefined {
+    if (!modelName) return undefined;
+    return this.config.models.items.find(m => m.name === modelName);
   }
 
   /** Modèle par défaut, ou `null` si aucun modèle n'est configuré. */
@@ -103,21 +81,30 @@ export class ModelConfigManager {
     return this.config.models.default;
   }
 
-  /** Modèle effectif : défaut si valide, sinon premier modèle disponible, sinon `null`. */
+  /** Modèle effectif : défaut si valide (activé), sinon premier modèle activé, sinon `null`. */
   public getEffectiveModel(): string | null {
     const preferred = this.config.models.default;
-    if (preferred) return preferred;
+    if (preferred && this.providers.has(preferred)) return preferred;
     return this.getAvailableModels()[0]?.name ?? null;
   }
 
-  public getAvailableModels(): ModelConfigItem[] {
-    const allModels: ModelConfigItem[] = [];
-    for (const providerConfig of Object.values(this.config.models.providers)) {
-      if (providerConfig.enabled) {
-        allModels.push(...providerConfig.models);
-      }
+  /** Modèles activés (le sélecteur du header + la jauge en dépendent). */
+  public getAvailableModels(): ModelItem[] {
+    return this.enabledItems();
+  }
+
+  /**
+   * Premier modèle activé portant le rôle demandé. Pour `chat`, retombe sur le
+   * modèle effectif (un modèle sans `roles` est considéré généraliste).
+   */
+  public getModelForRole(role: ModelRole): ModelItem | null {
+    const explicit = this.enabledItems().find(m => m.roles?.includes(role));
+    if (explicit) return explicit;
+    if (role === 'chat') {
+      const effective = this.getEffectiveModel();
+      return effective ? this.getModelItem(effective) ?? null : null;
     }
-    return allModels;
+    return null;
   }
 
   public async reloadConfig(): Promise<void> {
@@ -134,26 +121,15 @@ export class ModelConfigManager {
     return this.config;
   }
 
-  /** Premier provider activé qui propose le modèle demandé (défaut sinon). */
-  public getProviderNameForModel(modelName: string | null): string | undefined {
-    if (modelName) {
-      for (const [name, providerConfig] of Object.entries(this.config.models.providers)) {
-        if (providerConfig.enabled && providerConfig.models.some(m => m.name === modelName)) {
-          return name;
-        }
-      }
-    }
-    return Object.keys(this.config.models.providers).find(k => this.config.models.providers[k].enabled);
+  /** Type de provider du modèle donné (défaut : premier modèle activé). */
+  public getProviderNameForModel(modelName: string | null): ProviderType | undefined {
+    const item = this.getModelItem(modelName) ?? this.enabledItems()[0];
+    return item?.provider;
   }
 
-  public getContextLength(modelName: string | null): number {
-    if (modelName) {
-      for (const providerConfig of Object.values(this.config.models.providers)) {
-        const found = providerConfig.models.find(m => m.name === modelName);
-        if (found) return found.contextLength;
-      }
-    }
-    return 32768;
+  /** Longueur de contexte du modèle, ou `null` si inconnue / aucun modèle. */
+  public getContextLength(modelName: string | null): number | null {
+    return this.getModelItem(modelName)?.contextLength ?? null;
   }
 
   /** Change le modèle par défaut (persisté dans la config globale) et ré-instancie. */
@@ -169,11 +145,13 @@ export class ModelConfigManager {
 
   /**
    * True si le provider envoie les données hors de la machine (spec §6.1).
-   * Par sécurité, tout provider non-local (≠ ollama/lmstudio) est considéré cloud.
+   * Accepte un type de provider ou un nom de modèle ; par sécurité, tout ce qui
+   * n'est pas identifié local (ollama/lmstudio) est considéré cloud.
    */
-  public isCloudProvider(providerName: string): boolean {
-    const providerConfig = this.config.models.providers[providerName];
-    const type = providerConfig?.type ?? inferType(providerName);
-    return type !== 'ollama' && type !== 'lmstudio';
+  public isCloudProvider(providerOrModel: string): boolean {
+    if (LOCAL_PROVIDERS.includes(providerOrModel as ProviderType)) return false;
+    const item = this.getModelItem(providerOrModel);
+    if (item) return !LOCAL_PROVIDERS.includes(item.provider);
+    return true;
   }
 }

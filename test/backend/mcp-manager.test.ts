@@ -11,8 +11,20 @@ import type { ConfigManager, JarvisConfig, McpServerConfig } from '../../src/bac
 function fakeConfigManager(mcpServers: Record<string, McpServerConfig>): ConfigManager {
   const config: JarvisConfig = {
     version: 1,
-    models: { default: null, providers: {} },
-    mcpServers
+    models: { default: null, items: [] },
+    mcpServers,
+    // Ces tests ciblent les serveurs utilisateur : builtins désactivés.
+    builtinMcp: { memory: { enabled: false }, fetch: { enabled: false } }
+  };
+  return { getConfig: () => config } as unknown as ConfigManager;
+}
+
+function fakeConfigManagerFull(partial: Partial<JarvisConfig>): ConfigManager {
+  const config: JarvisConfig = {
+    version: 1,
+    models: { default: null, items: [] },
+    builtinMcp: { memory: { enabled: false }, fetch: { enabled: false } },
+    ...partial
   };
   return { getConfig: () => config } as unknown as ConfigManager;
 }
@@ -104,7 +116,48 @@ describe('McpManager', () => {
     expect(badStatus.error).toBe('spawn failed');
     const goodStatus = statuses.find(s => s.name === 'good')!;
     expect(goodStatus.connected).toBe(true);
-    expect(goodStatus.tools).toEqual(['echo']);
+    expect(goodStatus.tools).toEqual([
+      { name: 'echo', description: 'Echoes input', enabled: true }
+    ]);
+  });
+
+  it('filters disabledTools out of toToolDefinitions and flags them in statuses', async () => {
+    const otherTool: McpToolInfo = { name: 'other', description: 'Other', inputSchema: {} };
+    const client = fakeClient([echoTool, otherTool]);
+    const manager = new McpManager(
+      fakeConfigManagerFull({
+        mcpServers: { srv: { ...stdioConfig, disabledTools: ['echo'] } }
+      }),
+      () => client
+    );
+    await manager.initialize();
+
+    const defs = manager.toToolDefinitions();
+    expect(defs.map(d => d.name)).toEqual(['mcp__srv__other']);
+
+    const status = manager.getStatuses().find(s => s.name === 'srv')!;
+    expect(status.tools).toEqual([
+      { name: 'echo', description: 'Echoes input', enabled: false },
+      { name: 'other', description: 'Other', enabled: true }
+    ]);
+  });
+
+  it('applies builtinMcp disabledTools overrides to builtin servers', async () => {
+    const client = fakeClient([echoTool]);
+    const manager = new McpManager(
+      fakeConfigManagerFull({
+        builtinMcp: {
+          memory: { disabledTools: ['echo'] },
+          fetch: { enabled: false }
+        }
+      }),
+      () => client
+    );
+    await manager.initialize();
+
+    expect(manager.toToolDefinitions()).toHaveLength(0);
+    const memory = manager.getStatuses().find(s => s.name === 'memory')!;
+    expect(memory.tools).toEqual([{ name: 'echo', description: 'Echoes input', enabled: false }]);
   });
 
   it('reload closes existing clients and reconnects', async () => {

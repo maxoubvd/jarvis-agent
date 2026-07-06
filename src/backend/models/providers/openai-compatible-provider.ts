@@ -6,6 +6,7 @@ export interface OpenAICompatibleProviderOptions {
   baseUrl: string;
   model: string;
   apiKey?: string;
+  maxTokens?: number;
   extraHeaders?: Record<string, string>;
 }
 
@@ -23,6 +24,7 @@ export class OpenAICompatibleProvider implements IModelProvider {
       baseUrl: options.baseUrl.replace(/\/$/, ''),
       model: options.model,
       apiKey: options.apiKey,
+      maxTokens: options.maxTokens,
       extraHeaders: options.extraHeaders
     };
   }

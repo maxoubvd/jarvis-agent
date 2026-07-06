@@ -11,7 +11,8 @@ export interface TokenUsage {
   used: number;
   inputTokens: number;
   outputTokens: number;
-  limit: number;
+  /** Longueur de contexte du modèle configuré ; `null` si aucun modèle. */
+  limit: number | null;
   percentage: number;
   level: UsageLevel;
   /** Historique des 5 dernières requêtes (spec §2.1). */
@@ -32,17 +33,16 @@ export function estimateTokens(text: string): number {
 export class TokenCounter {
   private inputTokens = 0;
   private outputTokens = 0;
-  private limit: number;
+  private limit: number | null;
   private history: RequestTokenRecord[] = [];
 
-  constructor(limit = 32768) {
+  constructor(limit: number | null = null) {
     this.limit = limit;
   }
 
-  public setLimit(limit: number): void {
-    if (limit > 0) {
-      this.limit = limit;
-    }
+  /** `null` = aucun modèle configuré (la jauge affiche « 0 / — »). */
+  public setLimit(limit: number | null): void {
+    this.limit = limit !== null && limit > 0 ? limit : null;
   }
 
   public addRequest(model: string, inputTokens: number, outputTokens: number): void {
@@ -65,7 +65,8 @@ export class TokenCounter {
 
   public getUsage(): TokenUsage {
     const used = this.inputTokens + this.outputTokens;
-    const percentage = Math.min(100, Math.round((used / this.limit) * 100));
+    const limit = this.limit;
+    const percentage = limit ? Math.min(100, Math.round((used / limit) * 100)) : 0;
     const level: UsageLevel = percentage < 50 ? 'green' : percentage < 80 ? 'orange' : 'red';
     return {
       used,

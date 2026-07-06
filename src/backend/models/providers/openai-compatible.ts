@@ -4,6 +4,8 @@ export interface OpenAICompatibleConfig {
   baseUrl: string;
   model: string;
   apiKey?: string;
+  /** Limite de tokens de complétion (`max_tokens`), omise si non configurée. */
+  maxTokens?: number;
   extraHeaders?: Record<string, string>;
 }
 
@@ -21,6 +23,7 @@ export async function openaiCompatibleSend(
     body: JSON.stringify({
       model: config.model,
       messages: messages.map(m => ({ role: m.role, content: m.content })),
+      ...(config.maxTokens ? { max_tokens: config.maxTokens } : {}),
       stream: false
     })
   });
@@ -49,6 +52,7 @@ export async function openaiCompatibleStream(
       body: JSON.stringify({
         model: config.model,
         messages: messages.map(m => ({ role: m.role, content: m.content })),
+        ...(config.maxTokens ? { max_tokens: config.maxTokens } : {}),
         stream: true
       })
     });

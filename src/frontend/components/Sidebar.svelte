@@ -1,33 +1,18 @@
 <script lang="ts">
+  import Icon from './Icon.svelte';
+
   interface Props {
     activeTab?: string;
-    hitlMode?: string;
-    showThinking?: boolean;
     onTabChange?: (tab: string) => void;
-    onHitlModeChange?: (mode: string) => void;
-    onToggleThinking?: (show: boolean) => void;
   }
 
-  let {
-    activeTab = 'chat',
-    hitlMode = 'moderate',
-    showThinking = true,
-    onTabChange = () => {},
-    onHitlModeChange = () => {},
-    onToggleThinking = () => {}
-  }: Props = $props();
+  let { activeTab = 'chat', onTabChange = () => {} }: Props = $props();
 
   const tabs = [
-    { id: 'chat', label: '💬 Chat' },
-    { id: 'checkpoints', label: '🕒 Checkpoints' },
-    { id: 'analytics', label: '📊 Analytics' },
-    { id: 'settings', label: '⚙️ Settings' }
-  ];
-
-  const hitlModes = [
-    { id: 'strict', label: 'Strict' },
-    { id: 'moderate', label: 'Moderate' },
-    { id: 'free', label: 'Free' }
+    { id: 'chat', label: 'Chat', icon: 'chat' },
+    { id: 'checkpoints', label: 'Checkpoints', icon: 'history' },
+    { id: 'analytics', label: 'Analytics', icon: 'graph' },
+    { id: 'settings', label: 'Settings', icon: 'gear' }
   ];
 </script>
 
@@ -40,30 +25,11 @@
         class:active={activeTab === tab.id}
         onclick={() => onTabChange(tab.id)}
       >
+        <Icon name={tab.icon} size={15} />
         {tab.label}
       </button>
     {/each}
   </nav>
-
-  <div class="section-title">HITL</div>
-  <select
-    class="hitl-select"
-    value={hitlMode}
-    onchange={e => onHitlModeChange((e.target as HTMLSelectElement).value)}
-  >
-    {#each hitlModes as mode (mode.id)}
-      <option value={mode.id}>{mode.label}</option>
-    {/each}
-  </select>
-
-  <label class="toggle">
-    <input
-      type="checkbox"
-      checked={showThinking}
-      onchange={e => onToggleThinking((e.target as HTMLInputElement).checked)}
-    />
-    🧠 Thinking
-  </label>
 
   <div class="hint">
     <div class="hint-title">Commands</div>
@@ -80,8 +46,8 @@
   .sidebar {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
-    padding: 1rem 0.75rem;
+    gap: var(--jarvis-space-4);
+    padding: var(--jarvis-space-4) var(--jarvis-space-3);
     box-sizing: border-box;
     background: var(--vscode-sideBar-background);
     color: var(--vscode-sideBar-foreground);
@@ -89,7 +55,7 @@
   }
 
   .section-title {
-    font-size: 0.7rem;
+    font-size: var(--jarvis-text-xs);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -99,18 +65,23 @@
   .tabs {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
+    gap: var(--jarvis-space-1);
   }
 
   .tab {
-    padding: 0.5rem 0.6rem;
+    display: flex;
+    align-items: center;
+    gap: var(--jarvis-space-2);
+    padding: 7px 10px;
     text-align: left;
     background: transparent;
     border: none;
-    border-radius: 4px;
+    border-radius: var(--jarvis-radius-md);
     color: var(--vscode-sideBar-foreground);
     cursor: pointer;
-    font-size: 0.9rem;
+    font-size: var(--jarvis-text-md);
+    font-family: inherit;
+    transition: background var(--jarvis-transition);
   }
 
   .tab:hover {
@@ -118,47 +89,30 @@
   }
 
   .tab.active {
-    background: var(--vscode-list-activeSelectionBackground);
-    color: var(--vscode-list-activeSelectionForeground);
-  }
-
-  .hitl-select {
-    padding: 0.35rem 0.4rem;
-    background: var(--vscode-dropdown-background, var(--vscode-input-background));
-    color: var(--vscode-dropdown-foreground, var(--vscode-input-foreground));
-    border: 1px solid var(--vscode-dropdown-border, var(--vscode-input-border));
-    border-radius: 4px;
-    font-size: 0.85rem;
-  }
-
-  .toggle {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    font-size: 0.82rem;
-    cursor: pointer;
-    color: var(--vscode-sideBar-foreground);
+    background: var(--jarvis-accent-dim);
+    box-shadow: inset 2px 0 0 var(--jarvis-accent);
+    color: inherit;
   }
 
   .hint {
     display: flex;
     flex-direction: column;
-    gap: 0.35rem;
+    gap: var(--jarvis-space-1);
     margin-top: auto;
-    padding-top: 1rem;
+    padding-top: var(--jarvis-space-4);
     border-top: 1px solid var(--vscode-panel-border);
   }
 
   .hint-title {
-    font-size: 0.7rem;
+    font-size: var(--jarvis-text-xs);
     font-weight: 700;
     text-transform: uppercase;
     color: var(--vscode-descriptionForeground);
-    margin-bottom: 0.15rem;
+    margin-bottom: 2px;
   }
 
   code {
-    font-size: 0.72rem;
+    font-size: var(--jarvis-text-xs);
     font-family: var(--vscode-editor-font-family, monospace);
     color: var(--vscode-descriptionForeground);
   }

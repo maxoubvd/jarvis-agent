@@ -1,6 +1,8 @@
 import { Client as McpClient } from '@modelcontextprotocol/sdk/client/index.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { StdioClientTransport, getDefaultEnvironment } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { McpServerConfig } from '../../config/config-manager.js';
 
@@ -23,7 +25,9 @@ export class JarvisMcpClient {
 
   constructor(
     public readonly serverName: string,
-    private readonly config: McpServerConfig
+    private readonly config: McpServerConfig,
+    /** Serveur in-process (builtin implémenté dans l'extension) : connexion par paire mémoire. */
+    private readonly inProcessFactory?: () => Server
   ) {
     this.client = new McpClient(
       { name: 'jarvis-mcp-client', version: '0.0.1' },
@@ -33,7 +37,7 @@ export class JarvisMcpClient {
 
   public async connect(): Promise<void> {
     try {
-      this.transport = this.buildTransport();
+      this.transport = await this.buildTransport();
       await this.client.connect(this.transport);
       this.connected = true;
       this.lastError = null;
@@ -44,7 +48,12 @@ export class JarvisMcpClient {
     }
   }
 
-  private buildTransport(): Transport {
+  private async buildTransport(): Promise<Transport> {
+    if (this.inProcessFactory) {
+      const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+      await this.inProcessFactory().connect(serverTransport);
+      return clientTransport;
+    }
     if (this.config.transport === 'stdio') {
       if (!this.config.command) {
         throw new Error(`MCP ${this.serverName}: 'command' requis pour le transport stdio`);
@@ -52,7 +61,9 @@ export class JarvisMcpClient {
       return new StdioClientTransport({
         command: this.config.command,
         args: this.config.args ?? [],
-        env: this.config.env
+        // Fusionne avec l'environnement par défaut : un `env` fourni tel quel
+        // REMPLACERAIT l'environnement du process (PATH perdu → npx/uvx cassés).
+        env: this.config.env ? { ...getDefaultEnvironment(), ...this.config.env } : undefined
       });
     }
     if (!this.config.url) {

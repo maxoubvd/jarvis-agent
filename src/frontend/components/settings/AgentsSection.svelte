@@ -1,0 +1,144 @@
+<script lang="ts">
+  import type { SpecializedAgent } from '../../shared/types';
+  import Icon from '../Icon.svelte';
+
+  interface Props {
+    items?: SpecializedAgent[];
+    defaults?: SpecializedAgent[];
+    onChange?: (next: SpecializedAgent[]) => void;
+  }
+
+  let { items = [], defaults = [], onChange = () => {} }: Props = $props();
+
+  function update(next: SpecializedAgent[]) {
+    onChange(next);
+  }
+
+  function addAgent() {
+    update([
+      ...items,
+      {
+        id: crypto.randomUUID(),
+        mention: '@My-Agent',
+        label: 'My Agent',
+        description: '',
+        systemPrompt: '',
+        keywords: []
+      }
+    ]);
+  }
+
+  function removeAgent(index: number) {
+    update(items.filter((_, i) => i !== index));
+  }
+
+  function patch(index: number, partial: Partial<SpecializedAgent>) {
+    update(items.map((a, i) => (i === index ? { ...a, ...partial } : a)));
+  }
+
+  function resetToDefaults() {
+    update(structuredClone(defaults));
+  }
+
+  function keywordsText(agent: SpecializedAgent): string {
+    return (agent.keywords ?? []).join(', ');
+  }
+
+  function parseKeywords(text: string): string[] {
+    return text.split(',').map(k => k.trim()).filter(Boolean);
+  }
+</script>
+
+<div class="group j-group">
+  <div class="group-head j-row">
+    <h3><Icon name="tools" size={14} /> Agents</h3>
+    <div class="j-row">
+      <button class="j-btn" onclick={resetToDefaults}>Reset to defaults</button>
+      <button class="j-btn" onclick={addAgent}><Icon name="add" size={13} /> Add agent</button>
+    </div>
+  </div>
+
+  <p class="j-hint">
+    Specialized agents invoked with an @mention in the chat. Leave untouched to follow the
+    built-in defaults automatically.
+  </p>
+
+  {#if items.length === 0}
+    <div class="j-empty">No agents. "Reset to defaults" restores the built-in agents.</div>
+  {/if}
+
+  {#each items as agent, index (agent.id)}
+    <div class="j-card">
+      <div class="j-row">
+        <input
+          class="j-input"
+          style="width: 10rem"
+          placeholder="@Mention"
+          value={agent.mention}
+          oninput={e => patch(index, { mention: (e.target as HTMLInputElement).value })}
+        />
+        <input
+          class="j-input j-grow"
+          placeholder="Label"
+          value={agent.label}
+          oninput={e => patch(index, { label: (e.target as HTMLInputElement).value })}
+        />
+        <button class="j-btn j-btn-danger j-btn-icon" title="Remove" onclick={() => removeAgent(index)}>
+          <Icon name="trash" size={13} />
+        </button>
+      </div>
+      {#if agent.mention && !agent.mention.startsWith('@')}
+        <div class="warn">The mention should start with “@”.</div>
+      {/if}
+      <label class="j-field">
+        <span>Description</span>
+        <input
+          class="j-input"
+          value={agent.description}
+          oninput={e => patch(index, { description: (e.target as HTMLInputElement).value })}
+        />
+      </label>
+      <label class="j-field">
+        <span>System prompt</span>
+        <textarea
+          class="j-textarea"
+          rows="4"
+          value={agent.systemPrompt}
+          oninput={e => patch(index, { systemPrompt: (e.target as HTMLTextAreaElement).value })}
+        ></textarea>
+      </label>
+      <label class="j-field">
+        <span>Keywords (comma-separated, used for auto-suggestion)</span>
+        <input
+          class="j-input"
+          value={keywordsText(agent)}
+          oninput={e => patch(index, { keywords: parseKeywords((e.target as HTMLInputElement).value) })}
+        />
+      </label>
+    </div>
+  {/each}
+</div>
+
+<style>
+  .group-head {
+    justify-content: space-between;
+  }
+
+  h3 {
+    margin: 0;
+    font-size: var(--jarvis-text-md);
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: var(--jarvis-space-1);
+  }
+
+  .warn {
+    font-size: var(--jarvis-text-xs);
+    color: var(--vscode-terminal-ansiYellow);
+  }
+
+  p {
+    margin: 0;
+  }
+</style>

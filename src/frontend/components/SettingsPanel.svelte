@@ -1,75 +1,77 @@
 <script lang="ts">
   import type {
     JarvisConfig,
-    ProviderConfigItem,
-    ProviderType,
+    ModelItem,
     OptimizationConfig,
     McpServerConfig,
-    RuleItem
+    McpServerStatus,
+    BuiltinMcpOverride,
+    PromptItem,
+    RuleItem,
+    SpecializedAgent,
+    Workflow,
+    DocSite,
+    DocsSiteStatus,
+    WorkspaceProfile,
+    SettingsDefaults
   } from '../shared/types';
-
-  interface McpServerStatus {
-    name: string;
-    enabled: boolean;
-    connected: boolean;
-    tools: string[];
-    error?: string;
-  }
+  import Icon from './Icon.svelte';
+  import Toggle from './Toggle.svelte';
+  import ModelsSection from './settings/ModelsSection.svelte';
+  import McpSection, { type McpEntry } from './settings/McpSection.svelte';
+  import PromptsSection from './settings/PromptsSection.svelte';
+  import AgentsSection from './settings/AgentsSection.svelte';
+  import WorkflowsSection from './settings/WorkflowsSection.svelte';
+  import DocsSection from './settings/DocsSection.svelte';
+  import WorkspacesSection from './settings/WorkspacesSection.svelte';
 
   interface Props {
     settings?: JarvisConfig | null;
+    defaults?: SettingsDefaults | null;
     saveStatus?: { ok: boolean; error?: string } | null;
     mcpServers?: McpServerStatus[];
+    docsStatuses?: DocsSiteStatus[];
+    currentFolder?: string;
+    indexStatus?: { indexing: boolean; fileCount: number } | null;
     onSave?: (config: JarvisConfig) => void;
+    onIndexDocs?: (id: string) => void;
+    onReindex?: () => void;
+    onOpenConfig?: () => void;
   }
 
-  let { settings = null, saveStatus = null, mcpServers = [], onSave = () => {} }: Props = $props();
+  let {
+    settings = null,
+    defaults = null,
+    saveStatus = null,
+    mcpServers = [],
+    docsStatuses = [],
+    currentFolder = '',
+    indexStatus = null,
+    onSave = () => {},
+    onIndexDocs = () => {},
+    onReindex = () => {},
+    onOpenConfig = () => {}
+  }: Props = $props();
 
-  interface ProviderEntry {
-    key: string;
-    value: ProviderConfigItem;
-  }
-
-  const PROVIDER_TYPES: ProviderType[] = [
-    'openai-compatible',
-    'ollama',
-    'openrouter',
-    'lmstudio',
-    'mistral'
-  ];
-
-  const DEFAULT_BASE_URL: Record<ProviderType, string> = {
-    ollama: 'http://localhost:11434',
-    openrouter: 'https://openrouter.ai/api/v1',
-    lmstudio: 'http://localhost:1234/v1',
-    mistral: 'https://api.mistral.ai/v1',
-    'openai-compatible': 'https://api.openai.com/v1'
-  };
-
-  interface McpEntry {
-    key: string;
-    value: McpServerConfig;
-    /** Représentation éditable de args (une par ligne). */
-    argsText: string;
-    /** Représentation éditable de env (KEY=value, une par ligne). */
-    envText: string;
-  }
-
-  let providers = $state<ProviderEntry[]>([]);
+  let modelItems = $state<ModelItem[]>([]);
   let defaultModel = $state<string>('');
   let optimization = $state<OptimizationConfig>({});
   let mcpEntries = $state<McpEntry[]>([]);
   let rules = $state<RuleItem[]>([]);
+  let prompts = $state<PromptItem[]>([]);
+  let agents = $state<SpecializedAgent[]>([]);
+  let workflows = $state<Workflow[]>([]);
+  let builtinToggles = $state<Record<string, boolean>>({});
+  let builtinDisabledTools = $state<Record<string, string[]>>({});
+  let docs = $state<DocSite[]>([]);
+  let workspaces = $state<WorkspaceProfile[]>([]);
   let dirty = $state(false);
 
   // Re-synchronise l'état local quand une nouvelle config arrive du backend.
   $effect(() => {
     const incoming = settings;
     if (!incoming) return;
-    providers = Object.entries(incoming.models.providers ?? {}).map(([key, value]) => ({
-      key,
-      value: structuredClone($state.snapshot(value))
-    }));
+    modelItems = structuredClone($state.snapshot(incoming.models.items ?? [])) as ModelItem[];
     defaultModel = incoming.models.default ?? '';
     optimization = structuredClone($state.snapshot(incoming.optimization ?? {}));
     mcpEntries = Object.entries(incoming.mcpServers ?? {}).map(([key, value]) => ({
@@ -79,6 +81,26 @@
       envText: Object.entries(value.env ?? {}).map(([k, v]) => `${k}=${v}`).join('\n')
     }));
     rules = structuredClone($state.snapshot(incoming.rules ?? []));
+    prompts = structuredClone($state.snapshot(incoming.prompts ?? [])) as PromptItem[];
+    // Pré-remplit avec les défauts codés en dur quand la config est vide
+    // (même sémantique que getAgents/getWorkflows : config non vide gagne).
+    agents = structuredClone(
+      incoming.agents?.length ? $state.snapshot(incoming.agents) : (defaults?.agents ?? [])
+    ) as SpecializedAgent[];
+    workflows = structuredClone(
+      incoming.workflows?.length ? $state.snapshot(incoming.workflows) : (defaults?.workflows ?? [])
+    ) as Workflow[];
+    builtinToggles = Object.fromEntries(
+      (defaults?.builtinMcp ?? []).map(b => [
+        b.id,
+        incoming.builtinMcp?.[b.id]?.enabled ?? b.defaultEnabled
+      ])
+    );
+    builtinDisabledTools = Object.fromEntries(
+      (defaults?.builtinMcp ?? []).map(b => [b.id, incoming.builtinMcp?.[b.id]?.disabledTools ?? []])
+    );
+    docs = structuredClone($state.snapshot(incoming.docs ?? [])) as DocSite[];
+    workspaces = structuredClone($state.snapshot(incoming.workspaces ?? [])) as WorkspaceProfile[];
     dirty = false;
   });
 
@@ -86,86 +108,12 @@
     dirty = true;
   }
 
-  function allModelNames(): string[] {
-    return providers
-      .filter(p => p.value.enabled)
-      .flatMap(p => p.value.models.map(m => m.name))
-      .filter(Boolean);
-  }
-
-  function addProvider() {
-    let base = 'provider';
-    let key = base;
-    let i = 1;
-    const used = new Set(providers.map(p => p.key));
-    while (used.has(key)) key = `${base}-${++i}`;
-    providers = [
-      ...providers,
-      {
-        key,
-        value: {
-          enabled: true,
-          type: 'openai-compatible',
-          baseUrl: DEFAULT_BASE_URL['openai-compatible'],
-          apiKey: '',
-          models: []
-        }
-      }
-    ];
-    markDirty();
-  }
-
-  function removeProvider(index: number) {
-    providers = providers.filter((_, i) => i !== index);
-    markDirty();
-  }
-
-  function onTypeChange(entry: ProviderEntry, type: ProviderType) {
-    entry.value.type = type;
-    if (!entry.value.baseUrl || Object.values(DEFAULT_BASE_URL).includes(entry.value.baseUrl)) {
-      entry.value.baseUrl = DEFAULT_BASE_URL[type];
-    }
-    providers = [...providers];
-    markDirty();
-  }
-
-  function addModel(entry: ProviderEntry) {
-    entry.value.models = [...entry.value.models, { name: '', contextLength: 32768 }];
-    providers = [...providers];
-    markDirty();
-  }
-
-  function removeModel(entry: ProviderEntry, index: number) {
-    entry.value.models = entry.value.models.filter((_, i) => i !== index);
-    providers = [...providers];
-    markDirty();
-  }
-
-  function needsApiKey(type: ProviderType | undefined): boolean {
-    return type === 'openrouter' || type === 'mistral' || type === 'openai-compatible';
-  }
-
   // --- MCP servers ---
 
-  function addMcpServer() {
-    let key = 'server';
-    let i = 1;
-    const used = new Set(mcpEntries.map(e => e.key));
-    while (used.has(key)) key = `server-${++i}`;
-    mcpEntries = [
-      ...mcpEntries,
-      { key, value: { enabled: true, transport: 'stdio', command: '' }, argsText: '', envText: '' }
-    ];
+  function onBuiltinToolToggle(id: string, tool: string, enabled: boolean) {
+    const current = builtinDisabledTools[id] ?? [];
+    builtinDisabledTools[id] = enabled ? current.filter(t => t !== tool) : [...current, tool];
     markDirty();
-  }
-
-  function removeMcpServer(index: number) {
-    mcpEntries = mcpEntries.filter((_, i) => i !== index);
-    markDirty();
-  }
-
-  function statusFor(key: string): McpServerStatus | undefined {
-    return mcpServers.find(s => s.name === key);
   }
 
   function parseEnv(text: string): Record<string, string> | undefined {
@@ -195,20 +143,35 @@
     markDirty();
   }
 
-  function serialize(): JarvisConfig {
-    const providerRecord: Record<string, ProviderConfigItem> = {};
-    for (const { key, value } of providers) {
-      if (!key.trim()) continue;
-      providerRecord[key.trim()] = {
-        enabled: value.enabled,
-        type: value.type,
-        baseUrl: value.baseUrl,
-        apiKey: value.apiKey,
-        models: value.models
-          .filter(m => m.name.trim())
-          .map(m => ({ name: m.name.trim(), contextLength: Number(m.contextLength) || 32768 }))
-      };
+  /**
+   * Règle omit-if-unchanged : si la liste éditée est identique aux défauts,
+   * on n'écrit rien dans la config — les futurs changements de défauts restent
+   * ainsi suivis (sémantique getAgents/getWorkflows : « config non vide gagne »).
+   */
+  function omitIfDefault<T>(edited: T[], defaultItems: T[] | undefined): T[] | undefined {
+    if (edited.length === 0) return undefined;
+    if (defaultItems && JSON.stringify(edited) === JSON.stringify(defaultItems)) return undefined;
+    return edited;
+  }
+
+  /** N'écrit un override que si l'activation diffère du défaut ou des tools sont désactivés. */
+  function serializeBuiltinMcp(): Record<string, BuiltinMcpOverride> | undefined {
+    const out: Record<string, BuiltinMcpOverride> = {};
+    for (const b of defaults?.builtinMcp ?? []) {
+      const override: BuiltinMcpOverride = {};
+      const enabled = builtinToggles[b.id] ?? b.defaultEnabled;
+      if (enabled !== b.defaultEnabled) override.enabled = enabled;
+      const disabledTools = builtinDisabledTools[b.id] ?? [];
+      if (disabledTools.length > 0) override.disabledTools = [...disabledTools];
+      if (Object.keys(override).length > 0) out[b.id] = override;
     }
+    return Object.keys(out).length > 0 ? out : undefined;
+  }
+
+  function serialize(): JarvisConfig {
+    const items: ModelItem[] = ($state.snapshot(modelItems) as ModelItem[])
+      .filter(m => m.name.trim())
+      .map(m => ({ ...m, name: m.name.trim(), model: (m.model || m.name).trim() }));
     const mcpRecord: Record<string, McpServerConfig> = {};
     for (const entry of mcpEntries) {
       if (!entry.key.trim()) continue;
@@ -219,7 +182,8 @@
         command: entry.value.transport === 'stdio' ? entry.value.command : undefined,
         args: entry.value.transport === 'stdio' && args.length > 0 ? args : undefined,
         env: entry.value.transport === 'stdio' ? parseEnv(entry.envText) : undefined,
-        url: entry.value.transport === 'sse' ? entry.value.url : undefined
+        url: entry.value.transport === 'sse' ? entry.value.url : undefined,
+        disabledTools: entry.value.disabledTools?.length ? [...entry.value.disabledTools] : undefined
       };
     }
 
@@ -227,13 +191,23 @@
       version: settings?.version ?? 1,
       models: {
         default: defaultModel || null,
-        providers: providerRecord
+        items
       },
       mcpServers: Object.keys(mcpRecord).length > 0 ? mcpRecord : undefined,
       rules: rules.filter(r => r.content.trim() || r.name.trim()),
-      // Non édités ici — préservés pour ne pas les perdre à la sauvegarde.
-      workflows: settings?.workflows,
-      agents: settings?.agents,
+      prompts: (() => {
+        const kept = ($state.snapshot(prompts) as PromptItem[]).filter(
+          p => p.name.trim() || p.content.trim()
+        );
+        return kept.length > 0 ? kept : undefined;
+      })(),
+      workflows: omitIfDefault($state.snapshot(workflows) as Workflow[], defaults?.workflows),
+      agents: omitIfDefault($state.snapshot(agents) as SpecializedAgent[], defaults?.agents),
+      builtinMcp: serializeBuiltinMcp(),
+      docs: docs.length > 0 ? ($state.snapshot(docs) as DocSite[]) : undefined,
+      workspaces: workspaces.length > 0 ? ($state.snapshot(workspaces) as WorkspaceProfile[]) : undefined,
+      // Non édité ici — préservé pour ne pas réinitialiser le workspace actif.
+      activeWorkspaceId: settings?.activeWorkspaceId,
       optimization
     };
   }
@@ -246,13 +220,17 @@
 
 <section class="settings">
   <header class="settings-header">
-    <h2>⚙️ Settings</h2>
+    <h2><Icon name="gear" size={15} /> Settings</h2>
     <div class="actions">
       {#if saveStatus}
         <span class="save-status" class:error={!saveStatus.ok}>
-          {saveStatus.ok ? '✅ Saved' : `❌ ${saveStatus.error ?? 'Error'}`}
+          <Icon name={saveStatus.ok ? 'check' : 'error'} size={12} />
+          {saveStatus.ok ? 'Saved' : (saveStatus.error ?? 'Error')}
         </span>
       {/if}
+      <button title="Open ~/.jarvis/config.json in the editor" onclick={onOpenConfig}>
+        Edit config file
+      </button>
       <button class="primary" onclick={save} disabled={!dirty}>Save</button>
     </div>
   </header>
@@ -262,169 +240,26 @@
     default — add a provider and API key to get started.
   </p>
 
-  <!-- Providers & Models -->
-  <div class="group">
-    <div class="group-head">
-      <h3>Models & Providers</h3>
-      <button onclick={addProvider}>+ Add provider</button>
-    </div>
-
-    {#if providers.length === 0}
-      <div class="empty">No provider yet. Add one to configure a model.</div>
-    {/if}
-
-    {#each providers as entry, pIndex (pIndex)}
-      <div class="provider" class:disabled={!entry.value.enabled}>
-        <div class="provider-row">
-          <input
-            class="provider-name"
-            placeholder="provider id (e.g. openai)"
-            bind:value={entry.key}
-            oninput={markDirty}
-          />
-          <select
-            value={entry.value.type ?? 'openai-compatible'}
-            onchange={e => onTypeChange(entry, (e.target as HTMLSelectElement).value as ProviderType)}
-          >
-            {#each PROVIDER_TYPES as t}
-              <option value={t}>{t}</option>
-            {/each}
-          </select>
-          <label class="enable">
-            <input type="checkbox" bind:checked={entry.value.enabled} onchange={markDirty} />
-            Enabled
-          </label>
-          <button class="danger" onclick={() => removeProvider(pIndex)}>Remove</button>
-        </div>
-
-        <label class="field">
-          <span>Base URL</span>
-          <input bind:value={entry.value.baseUrl} oninput={markDirty} placeholder="https://…" />
-        </label>
-
-        {#if needsApiKey(entry.value.type)}
-          <label class="field">
-            <span>API Key</span>
-            <input
-              type="password"
-              bind:value={entry.value.apiKey}
-              oninput={markDirty}
-              placeholder="sk-…"
-              autocomplete="off"
-            />
-          </label>
-        {/if}
-
-        <div class="models">
-          <div class="models-head">
-            <span>Models</span>
-            <button onclick={() => addModel(entry)}>+ Add model</button>
-          </div>
-          {#each entry.value.models as model, mIndex (mIndex)}
-            <div class="model-row">
-              <input
-                class="grow"
-                placeholder="model name"
-                bind:value={model.name}
-                oninput={markDirty}
-              />
-              <input
-                class="ctx"
-                type="number"
-                min="1"
-                title="Context length"
-                bind:value={model.contextLength}
-                oninput={markDirty}
-              />
-              <label class="default-radio" title="Set as default model">
-                <input
-                  type="radio"
-                  name="default-model"
-                  checked={defaultModel === model.name && !!model.name}
-                  disabled={!model.name}
-                  onchange={() => { defaultModel = model.name; markDirty(); }}
-                />
-                default
-              </label>
-              <button class="danger" onclick={() => removeModel(entry, mIndex)}>✕</button>
-            </div>
-          {/each}
-        </div>
-      </div>
-    {/each}
-
-    {#if allModelNames().length > 0}
-      <label class="field default-select">
-        <span>Default model</span>
-        <select bind:value={defaultModel} onchange={markDirty}>
-          <option value="">— none —</option>
-          {#each allModelNames() as name}
-            <option value={name}>{name}</option>
-          {/each}
-        </select>
-      </label>
-    {/if}
-  </div>
+  <!-- Models -->
+  <ModelsSection
+    items={modelItems}
+    {defaultModel}
+    onChange={next => { modelItems = next; markDirty(); }}
+    onDefaultChange={name => { defaultModel = name; markDirty(); }}
+  />
 
   <!-- MCP servers -->
-  <div class="group">
-    <div class="group-head">
-      <h3>MCP Servers</h3>
-      <button onclick={addMcpServer}>+ Add server</button>
-    </div>
-
-    {#if mcpEntries.length === 0}
-      <div class="empty">No MCP server configured. Add one to expose its tools to the agent.</div>
-    {/if}
-
-    {#each mcpEntries as entry, sIndex (sIndex)}
-      {@const status = statusFor(entry.key)}
-      <div class="provider" class:disabled={!entry.value.enabled}>
-        <div class="provider-row">
-          <input
-            class="provider-name"
-            placeholder="server id (e.g. filesystem)"
-            bind:value={entry.key}
-            oninput={markDirty}
-          />
-          <select bind:value={entry.value.transport} onchange={markDirty}>
-            <option value="stdio">stdio</option>
-            <option value="sse">sse</option>
-          </select>
-          <label class="enable">
-            <input type="checkbox" bind:checked={entry.value.enabled} onchange={markDirty} />
-            Enabled
-          </label>
-          {#if status}
-            <span class="mcp-status" class:ok={status.connected} class:ko={!status.connected && !!status.error}>
-              {status.connected ? `● connected (${status.tools.length} tools)` : status.error ? `● ${status.error}` : '○ not connected'}
-            </span>
-          {/if}
-          <button class="danger" onclick={() => removeMcpServer(sIndex)}>Remove</button>
-        </div>
-
-        {#if entry.value.transport === 'stdio'}
-          <label class="field">
-            <span>Command</span>
-            <input bind:value={entry.value.command} oninput={markDirty} placeholder="npx" />
-          </label>
-          <label class="field">
-            <span>Arguments (one per line)</span>
-            <textarea rows="2" bind:value={entry.argsText} oninput={markDirty} placeholder="-y&#10;@modelcontextprotocol/server-filesystem"></textarea>
-          </label>
-          <label class="field">
-            <span>Environment (KEY=value, one per line)</span>
-            <textarea rows="2" bind:value={entry.envText} oninput={markDirty} placeholder="API_TOKEN=…"></textarea>
-          </label>
-        {:else}
-          <label class="field">
-            <span>URL</span>
-            <input bind:value={entry.value.url} oninput={markDirty} placeholder="https://host/sse" />
-          </label>
-        {/if}
-      </div>
-    {/each}
-  </div>
+  <McpSection
+    builtins={defaults?.builtinMcp ?? []}
+    {builtinToggles}
+    {builtinDisabledTools}
+    entries={mcpEntries}
+    statuses={mcpServers}
+    customTools={defaults?.customTools ?? []}
+    onBuiltinToggle={(id, on) => { builtinToggles[id] = on; markDirty(); }}
+    {onBuiltinToolToggle}
+    onEntriesChange={next => { mcpEntries = next; markDirty(); }}
+  />
 
   <!-- Rules -->
   <div class="group">
@@ -441,10 +276,11 @@
       <div class="provider" class:disabled={!rule.enabled}>
         <div class="provider-row">
           <input class="provider-name" placeholder="rule name" bind:value={rule.name} oninput={markDirty} />
-          <label class="enable">
-            <input type="checkbox" bind:checked={rule.enabled} onchange={markDirty} />
-            Enabled
-          </label>
+          <Toggle
+            checked={rule.enabled}
+            label="Enabled"
+            onchange={on => { rule.enabled = on; markDirty(); }}
+          />
           <button class="danger" onclick={() => removeRule(rIndex)}>Remove</button>
         </div>
         <textarea
@@ -456,6 +292,44 @@
       </div>
     {/each}
   </div>
+
+  <!-- Prompts -->
+  <PromptsSection
+    items={prompts}
+    onChange={next => { prompts = next; markDirty(); }}
+  />
+
+  <!-- Workspaces -->
+  <WorkspacesSection
+    items={workspaces}
+    {currentFolder}
+    {indexStatus}
+    onChange={next => { workspaces = next; markDirty(); }}
+    {onReindex}
+  />
+
+  <!-- Docs -->
+  <DocsSection
+    sites={docs}
+    statuses={docsStatuses}
+    {dirty}
+    onChange={next => { docs = next; markDirty(); }}
+    onIndex={onIndexDocs}
+  />
+
+  <!-- Agents -->
+  <AgentsSection
+    items={agents}
+    defaults={defaults?.agents ?? []}
+    onChange={next => { agents = next; markDirty(); }}
+  />
+
+  <!-- Workflows -->
+  <WorkflowsSection
+    items={workflows}
+    defaults={defaults?.workflows ?? []}
+    onChange={next => { workflows = next; markDirty(); }}
+  />
 
   <!-- Optimization -->
   <div class="group">
@@ -470,6 +344,12 @@
         <option value="free">free</option>
       </select>
     </label>
+
+    <Toggle
+      checked={optimization.showThinking ?? true}
+      label="Show thinking blocks in the chat"
+      onchange={on => { optimization.showThinking = on; markDirty(); }}
+    />
 
     <label class="field">
       <span>Agent max iterations</span>
@@ -515,7 +395,12 @@
 
   .settings-header h2 {
     margin: 0;
-    font-size: 1rem;
+    font-size: var(--jarvis-text-md);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    display: flex;
+    align-items: center;
+    gap: var(--jarvis-space-1);
   }
 
   .actions {
@@ -525,7 +410,10 @@
   }
 
   .save-status {
-    font-size: 0.78rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: var(--jarvis-text-xs);
     color: var(--vscode-terminal-ansiGreen);
   }
 
@@ -548,8 +436,8 @@
     flex-direction: column;
     gap: 0.6rem;
     border: 1px solid var(--vscode-editorWidget-border);
-    border-radius: 0.5rem;
-    padding: 0.75rem;
+    border-radius: var(--jarvis-radius-lg);
+    padding: var(--jarvis-space-4);
     background: var(--vscode-editorWidget-background);
   }
 
@@ -575,7 +463,7 @@
     flex-direction: column;
     gap: 0.5rem;
     border: 1px solid var(--vscode-editorWidget-border);
-    border-radius: 0.4rem;
+    border-radius: var(--jarvis-radius-md);
     padding: 0.6rem;
     background: var(--vscode-editor-background);
   }
@@ -596,14 +484,6 @@
     min-width: 8rem;
   }
 
-  .enable {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-    font-size: 0.78rem;
-    white-space: nowrap;
-  }
-
   .field {
     display: flex;
     flex-direction: column;
@@ -615,67 +495,6 @@
     color: var(--vscode-descriptionForeground);
     text-transform: uppercase;
     letter-spacing: 0.03em;
-  }
-
-  .models {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-    border-top: 1px dashed var(--vscode-editorWidget-border);
-    padding-top: 0.5rem;
-  }
-
-  .models-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    font-size: 0.72rem;
-    text-transform: uppercase;
-    color: var(--vscode-descriptionForeground);
-  }
-
-  .model-row {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-  }
-
-  .grow {
-    flex: 1;
-    min-width: 6rem;
-  }
-
-  .ctx {
-    width: 6rem;
-  }
-
-  .default-radio {
-    display: flex;
-    align-items: center;
-    gap: 0.2rem;
-    font-size: 0.72rem;
-    white-space: nowrap;
-  }
-
-  .default-select {
-    margin-top: 0.25rem;
-  }
-
-  .mcp-status {
-    font-size: 0.72rem;
-    color: var(--vscode-descriptionForeground);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 14rem;
-  }
-
-  .mcp-status.ok {
-    color: var(--vscode-terminal-ansiGreen);
-  }
-
-  .mcp-status.ko {
-    color: var(--vscode-terminal-ansiRed);
   }
 
   textarea {
@@ -690,7 +509,8 @@
   }
 
   textarea:focus {
-    outline: 1px solid var(--vscode-focusBorder);
+    outline: 1px solid var(--jarvis-accent);
+    outline-offset: -1px;
   }
 
   input,
@@ -706,17 +526,19 @@
 
   input:focus,
   select:focus {
-    outline: 1px solid var(--vscode-focusBorder);
+    outline: 1px solid var(--jarvis-accent);
+    outline-offset: -1px;
   }
 
   button {
-    padding: 0.35rem 0.6rem;
+    padding: 5px 12px;
     background: var(--vscode-button-secondaryBackground, var(--vscode-editorWidget-background));
     color: var(--vscode-button-secondaryForeground, var(--vscode-editor-foreground));
     border: 1px solid var(--vscode-editorWidget-border);
-    border-radius: 4px;
+    border-radius: var(--jarvis-radius-pill);
     cursor: pointer;
-    font-size: 0.8rem;
+    font-size: var(--jarvis-text-sm);
+    transition: background var(--jarvis-transition);
   }
 
   button:hover:not(:disabled) {
@@ -724,13 +546,13 @@
   }
 
   button.primary {
-    background: var(--vscode-button-background);
-    color: var(--vscode-button-foreground);
+    background: var(--jarvis-accent);
+    color: var(--jarvis-accent-fg);
     border-color: transparent;
   }
 
   button.primary:hover:not(:disabled) {
-    background: var(--vscode-button-hoverBackground);
+    background: var(--jarvis-accent-hover);
   }
 
   button.primary:disabled {

@@ -1,18 +1,20 @@
 <script lang="ts">
   import { clamp } from '../shared/utils';
   import type { RequestTokenRecord } from '../shared/types';
+  import Icon from './Icon.svelte';
 
   interface Props {
     used?: number;
-    limit?: number;
+    /** Longueur de contexte du modèle ; `null` = aucun modèle configuré. */
+    limit?: number | null;
     inputTokens?: number;
     outputTokens?: number;
     history?: RequestTokenRecord[];
   }
 
-  let { used = 0, limit = 10000, inputTokens = 0, outputTokens = 0, history = [] }: Props = $props();
+  let { used = 0, limit = null, inputTokens = 0, outputTokens = 0, history = [] }: Props = $props();
 
-  const percentage = $derived(clamp(Math.round((used / limit) * 100), 0, 100));
+  const percentage = $derived(limit ? clamp(Math.round((used / limit) * 100), 0, 100) : 0);
   const colorClass = $derived(percentage < 50 ? 'green' : percentage < 80 ? 'orange' : 'red');
 
   let showDetails = $state(false);
@@ -28,22 +30,26 @@
 
 <div class="gauge-wrapper">
   <button class="gauge-header" onclick={() => (showDetails = !showDetails)}>
-    <span>Tokens used {showDetails ? '▾' : '▸'}</span>
-    <span>{used.toLocaleString()} / {limit.toLocaleString()} ({percentage}%)</span>
+    <span class="gauge-title">
+      Tokens used <Icon name={showDetails ? 'chevron-up' : 'chevron-down'} size={11} />
+    </span>
+    <span>{used.toLocaleString()} / {limit ? limit.toLocaleString() : '—'} ({percentage}%)</span>
   </button>
   <div class="gauge">
     <div class="meter {colorClass}" style="width: {percentage}%"></div>
   </div>
 
   {#if percentage >= 80}
-    <div class="limit-warning">⚠️ Approaching the model's context limit</div>
+    <div class="limit-warning">
+      <Icon name="warning" size={12} /> Approaching the model's context limit
+    </div>
   {/if}
 
   {#if showDetails}
     <div class="details">
       <div class="split">
-        <span>⬆️ Input: {inputTokens.toLocaleString()}</span>
-        <span>⬇️ Output: {outputTokens.toLocaleString()}</span>
+        <span>Input: {inputTokens.toLocaleString()}</span>
+        <span>Output: {outputTokens.toLocaleString()}</span>
       </div>
       {#if history.length > 0}
         <table class="history">
@@ -77,7 +83,7 @@
     display: flex;
     justify-content: space-between;
     width: 100%;
-    font-size: 0.85rem;
+    font-size: var(--jarvis-text-sm);
     margin-bottom: 0.35rem;
     color: var(--vscode-descriptionForeground);
     background: transparent;
@@ -85,6 +91,12 @@
     padding: 0;
     cursor: pointer;
     font-family: inherit;
+  }
+
+  .gauge-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
   }
 
   .gauge {
@@ -101,7 +113,7 @@
   }
 
   .meter.green {
-    background: var(--vscode-terminal-ansiGreen);
+    background: var(--jarvis-gold);
   }
 
   .meter.orange {
@@ -109,12 +121,15 @@
   }
 
   .meter.red {
-    background: var(--vscode-terminal-ansiRed);
+    background: var(--jarvis-accent);
   }
 
   .limit-warning {
+    display: flex;
+    align-items: center;
+    gap: 4px;
     margin-top: 0.35rem;
-    font-size: 0.78rem;
+    font-size: var(--jarvis-text-xs);
     color: var(--vscode-terminal-ansiYellow);
   }
 

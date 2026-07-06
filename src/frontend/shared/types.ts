@@ -26,7 +26,8 @@ export interface TokenUsage {
   used: number;
   inputTokens: number;
   outputTokens: number;
-  limit: number;
+  /** Longueur de contexte du modèle configuré ; `null` si aucun modèle. */
+  limit: number | null;
   percentage: number;
   level: 'green' | 'orange' | 'red';
   history: RequestTokenRecord[];
@@ -34,19 +35,60 @@ export interface TokenUsage {
 
 // --- Config (miroir de src/backend/config/config-manager.ts — garder synchronisé) ---
 
-export type ProviderType = 'ollama' | 'openrouter' | 'lmstudio' | 'mistral' | 'openai-compatible';
+export type ProviderType =
+  | 'ollama'
+  | 'openai'
+  | 'openrouter'
+  | 'lmstudio'
+  | 'mistral'
+  | 'openai-compatible';
 
-export interface ModelConfigItem {
+export const PROVIDER_TYPES: ProviderType[] = [
+  'ollama',
+  'openai',
+  'openrouter',
+  'lmstudio',
+  'mistral',
+  'openai-compatible'
+];
+
+export const DEFAULT_BASE_URL: Record<ProviderType, string> = {
+  ollama: 'http://localhost:11434',
+  openai: 'https://api.openai.com/v1',
+  openrouter: 'https://openrouter.ai/api/v1',
+  lmstudio: 'http://localhost:1234/v1',
+  mistral: 'https://api.mistral.ai/v1',
+  'openai-compatible': 'https://api.openai.com/v1'
+};
+
+export type ModelRole = 'chat' | 'edit' | 'apply' | 'autocomplete' | 'embed' | 'rerank' | 'summarize';
+
+export const MODEL_ROLES: ModelRole[] = [
+  'chat',
+  'edit',
+  'apply',
+  'autocomplete',
+  'embed',
+  'rerank',
+  'summarize'
+];
+
+export type ModelCapability = 'tool_use' | 'image_input';
+
+export const MODEL_CAPABILITIES: ModelCapability[] = ['tool_use', 'image_input'];
+
+/** Entrée de modèle centrée « modèle » (façon Continue). */
+export interface ModelItem {
   name: string;
-  contextLength: number;
-}
-
-export interface ProviderConfigItem {
-  enabled: boolean;
-  type?: ProviderType;
-  baseUrl: string;
+  provider: ProviderType;
+  model: string;
   apiKey?: string;
-  models: ModelConfigItem[];
+  apiBase?: string;
+  roles?: ModelRole[];
+  capabilities?: ModelCapability[];
+  contextLength?: number;
+  maxTokens?: number;
+  enabled?: boolean;
 }
 
 export interface McpServerConfig {
@@ -57,6 +99,40 @@ export interface McpServerConfig {
   env?: Record<string, string>;
   url?: string;
   headers?: Record<string, string>;
+  /** Tools de ce serveur désactivés individuellement. */
+  disabledTools?: string[];
+}
+
+/** Override d'un serveur MCP intégré (activation + tools désactivés). */
+export interface BuiltinMcpOverride {
+  enabled?: boolean;
+  disabledTools?: string[];
+}
+
+/** Prompt enregistré, invocable via `/nom` dans le chat. */
+export interface PromptItem {
+  id: string;
+  name: string;
+  description?: string;
+  content: string;
+}
+
+/** Statut d'un tool exposé par un serveur MCP (message `mcpStatus`). */
+export interface McpToolStatus {
+  name: string;
+  description: string;
+  enabled: boolean;
+}
+
+/** Statut d'un serveur MCP (message `mcpStatus`). */
+export interface McpServerStatus {
+  name: string;
+  enabled: boolean;
+  connected: boolean;
+  tools: McpToolStatus[];
+  error?: string;
+  builtin?: boolean;
+  description?: string;
 }
 
 export interface RuleItem {
@@ -72,20 +148,85 @@ export interface OptimizationConfig {
   tddMaxAttempts?: number;
   tddTestCommand?: string;
   terminalTimeout?: number;
+  showThinking?: boolean;
+}
+
+export interface WorkflowStep {
+  name: string;
+  prompt: string;
+}
+
+export interface Workflow {
+  id: string;
+  label: string;
+  description: string;
+  steps: WorkflowStep[];
+}
+
+export interface SpecializedAgent {
+  id: string;
+  mention: string;
+  label: string;
+  description: string;
+  systemPrompt: string;
+  keywords: string[];
+}
+
+export interface DocSite {
+  id: string;
+  title: string;
+  startUrl: string;
+  enabled: boolean;
+}
+
+export interface WorkspaceProfile {
+  id: string;
+  name: string;
+  folder: string;
+  instructions: string;
+  enabled: boolean;
 }
 
 export interface JarvisConfig {
   version: number;
   models: {
     default: string | null;
-    providers: Record<string, ProviderConfigItem>;
+    items: ModelItem[];
   };
   mcpServers?: Record<string, McpServerConfig>;
+  builtinMcp?: Record<string, BuiltinMcpOverride>;
   rules?: RuleItem[];
-  /** Édités en Phase 2+ ; transmis tels quels par la Settings UI. */
-  workflows?: unknown[];
-  agents?: unknown[];
+  workflows?: Workflow[];
+  agents?: SpecializedAgent[];
+  prompts?: PromptItem[];
+  docs?: DocSite[];
+  workspaces?: WorkspaceProfile[];
+  activeWorkspaceId?: string | null;
   optimization?: OptimizationConfig;
+}
+
+/** Statut d'indexation d'un site de docs (message `docsStatus`). */
+export interface DocsSiteStatus {
+  id: string;
+  state: 'idle' | 'indexing' | 'done' | 'error';
+  pages: number;
+  indexedAt?: string;
+  error?: string;
+}
+
+/** Défauts codés en dur envoyés par le backend avec le message `settings`. */
+export interface SettingsDefaults {
+  agents: SpecializedAgent[];
+  workflows: Workflow[];
+  builtinMcp?: Array<{
+    id: string;
+    label: string;
+    description: string;
+    command: string;
+    defaultEnabled: boolean;
+  }>;
+  /** Outils personnalisés jarvis-tools/*.json (lecture seule dans l'UI). */
+  customTools?: Array<{ name: string; description: string }>;
 }
 
 export interface AnalyticsStats {

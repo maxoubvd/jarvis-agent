@@ -5,6 +5,7 @@ export interface OpenRouterOptions {
   baseUrl?: string;
   model?: string;
   apiKey?: string;
+  maxTokens?: number;
 }
 
 export class OpenRouterProvider implements IModelProvider {
@@ -16,6 +17,7 @@ export class OpenRouterProvider implements IModelProvider {
       baseUrl: (options.baseUrl ?? 'https://openrouter.ai/api/v1').replace(/\/$/, ''),
       model: options.model ?? 'deepseek-coder-v3',
       apiKey: options.apiKey,
+      maxTokens: options.maxTokens,
       extraHeaders: {
         'HTTP-Referer': 'https://github.com/jarvis-agent',
         'X-Title': 'Jarvis Agent'

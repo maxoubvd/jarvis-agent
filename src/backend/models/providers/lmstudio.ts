@@ -4,6 +4,8 @@ import { openaiCompatibleSend, openaiCompatibleStream, OpenAICompatibleConfig } 
 export interface LMStudioOptions {
   baseUrl?: string;
   model?: string;
+  apiKey?: string;
+  maxTokens?: number;
 }
 
 export class LMStudioProvider implements IModelProvider {
@@ -13,7 +15,8 @@ export class LMStudioProvider implements IModelProvider {
   constructor(options: LMStudioOptions = {}) {
     this.config = {
       baseUrl: (options.baseUrl ?? 'http://localhost:1234/v1').replace(/\/$/, ''),
-      model: options.model ?? 'local-model'
+      model: options.model ?? 'local-model',
+      maxTokens: options.maxTokens
     };
   }
 

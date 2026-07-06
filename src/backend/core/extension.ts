@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { ModelConfigManager } from '../config/model-config-manager.js';
-import { getConfigManager, normalizeConfig, type JarvisConfig } from '../config/config-manager.js';
+import { getConfigManager, normalizeConfig, type JarvisConfig, type DocSite } from '../config/config-manager.js';
 import { ChatMessage, IModelProvider } from '../models/abstract.js';
 import { HITLManager, HITLMode } from '../services/hitl.js';
 import { CheckpointManager } from '../services/checkpoint.js';
@@ -11,8 +11,12 @@ import { AutoTDDLoop } from '../services/tdd-loop.js';
 import { detectAgentMention, suggestAgent, getAgents } from '../services/agents.js';
 import { WorkflowRunner, getWorkflows } from '../services/workflows.js';
 import { loadRules, renderRules } from '../services/rules.js';
+import { loadPrompts, expandPrompt, normalizePromptName } from '../services/prompts.js';
+import { getActiveWorkspace, renderWorkspaceInstructions } from '../services/workspaces.js';
 import { WorkspaceIndexer } from '../services/context/indexer.js';
 import { expandMentions } from '../services/context/mentions.js';
+import { DocsService, mergeSearchResults } from '../services/context/docs.js';
+import type { RagSearchResult } from '../services/context/rag.js';
 import { operationLogger } from '../services/logger.js';
 import { SecretScrubber } from './utils/scrubber.js';
 import { SandboxManager } from './utils/sandbox.js';
@@ -27,6 +31,7 @@ import {
 } from './mcp/tools/fileSystem.js';
 import { executeTerminalCommand } from './mcp/tools/terminal.js';
 import { McpManager } from './mcp/manager.js';
+import { getBuiltinMcpServers, builtinCommandString } from './mcp/builtin.js';
 
 const BASE_SYSTEM_PROMPT =
   'Tu es Jarvis, un assistant de code agentique intégré à VS Code. ' +
@@ -48,6 +53,7 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
   private indexer = new WorkspaceIndexer();
   private toolRegistry: ToolRegistry | null = null;
   private mcpManager: McpManager | null = null;
+  private docsService: DocsService | null = null;
 
   /** Notifie l'hôte (status bar) à chaque évolution des tokens. */
   public onTokensChanged: ((usage: TokenUsage) => void) | null = null;
@@ -88,21 +94,46 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  /** Prompt système du chat direct, rules utilisateur incluses (spec §5.2). */
+  /** Instructions du workspace actif (type CLAUDE.md), vide si aucun. */
+  private getWorkspaceInstructionsText(): string {
+    try {
+      return renderWorkspaceInstructions(getActiveWorkspace(getConfigManager().getConfig()));
+    } catch {
+      return '';
+    }
+  }
+
+  /** Rules + instructions du workspace actif, concaténées pour les prompts système. */
+  private getPromptExtras(): string {
+    return [this.getRulesText(), this.getWorkspaceInstructionsText()].filter(Boolean).join('\n\n');
+  }
+
+  /** Prompt système du chat direct, rules + workspace inclus (spec §5.2). */
   private buildSystemPrompt(): string {
-    const rules = this.getRulesText();
-    return rules ? `${BASE_SYSTEM_PROMPT}\n\n${rules}` : BASE_SYSTEM_PROMPT;
+    const extras = this.getPromptExtras();
+    return extras ? `${BASE_SYSTEM_PROMPT}\n\n${extras}` : BASE_SYSTEM_PROMPT;
   }
 
   private getMcpManager(): McpManager | null {
     if (this.mcpManager) return this.mcpManager;
     try {
-      this.mcpManager = new McpManager();
+      const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      this.mcpManager = new McpManager(undefined, undefined, workspaceFolder);
       return this.mcpManager;
     } catch (err) {
       console.warn('McpManager indisponible:', err);
       return null;
     }
+  }
+
+  private getDocsService(): DocsService {
+    if (!this.docsService) this.docsService = new DocsService();
+    return this.docsService;
+  }
+
+  /** Recherche @docs: fusionnée : .md du workspace + documentations en cache. */
+  private searchAllDocs(query: string): RagSearchResult[] {
+    return mergeSearchResults(5, this.indexer.searchDocs(query), this.getDocsService().search(query));
   }
 
   private getConfiguredAgents() {
@@ -118,6 +149,14 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
       return getWorkflows(getConfigManager().getConfig());
     } catch {
       return getWorkflows();
+    }
+  }
+
+  private getConfiguredPrompts() {
+    try {
+      return loadPrompts(getConfigManager().getConfig());
+    } catch {
+      return [];
     }
   }
 
@@ -174,6 +213,17 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
         if (typeof message.mode === 'string') {
           this.hitl.setMode(message.mode as HITLMode);
           operationLogger.log('hitl', `Mode HITL: ${message.mode}`);
+          // Persiste le mode pour qu'il survive au rechargement de la fenêtre.
+          try {
+            const cm = getConfigManager();
+            const global = cm.getGlobalConfig();
+            await cm.writeGlobal({
+              ...global,
+              optimization: { ...global.optimization, hitlMode: message.mode as HITLMode }
+            });
+          } catch {
+            /* best-effort */
+          }
         }
         break;
       case 'setModel':
@@ -182,7 +232,10 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
         }
         break;
       case 'getSettings':
-        this.onGetSettings(webview);
+        await this.onGetSettings(webview);
+        break;
+      case 'openConfigFile':
+        await this.onOpenConfigFile();
         break;
       case 'updateSettings':
         if (message.config && typeof message.config === 'object') {
@@ -192,10 +245,44 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
       case 'getMcpStatus':
         await this.onGetMcpStatus(webview);
         break;
+      case 'indexDocs':
+        if (typeof message.id === 'string') {
+          await this.onIndexDocs(webview, message.id);
+        }
+        break;
+      case 'getDocsStatus':
+        await this.onGetDocsStatus(webview);
+        break;
+      case 'setActiveWorkspace':
+        await this.onSetActiveWorkspace(webview, typeof message.id === 'string' ? message.id : null);
+        break;
+      case 'getIndexStatus':
+        this.postIndexStatus(webview);
+        break;
       case 'indexWorkspace':
-        await this.indexWorkspaceInBackground();
+        await this.indexWorkspaceInBackground(webview);
         break;
     }
+  }
+
+  private async onSetActiveWorkspace(webview: vscode.Webview, id: string | null): Promise<void> {
+    try {
+      const cm = getConfigManager();
+      const global = cm.getGlobalConfig();
+      await cm.writeGlobal({ ...global, activeWorkspaceId: id ?? undefined });
+      operationLogger.log('workspace', `Workspace actif: ${id ?? 'aucun'}`);
+    } catch (err) {
+      operationLogger.log('workspace', `setActiveWorkspace échoué: ${err instanceof Error ? err.message : err}`, 'error');
+    }
+    this.postCapabilities(webview);
+  }
+
+  private postIndexStatus(webview: vscode.Webview): void {
+    this.post(webview, {
+      type: 'indexStatus',
+      indexing: this.indexer.isIndexing,
+      fileCount: this.indexer.fileCount
+    });
   }
 
   private onWebviewReady(webview: vscode.Webview): void {
@@ -203,7 +290,7 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     const model = configManager?.getEffectiveModel() ?? null;
     const models = configManager?.getAvailableModels() ?? [];
     const needsSetup = !model || models.length === 0;
-    this.tokenCounter.setLimit(configManager?.getContextLength(model) ?? 32768);
+    this.tokenCounter.setLimit(model ? configManager?.getContextLength(model) ?? null : null);
 
     this.post(webview, {
       type: 'status',
@@ -215,18 +302,85 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     });
     this.postTokens(webview);
     this.postCapabilities(webview);
+    // L'App a besoin de la config au démarrage (showThinking, docs, workspaces…).
+    void this.onGetSettings(webview);
+
+    // Ré-hydrate l'index des documentations depuis le cache disque.
+    try {
+      const docs = getConfigManager().getConfig().docs ?? [];
+      void this.getDocsService().loadFromCache(docs.filter(d => d.enabled)).catch(() => undefined);
+    } catch {
+      /* best-effort */
+    }
 
     // Background RAG indexing (spec §5.2)
-    void this.indexWorkspaceInBackground();
+    void this.indexWorkspaceInBackground(webview);
   }
 
-  /** Listes dynamiques (agents, workflows) pour l'autocomplétion du chat. */
+  /** Listes dynamiques (agents, workflows, workspaces) pour le chat. */
   private postCapabilities(webview: vscode.Webview): void {
+    let workspaces: Array<{ id: string; name: string }> = [];
+    let activeWorkspaceId: string | null = null;
+    try {
+      const config = getConfigManager().getConfig();
+      workspaces = (config.workspaces ?? []).filter(w => w.enabled).map(w => ({ id: w.id, name: w.name }));
+      activeWorkspaceId = config.activeWorkspaceId ?? null;
+    } catch {
+      /* best-effort */
+    }
     this.post(webview, {
       type: 'capabilities',
       agents: this.getConfiguredAgents().map(a => ({ mention: a.mention, label: a.label })),
-      workflows: this.getConfiguredWorkflows().map(w => ({ id: w.id, label: w.label }))
+      workflows: this.getConfiguredWorkflows().map(w => ({ id: w.id, label: w.label })),
+      prompts: this.getConfiguredPrompts().map(p => ({
+        name: normalizePromptName(p.name),
+        description: p.description ?? ''
+      })),
+      workspaces,
+      activeWorkspaceId
     });
+  }
+
+  /** Lance le crawl + indexation d'un site de docs, avec progression vers l'UI. */
+  private async onIndexDocs(webview: vscode.Webview, id: string): Promise<void> {
+    const site = (getConfigManager().getConfig().docs ?? []).find(d => d.id === id);
+    if (!site) {
+      this.post(webview, {
+        type: 'docsStatus',
+        sites: [{ id, state: 'error', pages: 0, error: 'Site not found in saved settings' }]
+      });
+      return;
+    }
+    this.post(webview, { type: 'docsStatus', sites: [{ id, state: 'indexing', pages: 0 }] });
+    try {
+      const { pages } = await this.getDocsService().indexSite(site, done => {
+        if (done % 5 === 0) {
+          this.post(webview, { type: 'docsStatus', sites: [{ id, state: 'indexing', pages: done }] });
+        }
+      });
+      operationLogger.log('docs', `Site ${site.title || site.startUrl} indexé (${pages} pages)`, 'success');
+      this.post(webview, {
+        type: 'docsStatus',
+        sites: [{ id, state: 'done', pages, indexedAt: new Date().toISOString() }]
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      operationLogger.log('docs', `Indexation docs échouée (${id}): ${msg}`, 'error');
+      this.post(webview, { type: 'docsStatus', sites: [{ id, state: 'error', pages: 0, error: msg }] });
+    }
+  }
+
+  private async onGetDocsStatus(webview: vscode.Webview): Promise<void> {
+    try {
+      const docs = getConfigManager().getConfig().docs ?? [];
+      const statuses = await this.getDocsService().getSiteStatuses(docs);
+      this.post(webview, {
+        type: 'docsStatus',
+        sites: statuses.map(s => ({ id: s.id, state: 'idle', pages: s.pages, indexedAt: s.indexedAt }))
+      });
+    } catch {
+      this.post(webview, { type: 'docsStatus', sites: [] });
+    }
   }
 
   private async onGetMcpStatus(webview: vscode.Webview): Promise<void> {
@@ -271,35 +425,94 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     this.postTokens(webview);
   }
 
+  /** Défauts codés en dur (agents/workflows/builtins MCP/custom tools) — pour l'éditeur des Settings. */
+  private async getSettingsDefaults(): Promise<Record<string, unknown>> {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    let customTools: Array<{ name: string; description: string }> = [];
+    if (workspaceFolder) {
+      try {
+        customTools = (await loadCustomTools(workspaceFolder)).map(t => ({
+          name: t.name,
+          description: t.description
+        }));
+      } catch {
+        /* best-effort */
+      }
+    }
+    return {
+      agents: getAgents(),
+      workflows: getWorkflows(),
+      builtinMcp: getBuiltinMcpServers(workspaceFolder).map(b => ({
+        id: b.id,
+        label: b.label,
+        description: b.description,
+        command: builtinCommandString(b),
+        defaultEnabled: b.config.enabled
+      })),
+      customTools
+    };
+  }
+
+  /** Ouvre la config globale (~/.jarvis/config.json) dans l'éditeur. */
+  private async onOpenConfigFile(): Promise<void> {
+    try {
+      // loadSync a créé le fichier au premier lancement ; l'ouvrir directement.
+      const uri = vscode.Uri.file(getConfigManager().getGlobalConfigPath());
+      const doc = await vscode.workspace.openTextDocument(uri);
+      await vscode.window.showTextDocument(doc, { preview: false });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      operationLogger.log('config', `openConfigFile échoué: ${msg}`, 'error');
+      vscode.window.showErrorMessage(`Jarvis: impossible d'ouvrir la config — ${msg}`);
+    }
+  }
+
   /** Envoie la config globale brute au webview pour édition dans l'onglet Settings. */
-  private onGetSettings(webview: vscode.Webview): void {
+  private async onGetSettings(webview: vscode.Webview): Promise<void> {
     let config: JarvisConfig;
     let needsSetup = true;
     try {
       config = getConfigManager().getGlobalConfig();
-      needsSetup = !config.models.default && Object.keys(config.models.providers).length === 0;
+      needsSetup = config.models.items.length === 0;
     } catch (err) {
       operationLogger.log('config', `getSettings échoué: ${err instanceof Error ? err.message : err}`, 'error');
       config = normalizeConfig(null);
     }
-    this.post(webview, { type: 'settings', config, needsSetup });
+    this.post(webview, {
+      type: 'settings',
+      config,
+      needsSetup,
+      defaults: await this.getSettingsDefaults(),
+      currentFolder: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? ''
+    });
   }
 
   /** Persiste la config éditée (scope global) puis ré-instancie providers + status. */
   private async onUpdateSettings(webview: vscode.Webview, incoming: JarvisConfig): Promise<void> {
     try {
+      const previousDocs = getConfigManager().getGlobalConfig().docs ?? [];
       const config = normalizeConfig(incoming);
       await getConfigManager().writeGlobal(config);
+      void this.syncDocsWithConfig(previousDocs, config.docs ?? []).catch(() => undefined);
       const configManager = this.getModelConfigManager();
       configManager?.refresh();
       this.toolRegistry = null; // sera reconstruit avec les tools MCP à jour
       await this.mcpManager?.reload().catch(() => undefined);
       this.postCapabilities(webview);
+      // Applique le mode HITL en live (sinon effectif seulement après reload).
+      const hitlMode = config.optimization?.hitlMode;
+      if (hitlMode) this.hitl.setMode(hitlMode);
       const model = configManager?.getEffectiveModel() ?? null;
-      this.tokenCounter.setLimit(configManager?.getContextLength(model) ?? 32768);
+      this.tokenCounter.setLimit(model ? configManager?.getContextLength(model) ?? null : null);
       operationLogger.log('config', 'Settings updated', 'success');
       this.post(webview, { type: 'settingsSaved', ok: true });
-      this.post(webview, { type: 'settings', config, needsSetup: !model });
+      this.post(webview, {
+        type: 'settings',
+        config,
+        needsSetup: !model,
+        defaults: await this.getSettingsDefaults(),
+        currentFolder: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? ''
+      });
       const models = configManager?.getAvailableModels() ?? [];
       this.post(webview, {
         type: 'status',
@@ -317,13 +530,33 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private async indexWorkspaceInBackground(): Promise<void> {
+  /** Applique le diff des sites docs après sauvegarde : purge supprimés/désactivés, charge les activés. */
+  private async syncDocsWithConfig(previous: DocSite[], next: DocSite[]): Promise<void> {
+    const docsService = this.getDocsService();
+    const nextById = new Map(next.map(d => [d.id, d]));
+    for (const old of previous) {
+      const current = nextById.get(old.id);
+      if (!current) {
+        await docsService.removeSite(old.id).catch(() => undefined);
+      } else if (!current.enabled && old.enabled) {
+        docsService.unloadSite(old.id);
+      }
+    }
+    await docsService.loadFromCache(next.filter(d => d.enabled)).catch(() => undefined);
+  }
+
+  private async indexWorkspaceInBackground(webview?: vscode.Webview): Promise<void> {
     if (this.indexer.isIndexing) return;
+    if (webview) {
+      this.post(webview, { type: 'indexStatus', indexing: true, fileCount: this.indexer.fileCount });
+    }
     try {
       const count = await this.indexer.indexWorkspace();
       operationLogger.log('rag', `Indexation terminée: ${count} fichiers`, 'success');
     } catch (err) {
       operationLogger.log('rag', `Indexation échouée: ${err instanceof Error ? err.message : err}`, 'error');
+    } finally {
+      if (webview) this.postIndexStatus(webview);
     }
   }
 
@@ -332,10 +565,10 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     if (!configManager) return null;
     const model = configManager.getEffectiveModel();
     if (!model) return null;
-    const providerName = configManager.getProviderNameForModel(model);
-    if (!providerName) return null;
-    const provider = configManager.getProvider(providerName);
+    // Un provider est instancié par modèle (schéma centré modèle).
+    const provider = configManager.getProvider(model);
     if (!provider) return null;
+    const providerName = configManager.getProviderNameForModel(model) ?? 'openai-compatible';
     return { provider, providerName, model };
   }
 
@@ -357,10 +590,17 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
       return;
     }
 
+    // Prompts enregistrés : `/nom args` → contenu du prompt + args
+    // (les commandes réservées /tdd, /workflow, /agent ne sont jamais masquées).
+    if (rawText.startsWith('/')) {
+      const expandedPrompt = expandPrompt(rawText, this.getConfiguredPrompts());
+      if (expandedPrompt !== null) rawText = expandedPrompt;
+    }
+
     // Expansion des mentions @file: / @docs: (spec Phase 4)
     const { expanded } = await expandMentions(rawText, {
       readFile: p => readFileTool(p),
-      searchDocs: q => this.indexer.searchDocs(q)
+      searchDocs: q => this.searchAllDocs(q)
     });
 
     const active = this.getActiveProvider();
@@ -397,7 +637,7 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     if (mention) {
       const { expanded: task } = await expandMentions(mention.task, {
         readFile: p => readFileTool(p),
-        searchDocs: q => this.indexer.searchDocs(q)
+        searchDocs: q => this.searchAllDocs(q)
       });
       await this.runAgent(webview, active, task, mention.agent.systemPrompt);
       return;
@@ -537,7 +777,7 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
       maxIterations,
       hitl: this.hitl,
       scrub: text => this.maybeScrub(text, active.providerName),
-      systemPrompt: buildAgentSystemPrompt(registry, persona, this.getRulesText() || undefined)
+      systemPrompt: buildAgentSystemPrompt(registry, persona, this.getPromptExtras() || undefined)
     });
   }
 
@@ -910,7 +1150,7 @@ export class JarvisExtension {
       const icon = usage.level === 'green' ? '$(hubot)' : usage.level === 'orange' ? '$(warning)' : '$(error)';
       this.statusBarItem.text = `${icon} Jarvis ${usage.percentage}%`;
       this.statusBarItem.tooltip =
-        `Jarvis Agent — ${usage.used.toLocaleString()} / ${usage.limit.toLocaleString()} tokens ` +
+        `Jarvis Agent — ${usage.used.toLocaleString()} / ${usage.limit?.toLocaleString() ?? '—'} tokens ` +
         `(⬆️ ${usage.inputTokens.toLocaleString()} / ⬇️ ${usage.outputTokens.toLocaleString()})`;
     };
 

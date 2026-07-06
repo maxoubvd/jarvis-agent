@@ -2,6 +2,14 @@
   import type { Message } from '../shared/types';
   import { marked } from 'marked';
   import { matchTrigger, filterCommands, type CommandItem } from '../shared/commands';
+  import Icon from './Icon.svelte';
+
+  const BADGE_ICONS: Record<string, string> = {
+    success: 'check',
+    error: 'error',
+    warning: 'warning',
+    info: 'info'
+  };
 
   interface Props {
     title?: string;
@@ -10,7 +18,11 @@
     showThinking?: boolean;
     /** Items dynamiques (agents/workflows) fusionnés dans l'autocomplétion. */
     extraCommands?: CommandItem[];
+    /** Profils de workspace sélectionnables (Settings > Workspaces). */
+    workspaces?: Array<{ id: string; name: string }>;
+    activeWorkspaceId?: string | null;
     onSend?: (text: string) => void;
+    onWorkspaceChange?: (id: string | null) => void;
   }
 
   let {
@@ -19,7 +31,10 @@
     isSending = false,
     showThinking = true,
     extraCommands = [],
-    onSend = () => {}
+    workspaces = [],
+    activeWorkspaceId = null,
+    onSend = () => {},
+    onWorkspaceChange = () => {}
   }: Props = $props();
 
   let inputText = $state('');
@@ -169,6 +184,22 @@
 <section class="chat-panel">
   <header>
     <h2>{title}</h2>
+    {#if workspaces.length > 0}
+      <select
+        class="workspace-select"
+        title="Active workspace"
+        value={activeWorkspaceId ?? ''}
+        onchange={e => {
+          const v = (e.target as HTMLSelectElement).value;
+          onWorkspaceChange(v || null);
+        }}
+      >
+        <option value="">No workspace</option>
+        {#each workspaces as ws (ws.id)}
+          <option value={ws.id}>{ws.name}</option>
+        {/each}
+      </select>
+    {/if}
   </header>
 
   {#if messages.length === 0}
@@ -198,7 +229,10 @@
             {#if message.badges?.length}
               <div class="badges">
                 {#each message.badges as badge}
-                  <span class="badge {badge.variant ?? 'info'}">{badge.icon} {badge.label}</span>
+                  <span class="badge {badge.variant ?? 'info'}">
+                    <Icon name={BADGE_ICONS[badge.variant ?? 'info'] ?? 'info'} size={11} />
+                    {badge.label}
+                  </span>
                 {/each}
               </div>
             {/if}
@@ -206,13 +240,12 @@
             {#if message.kind === 'thinking'}
               <div class="thinking-block">{message.content}</div>
             {:else if message.role === 'assistant'}
-              <span class="role">Assistant</span>
               {#if message.content}
                 {#each segment(message.content) as seg}
                   {#if seg.type === 'thinking'}
                     {#if showThinking}
                       <details class="thinking-details" open>
-                        <summary>🧠 Thinking</summary>
+                        <summary><Icon name="lightbulb" size={12} /> Thinking</summary>
                         <div class="thinking-block">{seg.content}</div>
                       </details>
                     {/if}
@@ -225,7 +258,6 @@
                 <p class="pending">…</p>
               {/if}
             {:else}
-              <span class="role">You</span>
               <p>{message.content}</p>
             {/if}
           </li>
@@ -265,8 +297,14 @@
         onblur={() => (showMenu = false)}
       ></textarea>
     </div>
-    <button class="send-btn" onclick={submit} disabled={isSending || !inputText.trim()}>
-      Send
+    <button
+      class="send-btn"
+      title="Send"
+      aria-label="Send"
+      onclick={submit}
+      disabled={isSending || !inputText.trim()}
+    >
+      <Icon name="send" size={15} />
     </button>
   </div>
 </section>
@@ -276,17 +314,39 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    padding: 1rem;
+    padding: var(--jarvis-space-4);
     border: 1px solid var(--vscode-editorWidget-border);
-    border-radius: 0.75rem;
+    border-radius: var(--jarvis-radius-lg);
     background: var(--vscode-editor-background);
     min-height: 200px;
-    gap: 0.75rem;
+    gap: var(--jarvis-space-3);
+    min-width: 0;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--jarvis-space-2);
+    flex-wrap: wrap;
   }
 
   header h2 {
     margin: 0;
-    font-size: 1rem;
+    font-size: var(--jarvis-text-md);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .workspace-select {
+    padding: 3px 8px;
+    background: var(--vscode-dropdown-background, var(--vscode-input-background));
+    color: var(--vscode-dropdown-foreground, var(--vscode-input-foreground));
+    border: 1px solid var(--vscode-dropdown-border, var(--vscode-input-border));
+    border-radius: var(--jarvis-radius-pill);
+    font-size: var(--jarvis-text-xs);
+    max-width: 11rem;
+    min-width: 0;
   }
 
   .empty {
@@ -315,53 +375,67 @@
     padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: var(--jarvis-space-4);
     overflow-y: auto;
     max-height: 55vh;
   }
 
   .message {
-    padding: 0.75rem;
-    border-radius: 0.5rem;
-    background: var(--vscode-editorWidget-background);
+    min-width: 0;
   }
 
+  /* Message utilisateur : bulle compacte alignée à droite (style Le Chat). */
   .message.user {
-    border-left: 3px solid var(--vscode-button-background);
+    align-self: flex-end;
+    max-width: 85%;
+    padding: var(--jarvis-space-2) var(--jarvis-space-3);
+    border-radius: var(--jarvis-radius-lg);
+    border-bottom-right-radius: var(--jarvis-radius-sm);
+    background: var(--vscode-input-background);
+    border: 1px solid var(--vscode-editorWidget-border);
   }
 
+  /* Réponse assistant : pleine largeur, sans bulle. */
   .message.assistant {
-    border-left: 3px solid var(--vscode-terminal-ansiGreen);
+    align-self: stretch;
   }
 
-  .message.tool {
-    border-left: 3px solid var(--vscode-terminal-ansiBlue);
-    font-size: 0.85rem;
+  .message.tool,
+  .message.step {
+    align-self: stretch;
+    font-size: var(--jarvis-text-sm);
+    padding: var(--jarvis-space-2) var(--jarvis-space-3);
+    border-radius: var(--jarvis-radius-md);
+    background: var(--vscode-editorWidget-background);
+    border: 1px solid var(--vscode-editorWidget-border);
   }
 
   .message.step {
-    border-left: 3px solid var(--vscode-terminal-ansiMagenta);
-    font-size: 0.85rem;
+    border-left: 2px solid var(--jarvis-gold);
   }
 
   .message.thinking-msg {
-    border-left: 3px solid var(--vscode-descriptionForeground);
-    padding: 0.5rem 0.75rem;
+    align-self: stretch;
+    padding: 0;
   }
 
   .badges {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.35rem;
-    margin-bottom: 0.4rem;
+    gap: var(--jarvis-space-1);
+    margin-bottom: var(--jarvis-space-1);
   }
 
   .badge {
-    font-size: 0.72rem;
-    padding: 0.1rem 0.45rem;
-    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: var(--jarvis-text-xs);
+    padding: 2px 8px;
+    border-radius: var(--jarvis-radius-pill);
     border: 1px solid var(--vscode-editorWidget-border);
     background: var(--vscode-editor-background);
+    color: var(--vscode-descriptionForeground);
   }
 
   .badge.success {
@@ -379,15 +453,6 @@
     color: var(--vscode-terminal-ansiYellow);
   }
 
-  .role {
-    display: block;
-    font-size: 0.75rem;
-    font-weight: 600;
-    margin-bottom: 0.25rem;
-    color: var(--vscode-descriptionForeground);
-    text-transform: uppercase;
-  }
-
   p {
     margin: 0;
     white-space: pre-wrap;
@@ -401,8 +466,11 @@
 
   .thinking-details summary {
     cursor: pointer;
-    font-size: 0.78rem;
+    font-size: var(--jarvis-text-xs);
     color: var(--vscode-descriptionForeground);
+    display: flex;
+    align-items: center;
+    gap: 4px;
   }
 
   .thinking-block {
@@ -440,14 +508,14 @@
   }
 
   .markdown :global(pre::after) {
-    content: '📋 copier';
+    content: 'copier';
     position: absolute;
     top: 0.3rem;
     right: 0.5rem;
     font-size: 0.68rem;
     color: var(--vscode-descriptionForeground);
     opacity: 0;
-    transition: opacity 0.15s;
+    transition: opacity var(--jarvis-transition);
   }
 
   .markdown :global(pre:hover::after) {
@@ -455,7 +523,8 @@
   }
 
   .markdown :global(pre.copied::after) {
-    content: '✅ copié';
+    content: '✓ copié';
+    color: var(--vscode-terminal-ansiGreen);
     opacity: 1;
   }
 
@@ -557,19 +626,22 @@
 
   .input {
     flex: 1;
+    min-width: 0;
     resize: none;
-    padding: 0.6rem 0.75rem;
+    padding: var(--jarvis-space-2) var(--jarvis-space-3);
     background: var(--vscode-input-background);
     color: var(--vscode-input-foreground);
     border: 1px solid var(--vscode-input-border, var(--vscode-editorWidget-border));
-    border-radius: 0.5rem;
-    font-family: var(--vscode-font-family, inherit);
-    font-size: 0.9rem;
+    border-radius: var(--jarvis-radius-lg);
+    font-family: var(--jarvis-font);
+    font-size: var(--jarvis-text-md);
     line-height: 1.5;
+    transition: border-color var(--jarvis-transition);
   }
 
   .input:focus {
-    outline: 1px solid var(--vscode-focusBorder);
+    outline: none;
+    border-color: var(--jarvis-accent);
   }
 
   .input:disabled {
@@ -577,18 +649,22 @@
   }
 
   .send-btn {
-    padding: 0.6rem 1rem;
-    background: var(--vscode-button-background);
-    color: var(--vscode-button-foreground);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    background: var(--jarvis-accent);
+    color: var(--jarvis-accent-fg);
     border: none;
-    border-radius: 0.5rem;
-    font-size: 0.9rem;
+    border-radius: var(--jarvis-radius-pill);
     cursor: pointer;
-    white-space: nowrap;
+    transition: background var(--jarvis-transition);
   }
 
   .send-btn:hover:not(:disabled) {
-    background: var(--vscode-button-hoverBackground);
+    background: var(--jarvis-accent-hover);
   }
 
   .send-btn:disabled {

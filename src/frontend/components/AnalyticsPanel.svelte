@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { AnalyticsStats } from '../shared/types';
+  import Icon from './Icon.svelte';
 
   interface Props {
     stats?: AnalyticsStats | null;
@@ -30,10 +31,10 @@
 
 <section class="analytics-panel">
   <header>
-    <h2>📊 Analytics</h2>
+    <h2><Icon name="graph" size={15} /> Analytics</h2>
     <div class="actions">
-      <button onclick={onRefresh}>🔄 Refresh</button>
-      <button onclick={onExport}>📤 Export</button>
+      <button onclick={onRefresh}><Icon name="sync" size={13} /> Refresh</button>
+      <button onclick={onExport}>Export</button>
     </div>
   </header>
 
@@ -101,7 +102,9 @@
               <td>{action.type}</td>
               <td class="model">{action.model}</td>
               <td>{(action.inputTokens + action.outputTokens).toLocaleString()}</td>
-              <td>{action.status === 'success' ? '✅' : '❌'}</td>
+              <td class:ok={action.status === 'success'} class:ko={action.status !== 'success'}>
+                <Icon name={action.status === 'success' ? 'check' : 'error'} size={12} />
+              </td>
             </tr>
           {/each}
         </tbody>
@@ -115,10 +118,10 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
-    padding: 1rem;
+    gap: var(--jarvis-space-3);
+    padding: var(--jarvis-space-4);
     border: 1px solid var(--vscode-editorWidget-border);
-    border-radius: 0.75rem;
+    border-radius: var(--jarvis-radius-lg);
     background: var(--vscode-editor-background);
     overflow-y: auto;
   }
@@ -131,7 +134,12 @@
 
   h2 {
     margin: 0;
-    font-size: 1rem;
+    font-size: var(--jarvis-text-md);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    display: flex;
+    align-items: center;
+    gap: var(--jarvis-space-1);
   }
 
   h3 {
@@ -148,13 +156,17 @@
   }
 
   button {
-    padding: 0.3rem 0.7rem;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--jarvis-space-1);
+    padding: 4px 10px;
     background: var(--vscode-button-secondaryBackground, var(--vscode-editorWidget-background));
     color: var(--vscode-button-secondaryForeground, inherit);
     border: 1px solid var(--vscode-editorWidget-border);
-    border-radius: 0.4rem;
-    font-size: 0.8rem;
+    border-radius: var(--jarvis-radius-pill);
+    font-size: var(--jarvis-text-sm);
     cursor: pointer;
+    transition: background var(--jarvis-transition);
   }
 
   button:hover {
@@ -221,7 +233,7 @@
 
   .bar {
     height: 100%;
-    background: var(--vscode-button-background);
+    background: var(--jarvis-gold);
     transition: width 0.3s ease;
   }
 
@@ -252,5 +264,13 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  td.ok {
+    color: var(--vscode-terminal-ansiGreen);
+  }
+
+  td.ko {
+    color: var(--vscode-terminal-ansiRed);
   }
 </style>

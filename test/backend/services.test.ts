@@ -40,6 +40,24 @@ describe('TokenCounter (spec §3.2)', () => {
   it('estimates tokens roughly at 4 chars per token', () => {
     expect(estimateTokens('abcdefgh')).toBe(2);
   });
+
+  it('reports a null limit and 0% when no model is configured', () => {
+    const counter = new TokenCounter();
+    counter.addRequest('m', 100, 50);
+    const usage = counter.getUsage();
+    expect(usage.limit).toBeNull();
+    expect(usage.percentage).toBe(0);
+    expect(usage.level).toBe('green');
+    expect(counter.isNearLimit()).toBe(false);
+  });
+
+  it('clears the limit when set back to null (model removed)', () => {
+    const counter = new TokenCounter(1000);
+    counter.setLimit(null);
+    expect(counter.getUsage().limit).toBeNull();
+    counter.setLimit(2048);
+    expect(counter.getUsage().limit).toBe(2048);
+  });
 });
 
 describe('ResponseCache (spec §3.2)', () => {

@@ -86,7 +86,16 @@ export class RagIndex {
   }
 
   public removeDocument(filePath: string): void {
-    const removed = this.chunks.filter(c => c.path === filePath);
+    this.removeWhere(c => c.path === filePath);
+  }
+
+  /** Retire tous les documents dont le path commence par `prefix` (ex: `docs:<id>:`). */
+  public removeByPrefix(prefix: string): void {
+    this.removeWhere(c => c.path.startsWith(prefix));
+  }
+
+  private removeWhere(predicate: (chunk: RagChunk) => boolean): void {
+    const removed = this.chunks.filter(predicate);
     if (removed.length === 0) return;
     for (const chunk of removed) {
       for (const term of chunk.tf.keys()) {
@@ -95,7 +104,8 @@ export class RagIndex {
         else this.documentFrequency.set(term, df);
       }
     }
-    this.chunks = this.chunks.filter(c => c.path !== filePath);
+    const removedSet = new Set(removed);
+    this.chunks = this.chunks.filter(c => !removedSet.has(c as IndexedChunk));
   }
 
   private idf(term: string): number {

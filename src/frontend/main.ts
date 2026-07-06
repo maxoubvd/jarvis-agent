@@ -1,4 +1,5 @@
 import './styles/vscode-theme.css';
+import './styles/tokens.css';
 import { mount } from 'svelte';
 import App from './App.svelte';
 import vscode from './lib/vscode-api';
