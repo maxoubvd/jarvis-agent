@@ -28,13 +28,13 @@
 <section class="checkpoint-panel">
   <header>
     <h2>🕒 Checkpoints (Time Travel)</h2>
-    <button class="refresh" onclick={() => onRefresh()}>↻ Rafraîchir</button>
+    <button class="refresh" onclick={() => onRefresh()}>↻ Refresh</button>
   </header>
 
   {#if checkpoints.length === 0}
     <div class="empty">
-      Aucun checkpoint. Les checkpoints sont des <code>git stash</code> nommés créés
-      avant les actions importantes.
+      No checkpoints yet. Checkpoints are named <code>git stash</code> entries created
+      before important actions.
     </div>
   {:else}
     <ul class="list">

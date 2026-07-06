@@ -135,6 +135,7 @@ export class HITLManager {
       case 'delete_file': return `Supprimer: ${params.path}`;
       case 'read_file': return `Lire: ${params.path}`;
       case 'web_search': return `Rechercher: ${params.query}`;
+      case 'mcp': return `Appeler l'outil MCP: ${params.tool ?? '?'} (serveur: ${params.server ?? '?'})`;
       default: return actionType;
     }
   }

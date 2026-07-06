@@ -1,14 +1,33 @@
 <script lang="ts">
   interface Props {
     activeTab?: string;
+    hitlMode?: string;
+    showThinking?: boolean;
     onTabChange?: (tab: string) => void;
+    onHitlModeChange?: (mode: string) => void;
+    onToggleThinking?: (show: boolean) => void;
   }
 
-  let { activeTab = 'chat', onTabChange = () => {} }: Props = $props();
+  let {
+    activeTab = 'chat',
+    hitlMode = 'moderate',
+    showThinking = true,
+    onTabChange = () => {},
+    onHitlModeChange = () => {},
+    onToggleThinking = () => {}
+  }: Props = $props();
 
   const tabs = [
     { id: 'chat', label: '💬 Chat' },
-    { id: 'checkpoints', label: '🕒 Checkpoints' }
+    { id: 'checkpoints', label: '🕒 Checkpoints' },
+    { id: 'analytics', label: '📊 Analytics' },
+    { id: 'settings', label: '⚙️ Settings' }
+  ];
+
+  const hitlModes = [
+    { id: 'strict', label: 'Strict' },
+    { id: 'moderate', label: 'Moderate' },
+    { id: 'free', label: 'Free' }
   ];
 </script>
 
@@ -26,12 +45,34 @@
     {/each}
   </nav>
 
+  <div class="section-title">HITL</div>
+  <select
+    class="hitl-select"
+    value={hitlMode}
+    onchange={e => onHitlModeChange((e.target as HTMLSelectElement).value)}
+  >
+    {#each hitlModes as mode (mode.id)}
+      <option value={mode.id}>{mode.label}</option>
+    {/each}
+  </select>
+
+  <label class="toggle">
+    <input
+      type="checkbox"
+      checked={showThinking}
+      onchange={e => onToggleThinking((e.target as HTMLInputElement).checked)}
+    />
+    🧠 Thinking
+  </label>
+
   <div class="hint">
-    <div class="hint-title">Commandes</div>
-    <code>@read &lt;fichier&gt;</code>
-    <code>@list &lt;dossier&gt;</code>
-    <code>@write &lt;fichier&gt; ...</code>
-    <code>@run &lt;commande&gt;</code>
+    <div class="hint-title">Commands</div>
+    <code>/agent &lt;task&gt;</code>
+    <code>/tdd &lt;task&gt;</code>
+    <code>/workflow &lt;id&gt; &lt;task&gt;</code>
+    <code>@QA-Agent, @Doc-Agent…</code>
+    <code>@file:path @docs:topic</code>
+    <code>@read @list @write @run</code>
   </div>
 </aside>
 
@@ -79,6 +120,24 @@
   .tab.active {
     background: var(--vscode-list-activeSelectionBackground);
     color: var(--vscode-list-activeSelectionForeground);
+  }
+
+  .hitl-select {
+    padding: 0.35rem 0.4rem;
+    background: var(--vscode-dropdown-background, var(--vscode-input-background));
+    color: var(--vscode-dropdown-foreground, var(--vscode-input-foreground));
+    border: 1px solid var(--vscode-dropdown-border, var(--vscode-input-border));
+    border-radius: 4px;
+    font-size: 0.85rem;
+  }
+
+  .toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.82rem;
+    cursor: pointer;
+    color: var(--vscode-sideBar-foreground);
   }
 
   .hint {

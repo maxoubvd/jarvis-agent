@@ -41,13 +41,17 @@
     "@types/node": "^20.0.0",
     "@types/prismjs": "^1.26.6",
     "@types/vscode": "^1.90.0",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
     "autoprefixer": "^10.5.2",
     "eslint": "^8.0.0",
+    "eslint-plugin-svelte": "^2.46.1",
     "jsdom": "^27.0.1",
     "postcss": "^8.0.0",
     "postcss-load-config": "^5.1.0",
     "prettier": "^3.0.0",
     "svelte": "^5.56.4",
+    "svelte-eslint-parser": "^0.43.0",
     "svelte-preprocess": "^5.0.0",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.5.0",
@@ -101,15 +105,39 @@
       {
         "command": "jarvis.exportAnalytics",
         "title": "Jarvis: Export Analytics"
+      },
+      {
+        "command": "jarvis.generateJarvisignore",
+        "title": "Jarvis: Generate .jarvisignore"
+      },
+      {
+        "command": "jarvis.addToJarvisignore",
+        "title": "Jarvis: Add to .jarvisignore"
+      },
+      {
+        "command": "jarvis.removeFromJarvisignore",
+        "title": "Jarvis: Remove from .jarvisignore"
+      },
+      {
+        "command": "jarvis.indexWorkspace",
+        "title": "Jarvis: Index Workspace (RAG)"
       }
     ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "jarvis.addToJarvisignore",
+          "group": "7_modification"
+        }
+      ]
+    },
     "configuration": {
       "title": "Jarvis Agent",
       "properties": {
         "jarvis.models.default": {
           "type": "string",
-          "default": "deepseek-coder-v3",
-          "description": "Modèle par défaut pour Jarvis"
+          "default": "",
+          "description": "Legacy — le modèle par défaut est géré dans l'onglet Settings (~/.jarvis/config.json)"
         },
         "jarvis.hitl.mode": {
           "type": "string",
@@ -120,9 +148,28 @@
             "free"
           ],
           "description": "Mode de validation Human-in-the-Loop"
+        },
+        "jarvis.agent.maxIterations": {
+          "type": "number",
+          "default": 10,
+          "description": "Nombre maximum d'itérations de la boucle agentique"
+        },
+        "jarvis.tdd.maxAttempts": {
+          "type": "number",
+          "default": 5,
+          "description": "Nombre maximum de tentatives de la boucle Auto-TDD"
+        },
+        "jarvis.tdd.testCommand": {
+          "type": "string",
+          "default": "npm test",
+          "description": "Commande de test utilisée par la boucle Auto-TDD"
+        },
+        "jarvis.terminal.timeout": {
+          "type": "number",
+          "default": 30000,
+          "description": "Timeout des commandes terminal (ms)"
         }
       }
     }
   }
 }
-

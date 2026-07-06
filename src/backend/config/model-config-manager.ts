@@ -1,101 +1,94 @@
-import * as fs from 'fs/promises';
-import * as fsSync from 'fs';
-import * as path from 'path';
-import * as vscode from 'vscode';
 import { IModelProvider } from '../models/abstract.js';
 import { OllamaProvider } from '../models/providers/ollama.js';
 import { OpenRouterProvider } from '../models/providers/openrouter.js';
 import { LMStudioProvider } from '../models/providers/lmstudio.js';
+import { MistralProvider } from '../models/providers/mistral.js';
+import { OpenAICompatibleProvider } from '../models/providers/openai-compatible-provider.js';
+import {
+  ConfigManager,
+  getConfigManager,
+  ProviderType,
+  type JarvisConfig,
+  type ModelConfigItem,
+  type ProviderConfigItem
+} from './config-manager.js';
 
-export interface ModelConfigItem {
-  name: string;
-  contextLength: number;
+// Réexport pour compat ascendante (consommateurs dans src/backend/models/*).
+export type { JarvisConfig, ModelConfigItem, ProviderConfigItem };
+
+function inferType(providerName: string): ProviderType {
+  switch (providerName) {
+    case 'ollama':
+    case 'openrouter':
+    case 'lmstudio':
+    case 'mistral':
+      return providerName;
+    default:
+      return 'openai-compatible';
+  }
 }
 
-export interface ProviderConfigItem {
-  enabled: boolean;
-  baseUrl: string;
-  apiKey?: string;
-  models: ModelConfigItem[];
-}
-
-export interface JarvisConfig {
-  models: {
-    default: string;
-    providers: Record<string, ProviderConfigItem>;
-  };
-}
-
+/**
+ * Consommateur de {@link ConfigManager} : instancie les providers activés à
+ * partir de la config effective. Ne lit plus le disque et ne throw plus —
+ * une config vide (aucun modèle) est un état valide (onboarding).
+ */
 export class ModelConfigManager {
-  private config: JarvisConfig;
-  private configPath: string;
-  private providers: Map<string, IModelProvider>;
+  private providers: Map<string, IModelProvider> = new Map();
 
-  constructor() {
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-    if (!workspaceFolder) {
-      throw new Error('Workspace introuvable');
-    }
-    
-    this.configPath = path.join(workspaceFolder, 'jarvis', 'jarvis-config.json');
-    this.providers = new Map();
-    this.config = this.loadConfigSync();
+  constructor(private cfg: ConfigManager = getConfigManager()) {
     this.initializeProviders();
   }
 
-  private loadConfigSync(): JarvisConfig {
-    try {
-      const configContent = fsSync.readFileSync(this.configPath, 'utf-8');
-      return JSON.parse(configContent);
-    } catch (error) {
-      console.error('Erreur de chargement de la configuration:', error);
-      throw new Error('Impossible de charger la configuration Jarvis');
-    }
-  }
-
-  private async loadConfig(): Promise<JarvisConfig> {
-    try {
-      const configContent = await fs.readFile(this.configPath, 'utf-8');
-      return JSON.parse(configContent);
-    } catch (error) {
-      console.error('Erreur de chargement de la configuration:', error);
-      throw new Error('Impossible de charger la configuration Jarvis');
-    }
+  private get config(): JarvisConfig {
+    return this.cfg.getConfig();
   }
 
   private initializeProviders(): void {
+    this.providers.clear();
     const providersConfig = this.config.models.providers;
     const defaultModel = this.config.models.default;
 
     for (const [providerName, providerConfig] of Object.entries(providersConfig)) {
       if (!providerConfig.enabled) continue;
 
-      // Prefer the global default model if this provider offers it,
-      // otherwise fall back to the provider's first configured model.
       const providerModelNames = providerConfig.models.map(m => m.name);
-      const model = providerModelNames.includes(defaultModel)
-        ? defaultModel
-        : providerModelNames[0];
+      const model =
+        defaultModel && providerModelNames.includes(defaultModel)
+          ? defaultModel
+          : providerModelNames[0];
+      if (!model) continue; // provider activé mais sans modèle
 
-      switch (providerName) {
+      const type = providerConfig.type ?? inferType(providerName);
+      switch (type) {
         case 'ollama':
-          this.providers.set(providerName, new OllamaProvider({
-            baseUrl: providerConfig.baseUrl,
-            model
-          }));
+          this.providers.set(providerName, new OllamaProvider({ baseUrl: providerConfig.baseUrl, model }));
           break;
         case 'openrouter':
-          this.providers.set(providerName, new OpenRouterProvider({
-            baseUrl: providerConfig.baseUrl,
-            apiKey: providerConfig.apiKey,
-            model
-          }));
+          this.providers.set(
+            providerName,
+            new OpenRouterProvider({ baseUrl: providerConfig.baseUrl, apiKey: providerConfig.apiKey, model })
+          );
           break;
         case 'lmstudio':
-          this.providers.set(providerName, new LMStudioProvider({
-            baseUrl: providerConfig.baseUrl,
-            model
-          }));
+          this.providers.set(providerName, new LMStudioProvider({ baseUrl: providerConfig.baseUrl, model }));
+          break;
+        case 'mistral':
+          this.providers.set(
+            providerName,
+            new MistralProvider({ baseUrl: providerConfig.baseUrl, apiKey: providerConfig.apiKey, model })
+          );
+          break;
+        default:
+          this.providers.set(
+            providerName,
+            new OpenAICompatibleProvider({
+              name: providerName,
+              baseUrl: providerConfig.baseUrl,
+              apiKey: providerConfig.apiKey,
+              model
+            })
+          );
           break;
       }
     }
@@ -105,29 +98,82 @@ export class ModelConfigManager {
     return this.providers.get(providerName);
   }
 
-  public getDefaultModel(): string {
+  /** Modèle par défaut, ou `null` si aucun modèle n'est configuré. */
+  public getDefaultModel(): string | null {
     return this.config.models.default;
+  }
+
+  /** Modèle effectif : défaut si valide, sinon premier modèle disponible, sinon `null`. */
+  public getEffectiveModel(): string | null {
+    const preferred = this.config.models.default;
+    if (preferred) return preferred;
+    return this.getAvailableModels()[0]?.name ?? null;
   }
 
   public getAvailableModels(): ModelConfigItem[] {
     const allModels: ModelConfigItem[] = [];
-    
     for (const providerConfig of Object.values(this.config.models.providers)) {
       if (providerConfig.enabled) {
         allModels.push(...providerConfig.models);
       }
     }
-    
     return allModels;
   }
 
   public async reloadConfig(): Promise<void> {
-    this.config = await this.loadConfig();
-    this.providers.clear();
+    await this.cfg.reload();
+    this.initializeProviders();
+  }
+
+  /** Ré-instancie les providers depuis la config courante (après un changement externe). */
+  public refresh(): void {
     this.initializeProviders();
   }
 
   public getConfig(): JarvisConfig {
     return this.config;
+  }
+
+  /** Premier provider activé qui propose le modèle demandé (défaut sinon). */
+  public getProviderNameForModel(modelName: string | null): string | undefined {
+    if (modelName) {
+      for (const [name, providerConfig] of Object.entries(this.config.models.providers)) {
+        if (providerConfig.enabled && providerConfig.models.some(m => m.name === modelName)) {
+          return name;
+        }
+      }
+    }
+    return Object.keys(this.config.models.providers).find(k => this.config.models.providers[k].enabled);
+  }
+
+  public getContextLength(modelName: string | null): number {
+    if (modelName) {
+      for (const providerConfig of Object.values(this.config.models.providers)) {
+        const found = providerConfig.models.find(m => m.name === modelName);
+        if (found) return found.contextLength;
+      }
+    }
+    return 32768;
+  }
+
+  /** Change le modèle par défaut (persisté dans la config globale) et ré-instancie. */
+  public async setDefaultModel(modelName: string): Promise<void> {
+    const next = this.cfg.getGlobalConfig();
+    const updated: JarvisConfig = {
+      ...next,
+      models: { ...next.models, default: modelName }
+    };
+    await this.cfg.writeGlobal(updated);
+    this.initializeProviders();
+  }
+
+  /**
+   * True si le provider envoie les données hors de la machine (spec §6.1).
+   * Par sécurité, tout provider non-local (≠ ollama/lmstudio) est considéré cloud.
+   */
+  public isCloudProvider(providerName: string): boolean {
+    const providerConfig = this.config.models.providers[providerName];
+    const type = providerConfig?.type ?? inferType(providerName);
+    return type !== 'ollama' && type !== 'lmstudio';
   }
 }

@@ -9,7 +9,11 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('jarvis.startChat', () => jarvis.startChat()),
     vscode.commands.registerCommand('jarvis.rollback', () => jarvis.showRollbackPanel()),
     vscode.commands.registerCommand('jarvis.listCheckpoints', () => jarvis.listCheckpoints()),
-    vscode.commands.registerCommand('jarvis.exportAnalytics', () => jarvis.exportAnalytics())
+    vscode.commands.registerCommand('jarvis.exportAnalytics', () => jarvis.exportAnalytics()),
+    vscode.commands.registerCommand('jarvis.generateJarvisignore', () => jarvis.generateJarvisignore()),
+    vscode.commands.registerCommand('jarvis.addToJarvisignore', (uri?: vscode.Uri) => jarvis.addToJarvisignore(uri)),
+    vscode.commands.registerCommand('jarvis.removeFromJarvisignore', () => jarvis.removeFromJarvisignore()),
+    vscode.commands.registerCommand('jarvis.indexWorkspace', () => jarvis.indexWorkspace())
   ];
 
   context.subscriptions.push(...commands);

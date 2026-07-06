@@ -1,4 +1,5 @@
 import * as fs from 'fs/promises';
+import * as fsSync from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 
@@ -24,7 +25,6 @@ export class SandboxManager {
 
   private loadIgnorePatterns(): void {
     try {
-      const fsSync = require('fs');
       if (!fsSync.existsSync(this.ignorePath)) {
         this.generateDefaultIgnore();
         return;
@@ -116,6 +116,55 @@ export class SandboxManager {
     this.ignorePatterns = this.getDefaultPatterns();
   }
 
+  /** Régénère le fichier .jarvisignore avec les patterns recommandés. */
+  public async regenerateIgnoreFile(): Promise<void> {
+    await this.generateDefaultIgnore();
+  }
+
+  public getIgnorePatterns(): string[] {
+    return [...this.ignorePatterns];
+  }
+
+  /** Ajoute un pattern à .jarvisignore (commande "Add to .jarvisignore"). */
+  public async addIgnorePattern(pattern: string): Promise<void> {
+    const trimmed = pattern.trim();
+    if (!trimmed || this.ignorePatterns.includes(trimmed)) return;
+    this.ignorePatterns.push(trimmed);
+    await this.persistPatterns();
+  }
+
+  /** Retire un pattern de .jarvisignore (commande "Remove from .jarvisignore"). */
+  public async removeIgnorePattern(pattern: string): Promise<void> {
+    this.ignorePatterns = this.ignorePatterns.filter(p => p !== pattern);
+    await this.persistPatterns();
+  }
+
+  private async persistPatterns(): Promise<void> {
+    let content: string;
+    try {
+      content = await fs.readFile(this.ignorePath, 'utf-8');
+    } catch {
+      content = '# Jarvis Ignore File — fichiers invisibles pour l\'IA\n';
+    }
+    const existing = new Set(
+      content.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'))
+    );
+    const lines = content.split('\n').filter(l => {
+      const t = l.trim();
+      return !t || t.startsWith('#') || this.ignorePatterns.includes(t);
+    });
+    for (const pattern of this.ignorePatterns) {
+      if (!existing.has(pattern)) {
+        lines.push(pattern);
+      }
+    }
+    try {
+      await fs.writeFile(this.ignorePath, lines.join('\n'), 'utf-8');
+    } catch {
+      // Ignore write errors
+    }
+  }
+
   public async reloadIgnorePatterns(): Promise<void> {
     try {
       const content = await fs.readFile(this.ignorePath, 'utf-8');
@@ -129,11 +178,18 @@ export class SandboxManager {
     const normalized = path.resolve(filePath).replace(/\\/g, '/');
     const workspaceNorm = this.workspaceRoot;
 
-    if (!normalized.startsWith(workspaceNorm)) {
+    if (normalized !== workspaceNorm && !normalized.startsWith(workspaceNorm + '/')) {
       return { allowed: false, reason: `Chemin hors du workspace: ${filePath}` };
     }
 
     const relative = normalized.slice(workspaceNorm.length).replace(/^\//, '');
+
+    // Patterns de négation (!pattern) : ré-autorisent explicitement (ex: !.env.example)
+    for (const pattern of this.ignorePatterns) {
+      if (pattern.startsWith('!') && this.matchesPattern(relative, pattern.slice(1))) {
+        return this.checkSymlink(filePath);
+      }
+    }
 
     for (const pattern of this.ignorePatterns) {
       if (pattern.startsWith('!')) {
@@ -144,6 +200,28 @@ export class SandboxManager {
       }
     }
 
+    return this.checkSymlink(filePath);
+  }
+
+  /**
+   * Protection symlink (spec §6.1) : bloque les liens symboliques qui
+   * pourraient pointer hors du workspace.
+   */
+  private checkSymlink(filePath: string): AccessResult {
+    try {
+      let current = path.resolve(filePath);
+      const root = path.resolve(this.workspaceRoot);
+      while (current.replace(/\\/g, '/').startsWith(root.replace(/\\/g, '/')) && current !== root) {
+        if (fsSync.existsSync(current) && fsSync.lstatSync(current).isSymbolicLink()) {
+          return { allowed: false, reason: `Lien symbolique détecté: ${current}` };
+        }
+        const parent = path.dirname(current);
+        if (parent === current) break;
+        current = parent;
+      }
+    } catch {
+      // lstat impossible → on n'empêche pas l'accès pour autant
+    }
     return { allowed: true };
   }
 
