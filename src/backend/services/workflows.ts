@@ -1,4 +1,5 @@
 import { AgentOrchestrator, AgentEvents, AgentResult } from '../core/agent/orchestrator.js';
+import { TaskDecomposer } from './task-decomposer.js';
 
 export interface WorkflowStep {
   name: string;
@@ -15,6 +16,12 @@ export interface Workflow {
 
 /** Workflows prédéfinis (spec §5.2). */
 export const WORKFLOWS: Workflow[] = [
+  {
+    id: 'dynamic',
+    label: 'Auto (Micro-Tâches)',
+    description: 'Découpage dynamique optimisé par IA (Recommandé)',
+    steps: []
+  },
   {
     id: 'dev-feature',
     label: 'Dev Feature',
@@ -126,12 +133,20 @@ export class WorkflowRunner {
     // Checkpoint avant le workflow complet (spec §6.2)
     await this.beforeRun?.();
 
+    let stepsToRun = workflow.steps;
+    if (workflow.id === 'dynamic' || workflow.steps.length === 0) {
+      events.onStepStart?.('Analyse & Découpage', 1, 1);
+      const decomposer = new TaskDecomposer(this.orchestrator.provider);
+      stepsToRun = await decomposer.decompose(task);
+      events.onStepDone?.('Analyse & Découpage', { success: true, finalText: `Tâche découpée en ${stepsToRun.length} étapes.`, steps: [], iterations: 1 });
+    }
+
     const results: WorkflowStepResult[] = [];
     let previous = '(première étape)';
 
-    for (let i = 0; i < workflow.steps.length; i++) {
-      const step = workflow.steps[i];
-      events.onStepStart?.(step.name, i + 1, workflow.steps.length);
+    for (let i = 0; i < stepsToRun.length; i++) {
+      const step = stepsToRun[i];
+      events.onStepStart?.(step.name, i + 1, stepsToRun.length);
 
       const prompt = step.prompt.replace(/\{task\}/g, task).replace(/\{previous\}/g, previous);
       const result = await this.orchestrator.run(prompt, [], events);

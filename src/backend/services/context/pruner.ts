@@ -1,8 +1,5 @@
-/**
- * Context Pruning (spec §8.3) : n'envoyer au modèle que les parties
- * pertinentes d'un fichier. Implémentation légère à base d'analyse
- * structurelle par indentation/accolades (sans tree-sitter).
- */
+import Parser from 'web-tree-sitter';
+import * as path from 'path';
 
 export type PruneLevel = 'none' | 'function' | 'class' | 'module';
 
@@ -10,6 +7,8 @@ export interface PruneOptions {
   level: PruneLevel;
   /** Nom du symbole (fonction/classe) à conserver en entier. */
   symbol?: string;
+  /** Extension du fichier pour déterminer le langage (ex: .ts, .py) */
+  fileExtension?: string;
 }
 
 interface CodeBlock {
@@ -17,19 +16,100 @@ interface CodeBlock {
   kind: 'function' | 'class';
   startLine: number;
   endLine: number;
+  node: Parser.SyntaxNode;
 }
 
-const IMPORT_REGEX = /^\s*(import\s|from\s+\S+\s+import|const\s+\w+\s*=\s*require\(|using\s|#include\s)/;
+let parserReady = false;
+let currentLang = '';
 
-const DECLARATION_PATTERNS: Array<{ kind: 'function' | 'class'; regex: RegExp }> = [
-  { kind: 'class', regex: /^\s*(?:export\s+)?(?:default\s+)?(?:abstract\s+)?class\s+([A-Za-z_$][\w$]*)/ },
-  { kind: 'function', regex: /^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s*\*?\s*([A-Za-z_$][\w$]*)/ },
-  { kind: 'function', regex: /^\s*(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[\w$]+)\s*=>/ },
-  { kind: 'function', regex: /^\s*(?:public|private|protected)?\s*(?:static\s+)?(?:async\s+)?([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*(?::[^{]+)?\{/ },
-  { kind: 'function', regex: /^\s*def\s+([A-Za-z_]\w*)/ }
+/** Initialise web-tree-sitter si ce n'est pas déjà fait. */
+async function ensureParser(extension: string): Promise<Parser | null> {
+  if (extension !== '.ts' && extension !== '.js' && extension !== '.tsx' && extension !== '.jsx') {
+    // Pour cet exemple, on limite TS/JS. À étendre avec d'autres WASM.
+    return null;
+  }
+  
+  try {
+    if (!parserReady) {
+      await Parser.init();
+      parserReady = true;
+    }
+    const parser = new Parser();
+    // En production, il faut packager tree-sitter-typescript.wasm
+    // avec l'extension ou le télécharger à la volée.
+    const langWasmPath = path.join(__dirname, '..', '..', '..', 'media', 'tree-sitter-typescript.wasm');
+    const lang = await Parser.Language.load(langWasmPath);
+    parser.setLanguage(lang);
+    return parser;
+  } catch (err) {
+    console.error('Erreur initialisation tree-sitter:', err);
+    return null;
+  }
+}
+
+/** 
+ * Extrait les blocs de premier niveau en utilisant l'AST Tree-sitter.
+ */
+function extractBlocksAST(root: Parser.SyntaxNode): CodeBlock[] {
+  const blocks: CodeBlock[] = [];
+  
+  for (const child of root.children) {
+    if (child.type === 'class_declaration' || child.type === 'export_statement' && child.children.some(c => c.type === 'class_declaration')) {
+      const classNode = child.type === 'class_declaration' ? child : child.children.find(c => c.type === 'class_declaration')!;
+      const nameNode = classNode.childForFieldName('name');
+      if (nameNode) {
+        blocks.push({
+          name: nameNode.text,
+          kind: 'class',
+          startLine: child.startPosition.row,
+          endLine: child.endPosition.row,
+          node: child
+        });
+      }
+    } else if (child.type === 'function_declaration' || child.type === 'export_statement' && child.children.some(c => c.type === 'function_declaration')) {
+      const fnNode = child.type === 'function_declaration' ? child : child.children.find(c => c.type === 'function_declaration')!;
+      const nameNode = fnNode.childForFieldName('name');
+      if (nameNode) {
+        blocks.push({
+          name: nameNode.text,
+          kind: 'function',
+          startLine: child.startPosition.row,
+          endLine: child.endPosition.row,
+          node: child
+        });
+      }
+    } else if (child.type === 'lexical_declaration' || child.type === 'variable_declaration') {
+      // Pour les arrow functions de premier niveau (const x = () => {})
+      const declarator = child.children.find(c => c.type === 'variable_declarator');
+      if (declarator) {
+        const nameNode = declarator.childForFieldName('name');
+        const valueNode = declarator.childForFieldName('value');
+        if (nameNode && valueNode && valueNode.type === 'arrow_function') {
+          blocks.push({
+            name: nameNode.text,
+            kind: 'function',
+            startLine: child.startPosition.row,
+            endLine: child.endPosition.row,
+            node: child
+          });
+        }
+      }
+    }
+  }
+  
+  return blocks;
+}
+
+// Fallback Regex en cas d'absence de Tree-Sitter
+const IMPORT_REGEX = /^\s*(import\s|from\s+\S+\s+import|const\s+\w+\s*=\s*require\(|using\s|#include\s)/;
+const DECLARATION_PATTERNS = [
+  { kind: 'class' as const, regex: /^\s*(?:export\s+)?(?:default\s+)?(?:abstract\s+)?class\s+([A-Za-z_$][\w$]*)/ },
+  { kind: 'function' as const, regex: /^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s*\*?\s*([A-Za-z_$][\w$]*)/ },
+  { kind: 'function' as const, regex: /^\s*(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[\w$]+)\s*=>/ },
+  { kind: 'function' as const, regex: /^\s*(?:public|private|protected)?\s*(?:static\s+)?(?:async\s+)?([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*(?::[^{]+)?\{/ },
+  { kind: 'function' as const, regex: /^\s*def\s+([A-Za-z_]\w*)/ }
 ];
 
-/** Trouve la fin d'un bloc par équilibre d'accolades (ou dé-indentation pour Python). */
 function findBlockEnd(lines: string[], startLine: number): number {
   const startText = lines[startLine];
   const usesBraces = /\{\s*$/.test(startText) || startText.includes('{') ||
@@ -40,34 +120,19 @@ function findBlockEnd(lines: string[], startLine: number): number {
     let seenOpen = false;
     for (let i = startLine; i < lines.length; i++) {
       for (const ch of lines[i]) {
-        if (ch === '{') {
-          depth++;
-          seenOpen = true;
-        } else if (ch === '}') {
-          depth--;
-        }
+        if (ch === '{') { depth++; seenOpen = true; }
+        else if (ch === '}') { depth--; }
       }
       if (seenOpen && depth <= 0) return i;
     }
     return lines.length - 1;
   }
-
-  // Style indentation (Python)
-  const baseIndent = startText.match(/^\s*/)?.[0].length ?? 0;
-  let lastNonEmpty = startLine;
-  for (let i = startLine + 1; i < lines.length; i++) {
-    const line = lines[i];
-    if (!line.trim()) continue;
-    const indent = line.match(/^\s*/)?.[0].length ?? 0;
-    if (indent <= baseIndent) return lastNonEmpty;
-    lastNonEmpty = i;
-  }
-  return lastNonEmpty;
+  return startLine; // Fallback simple pour python
 }
 
-export function extractBlocks(content: string): CodeBlock[] {
+function extractBlocksRegex(content: string): Omit<CodeBlock, 'node'>[] {
   const lines = content.split('\n');
-  const blocks: CodeBlock[] = [];
+  const blocks: Omit<CodeBlock, 'node'>[] = [];
   for (let i = 0; i < lines.length; i++) {
     for (const { kind, regex } of DECLARATION_PATTERNS) {
       const match = lines[i].match(regex);
@@ -85,24 +150,27 @@ function extractImports(lines: string[]): string[] {
 }
 
 /**
- * Élagage du contexte :
- * - `function` : imports + le bloc contenant/nommé `symbol`, signatures du reste
- * - `class`    : imports + la classe ciblée entière
- * - `module`   : fichier sans commentaires ni lignes vides
- * - `none`     : fichier complet
+ * Élagage du contexte via AST Tree-Sitter (ou regex en fallback).
  */
-export function pruneContext(content: string, options: PruneOptions): string {
+export async function pruneContext(content: string, options: PruneOptions): Promise<string> {
   if (options.level === 'none') return content;
 
   const lines = content.split('\n');
-
   if (options.level === 'module') {
-    return lines
-      .filter(l => l.trim() && !/^\s*(\/\/|\/\*|\*|#(?!include)|<!--)/.test(l))
-      .join('\n');
+    return lines.filter(l => l.trim() && !/^\s*(\/\/|\/\*|\*|#(?!include)|<!--)/.test(l)).join('\n');
   }
 
-  const blocks = extractBlocks(content);
+  const parser = await ensureParser(options.fileExtension || '.ts');
+  
+  let blocks: Array<{ name: string; kind: 'function' | 'class'; startLine: number; endLine: number }> = [];
+  
+  if (parser) {
+    const tree = parser.parse(content);
+    blocks = extractBlocksAST(tree.rootNode);
+  } else {
+    blocks = extractBlocksRegex(content);
+  }
+
   const wantedKind = options.level === 'class' ? 'class' : 'function';
   const target = options.symbol
     ? blocks.find(b => b.name === options.symbol) ??
@@ -110,8 +178,7 @@ export function pruneContext(content: string, options: PruneOptions): string {
     : blocks.find(b => b.kind === wantedKind);
 
   if (!target) {
-    // Symbole introuvable → repli sur le module élagué
-    return pruneContext(content, { level: 'module' });
+    return pruneContext(content, { level: 'module', fileExtension: options.fileExtension });
   }
 
   const parts: string[] = [];
@@ -120,10 +187,10 @@ export function pruneContext(content: string, options: PruneOptions): string {
     parts.push(imports.join('\n'));
   }
 
-  // Signatures des autres blocs de premier niveau pour garder la carte du fichier
   const signatures = blocks
     .filter(b => b !== target && (b.startLine < target.startLine || b.startLine > target.endLine))
     .map(b => `${lines[b.startLine].trim()} … // lignes ${b.startLine + 1}-${b.endLine + 1}`);
+    
   if (signatures.length > 0) {
     parts.push('// Autres définitions du fichier:\n' + signatures.join('\n'));
   }

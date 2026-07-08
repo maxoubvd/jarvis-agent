@@ -98,6 +98,109 @@ describe('temperature forwarding (model profiles)', () => {
   });
 });
 
+describe('structured outputs (JSON object mode)', () => {
+  it('OpenAI-compatible sends response_format when requested', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ choices: [{ message: { content: '{}' } }] })));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const provider = new LMStudioProvider({ model: 'test' });
+    await provider.sendPrompt(messages, undefined, undefined, { responseFormat: 'json_object' });
+
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.response_format).toEqual({ type: 'json_object' });
+  });
+
+  it('OpenAI-compatible omits response_format by default', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ choices: [{ message: { content: 'ok' } }] })));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const provider = new LMStudioProvider({ model: 'test' });
+    await provider.sendPrompt(messages);
+
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect('response_format' in body).toBe(false);
+  });
+
+  it('Ollama maps json_object to format:"json"', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ message: { content: '{}' } })));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const provider = new OllamaProvider({ model: 'test' });
+    await provider.sendPrompt(messages, undefined, undefined, { responseFormat: 'json_object' });
+
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.format).toBe('json');
+  });
+});
+
+describe('prompt cache usage stats', () => {
+  it('extracts cached_tokens from the OpenAI usage block (non-stream)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: 'ok' } }],
+          usage: { prompt_tokens: 100, completion_tokens: 20, prompt_tokens_details: { cached_tokens: 64 } }
+        })
+      )
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const provider = new LMStudioProvider({ model: 'test' });
+    const res = await provider.sendPrompt(messages);
+    const result = typeof res === 'string' ? { usage: undefined } : res;
+
+    expect(result.usage?.cachedTokens).toBe(64);
+    expect(result.usage?.promptTokens).toBe(100);
+  });
+
+  it('reads DeepSeek prompt_cache_hit_tokens as cachedTokens', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: 'ok' } }],
+          usage: { prompt_tokens: 80, completion_tokens: 10, prompt_cache_hit_tokens: 48 }
+        })
+      )
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const provider = new LMStudioProvider({ model: 'test' });
+    const res = await provider.sendPrompt(messages);
+    const result = typeof res === 'string' ? { usage: undefined } : res;
+
+    expect(result.usage?.cachedTokens).toBe(48);
+  });
+
+  it('requests usage on the stream and surfaces it via onDone', async () => {
+    const body = streamingResponse([
+      'data: ' + JSON.stringify({ choices: [{ delta: { content: 'hi' } }] }) + '\n',
+      'data: ' + JSON.stringify({ choices: [], usage: { prompt_tokens: 50, prompt_tokens_details: { cached_tokens: 32 } } }) + '\n',
+      'data: [DONE]\n'
+    ]);
+    const fetchMock = vi.fn().mockResolvedValue(body);
+    vi.stubGlobal('fetch', fetchMock);
+
+    const provider = new LMStudioProvider({ model: 'test' });
+    let cached: number | undefined;
+    await provider.sendPromptStream(
+      messages,
+      () => {},
+      (_tc, usage) => { cached = usage?.cachedTokens; },
+      err => { throw err; }
+    );
+
+    const reqBody = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(reqBody.stream_options).toEqual({ include_usage: true });
+    expect(cached).toBe(32);
+  });
+});
+
 describe('LMStudioProvider streaming (OpenAI-compatible SSE)', () => {
   it('parses SSE data lines and stops at [DONE]', async () => {
     const body = streamingResponse([

@@ -14,7 +14,8 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('jarvis.generateJarvisignore', () => jarvis.generateJarvisignore()),
     vscode.commands.registerCommand('jarvis.addToJarvisignore', (uri?: vscode.Uri) => jarvis.addToJarvisignore(uri)),
     vscode.commands.registerCommand('jarvis.removeFromJarvisignore', () => jarvis.removeFromJarvisignore()),
-    vscode.commands.registerCommand('jarvis.indexWorkspace', () => jarvis.indexWorkspace())
+    vscode.commands.registerCommand('jarvis.indexWorkspace', () => jarvis.indexWorkspace()),
+    vscode.commands.registerCommand('jarvis.inlineEdit', () => jarvis.inlineEdit())
   ];
 
   context.subscriptions.push(...commands);

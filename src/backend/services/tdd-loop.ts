@@ -97,7 +97,8 @@ export class AutoTDDLoop {
       // 1-2. Générer le code
       let raw: string;
       try {
-        raw = await this.provider.sendPrompt(messages);
+        const res = await this.provider.sendPrompt(messages);
+        raw = typeof res === 'string' ? res : res.text;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         return {

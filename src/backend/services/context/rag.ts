@@ -1,8 +1,4 @@
-/**
- * Base vectorielle locale légère (RAG, spec §5.2 / Phase 4) :
- * indexation TF-IDF par chunks + recherche par similarité cosinus.
- * Zéro dépendance externe, tout reste en mémoire locale.
- */
+import { pipeline, FeatureExtractionPipeline } from '@xenova/transformers';
 
 export interface RagChunk {
   path: string;
@@ -22,32 +18,26 @@ export interface RagSearchResult {
 const CHUNK_LINES = 40;
 const CHUNK_OVERLAP = 8;
 
-function tokenize(text: string): string[] {
-  return (
-    text
-      // découpe camelCase pour matcher les identifiants de code (avant le lowercase)
-      .replace(/([a-z])([A-Z])/g, '$1 $2')
-      .toLowerCase()
-      .match(/[a-zà-ÿ0-9_]{2,}/gi) ?? []
-  ).map(t => t.toLowerCase());
-}
-
-function termFrequencies(tokens: string[]): Map<string, number> {
-  const tf = new Map<string, number>();
-  for (const token of tokens) {
-    tf.set(token, (tf.get(token) ?? 0) + 1);
-  }
-  return tf;
-}
-
 interface IndexedChunk extends RagChunk {
-  tf: Map<string, number>;
-  norm: number;
+  embedding: Float32Array;
+}
+
+function cosineSimilarity(a: Float32Array | number[], b: Float32Array | number[]): number {
+  let dotProduct = 0;
+  let normA = 0;
+  let normB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dotProduct += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  if (normA === 0 || normB === 0) return 0;
+  return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
 export class RagIndex {
   private chunks: IndexedChunk[] = [];
-  private documentFrequency = new Map<string, number>();
+  private extractorPromise: Promise<FeatureExtractionPipeline> | null = null;
 
   public get size(): number {
     return this.chunks.length;
@@ -55,7 +45,21 @@ export class RagIndex {
 
   public clear(): void {
     this.chunks = [];
-    this.documentFrequency = new Map();
+  }
+
+  private async getExtractor(): Promise<FeatureExtractionPipeline> {
+    if (!this.extractorPromise) {
+      this.extractorPromise = pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2', {
+        // Options can be passed here if needed
+      }) as Promise<FeatureExtractionPipeline>;
+    }
+    return this.extractorPromise;
+  }
+
+  private async generateEmbedding(text: string): Promise<Float32Array> {
+    const extractor = await this.getExtractor();
+    const output = await extractor(text, { pooling: 'mean', normalize: true });
+    return output.data as Float32Array;
   }
 
   public getFiles(query: string, maxResults = 50): string[] {
@@ -70,9 +74,7 @@ export class RagIndex {
     return Array.from(uniquePaths);
   }
 
-  /** Découpe un fichier en chunks avec chevauchement et les indexe. */
-  public addDocument(filePath: string, content: string): void {
-    // Ré-indexation d'un fichier : retirer ses anciens chunks
+  public async addDocument(filePath: string, content: string): Promise<void> {
     this.removeDocument(filePath);
 
     const lines = content.split('\n');
@@ -81,17 +83,17 @@ export class RagIndex {
       const text = lines.slice(start, end).join('\n');
       if (!text.trim()) continue;
 
-      const tf = termFrequencies(tokenize(text));
-      this.chunks.push({
-        path: filePath,
-        startLine: start + 1,
-        endLine: end,
-        text,
-        tf,
-        norm: 0
-      });
-      for (const term of tf.keys()) {
-        this.documentFrequency.set(term, (this.documentFrequency.get(term) ?? 0) + 1);
+      try {
+        const embedding = await this.generateEmbedding(text);
+        this.chunks.push({
+          path: filePath,
+          startLine: start + 1,
+          endLine: end,
+          text,
+          embedding
+        });
+      } catch (err) {
+        console.error(`Erreur d'embedding pour ${filePath}:`, err);
       }
       if (end >= lines.length) break;
     }
@@ -101,58 +103,27 @@ export class RagIndex {
     this.removeWhere(c => c.path === filePath);
   }
 
-  /** Retire tous les documents dont le path commence par `prefix` (ex: `docs:<id>:`). */
   public removeByPrefix(prefix: string): void {
     this.removeWhere(c => c.path.startsWith(prefix));
   }
 
   private removeWhere(predicate: (chunk: RagChunk) => boolean): void {
-    const removed = this.chunks.filter(predicate);
-    if (removed.length === 0) return;
-    for (const chunk of removed) {
-      for (const term of chunk.tf.keys()) {
-        const df = (this.documentFrequency.get(term) ?? 1) - 1;
-        if (df <= 0) this.documentFrequency.delete(term);
-        else this.documentFrequency.set(term, df);
-      }
-    }
-    const removedSet = new Set(removed);
-    this.chunks = this.chunks.filter(c => !removedSet.has(c as IndexedChunk));
+    this.chunks = this.chunks.filter(c => !predicate(c));
   }
 
-  private idf(term: string): number {
-    const df = this.documentFrequency.get(term) ?? 0;
-    if (df === 0) return 0;
-    return Math.log(1 + this.chunks.length / df);
-  }
+  public async search(query: string, topK = 5): Promise<RagSearchResult[]> {
+    if (this.chunks.length === 0 || !query.trim()) return [];
 
-  /** Recherche sémantique lexicale : cosinus TF-IDF requête vs chunks. */
-  public search(query: string, topK = 5): RagSearchResult[] {
-    const queryTf = termFrequencies(tokenize(query));
-    if (queryTf.size === 0 || this.chunks.length === 0) return [];
-
-    const queryWeights = new Map<string, number>();
-    let queryNorm = 0;
-    for (const [term, tf] of queryTf) {
-      const w = tf * this.idf(term);
-      queryWeights.set(term, w);
-      queryNorm += w * w;
+    let queryEmbedding: Float32Array;
+    try {
+      queryEmbedding = await this.generateEmbedding(query);
+    } catch {
+      return [];
     }
-    queryNorm = Math.sqrt(queryNorm);
-    if (queryNorm === 0) return [];
-
+    
     const scored: RagSearchResult[] = [];
     for (const chunk of this.chunks) {
-      let dot = 0;
-      let chunkNorm = 0;
-      for (const [term, tf] of chunk.tf) {
-        const w = tf * this.idf(term);
-        chunkNorm += w * w;
-        const qw = queryWeights.get(term);
-        if (qw) dot += qw * w;
-      }
-      if (dot === 0) continue;
-      const score = dot / (queryNorm * Math.sqrt(chunkNorm));
+      const score = cosineSimilarity(queryEmbedding, chunk.embedding);
       scored.push({
         path: chunk.path,
         startLine: chunk.startLine,

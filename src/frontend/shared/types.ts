@@ -6,6 +6,13 @@ export interface Badge {
   variant?: 'success' | 'error' | 'warning' | 'info';
 }
 
+export interface ProcessStep {
+  id: string;
+  kind: 'thinking' | 'tool' | 'step';
+  content: string;
+  badges?: Badge[];
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -13,12 +20,15 @@ export interface Message {
   timestamp: number;
   kind?: MessageKind;
   badges?: Badge[];
+  processSteps?: ProcessStep[];
 }
 
 export interface RequestTokenRecord {
   model: string;
   inputTokens: number;
   outputTokens: number;
+  /** Tokens du prompt servis depuis le cache du provider (0/absent si aucun). */
+  cachedTokens?: number;
   timestamp: string;
 }
 
@@ -26,6 +36,8 @@ export interface TokenUsage {
   used: number;
   inputTokens: number;
   outputTokens: number;
+  /** Cumul des tokens servis depuis le cache du provider (économie coût/latence). */
+  cachedTokens: number;
   /** Longueur de contexte du modèle configuré ; `null` si aucun modèle. */
   limit: number | null;
   percentage: number;

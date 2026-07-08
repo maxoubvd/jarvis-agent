@@ -9,10 +9,11 @@
     limit?: number | null;
     inputTokens?: number;
     outputTokens?: number;
+    cachedTokens?: number;
     history?: RequestTokenRecord[];
   }
 
-  let { used = 0, limit = null, inputTokens = 0, outputTokens = 0, history = [] }: Props = $props();
+  let { used = 0, limit = null, inputTokens = 0, outputTokens = 0, cachedTokens = 0, history = [] }: Props = $props();
 
   const percentage = $derived(limit ? clamp(Math.round((used / limit) * 100), 0, 100) : 0);
   const colorClass = $derived(percentage < 50 ? 'green' : percentage < 80 ? 'orange' : 'red');
@@ -58,6 +59,11 @@
       <div class="split">
         <span>Input: {inputTokens.toLocaleString()}</span>
         <span>Output: {outputTokens.toLocaleString()}</span>
+        {#if cachedTokens > 0}
+          <span class="cached" title="Prompt tokens served from the provider cache (cost & latency savings)">
+            ⚡ Cached: {cachedTokens.toLocaleString()}
+          </span>
+        {/if}
       </div>
       {#if history.length > 0}
         <table class="history">
@@ -156,8 +162,13 @@
 
   .split {
     display: flex;
-    gap: 1rem;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
     margin-bottom: 0.4rem;
+  }
+
+  .cached {
+    color: var(--vscode-terminal-ansiGreen);
   }
 
   .history {

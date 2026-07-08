@@ -313,12 +313,34 @@
               </div>
             {/if}
 
-            {#if message.kind === 'thinking'}
+            {#if message.processSteps && message.processSteps.length > 0}
               <details class="thinking-details" open={isSending && message.id === messages[messages.length - 1].id}>
-                <summary><Icon name="lightbulb" size={12} /> Thinking process <span class="expand-icon"><Icon name="chevron-down" size={12} /></span></summary>
-                <div class="thinking-block">{message.content}</div>
+                <summary>
+                  <Icon name="lightbulb" size={12} /> Agent Process <span class="expand-icon"><Icon name="chevron-down" size={12} /></span>
+                </summary>
+                <div class="process-steps">
+                  {#each message.processSteps as step (step.id)}
+                    <div class="process-step {step.kind}">
+                      {#if step.badges?.length}
+                        <div class="badges">
+                          {#each step.badges as badge}
+                            <span class="badge {badge.variant ?? 'info'}">
+                              <Icon name={BADGE_ICONS[badge.variant ?? 'info'] ?? 'info'} size={11} />
+                              {badge.label}
+                            </span>
+                          {/each}
+                        </div>
+                      {/if}
+                      {#if step.content}
+                        <div class="thinking-block">{step.content}</div>
+                      {/if}
+                    </div>
+                  {/each}
+                </div>
               </details>
-            {:else if message.role === 'assistant'}
+            {/if}
+
+            {#if message.role === 'assistant'}
               {#if message.content}
                 {#each segment(message.content) as seg}
                   {#if seg.type === 'thinking'}
@@ -333,10 +355,12 @@
                     <div class="markdown">{@html render(seg.content)}</div>
                   {/if}
                 {/each}
-              {:else}
-                <p class="pending">…</p>
               {/if}
-            {:else if message.kind !== 'tool'}
+
+              {#if isSending && message.id === messages[messages.length - 1].id}
+                <p class="pending"><span class="badge info wavelight"><Icon name="cpu" size={11} /> Working...</span></p>
+              {/if}
+            {:else if message.kind !== 'tool' && message.kind !== 'step' && message.kind !== 'thinking'}
               <p>{message.content}</p>
             {/if}
           </li>
@@ -395,15 +419,26 @@
         onblur={() => (showMenu = false)}
       ></textarea>
     </div>
-    <button
-      class="send-btn"
-      title="Send"
-      aria-label="Send"
-      onclick={submit}
-      disabled={isSending || !inputText.trim()}
-    >
-      <Icon name="send" size={15} />
-    </button>
+    {#if isSending}
+      <button
+        class="send-btn stop-btn"
+        title="Stop generation"
+        aria-label="Stop"
+        onclick={() => vscode.postMessage({ type: 'cancelRequest' })}
+      >
+        <Icon name="square" size={12} />
+      </button>
+    {:else}
+      <button
+        class="send-btn"
+        title="Send"
+        aria-label="Send"
+        onclick={submit}
+        disabled={!inputText.trim()}
+      >
+        <Icon name="send" size={15} />
+      </button>
+    {/if}
   </div>
 </section>
 
@@ -592,6 +627,20 @@
     margin-top: 0.3rem;
     white-space: pre-wrap;
     word-break: break-word;
+  }
+
+  .process-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 6px;
+    padding-left: 8px;
+    border-left: 2px solid var(--vscode-editorWidget-border);
+  }
+
+  .process-step.tool,
+  .process-step.step {
+    padding: 2px 0;
   }
 
   .markdown {
@@ -796,24 +845,29 @@
   }
 
   .send-btn {
-    display: inline-flex;
+    align-self: flex-end;
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border: none;
+    border-radius: var(--jarvis-radius-md);
+    padding: var(--jarvis-space-2) var(--jarvis-space-3);
+    cursor: pointer;
+    display: flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
+    min-width: 36px;
     height: 36px;
-    flex-shrink: 0;
-    background: var(--jarvis-accent);
-    color: var(--jarvis-accent-fg);
-    border: none;
-    border-radius: var(--jarvis-radius-pill);
-    cursor: pointer;
-    transition: background var(--jarvis-transition);
   }
-
   .send-btn:hover:not(:disabled) {
-    background: var(--jarvis-accent-hover);
+    background: var(--vscode-button-hoverBackground);
   }
-
+  .send-btn.stop-btn {
+    background: var(--vscode-errorForeground);
+    color: var(--vscode-editor-background);
+  }
+  .send-btn.stop-btn:hover {
+    opacity: 0.8;
+  }
   .send-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;

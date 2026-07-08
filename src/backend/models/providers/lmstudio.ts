@@ -1,4 +1,5 @@
-import { IModelProvider, ChatMessage } from '../abstract.js';
+import { IModelProvider, ChatMessage, SendPromptResult, NativeToolCall, SendOptions, ProviderUsage } from '../abstract.js';
+import { ToolDefinition } from '../../core/agent/tool-registry.js';
 import { openaiCompatibleSend, openaiCompatibleStream, OpenAICompatibleConfig } from './openai-compatible.js';
 
 export interface LMStudioOptions {
@@ -22,16 +23,19 @@ export class LMStudioProvider implements IModelProvider {
     };
   }
 
-  public async sendPrompt(messages: ChatMessage[]): Promise<string> {
-    return openaiCompatibleSend(this.config, messages);
+  public async sendPrompt(messages: ChatMessage[], tools?: ToolDefinition[], signal?: AbortSignal, options?: SendOptions): Promise<SendPromptResult> {
+    return openaiCompatibleSend(this.config, messages, tools, signal, options);
   }
 
   public async sendPromptStream(
     messages: ChatMessage[],
     onChunk: (text: string) => void,
-    onDone: () => void,
-    onError: (err: Error) => void
+    onDone: (toolCalls?: NativeToolCall[], usage?: ProviderUsage) => void,
+    onError: (err: Error) => void,
+    tools?: ToolDefinition[],
+    signal?: AbortSignal,
+    options?: SendOptions
   ): Promise<void> {
-    return openaiCompatibleStream(this.config, messages, onChunk, onDone, onError);
+    return openaiCompatibleStream(this.config, messages, onChunk, onDone, onError, tools, signal, options);
   }
 }

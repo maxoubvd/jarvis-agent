@@ -1,9 +1,10 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { ChatMessage, IModelProvider } from '../../models/abstract.js';
+import { ChatMessage, IModelProvider, ProviderUsage } from '../../models/abstract.js';
 import { extractJson } from '../utils/json-cleaner.js';
 import { ToolRegistry, ToolDefinition } from './tool-registry.js';
 import { ChangeTracker } from '../../services/change-tracker.js';
+import { operationLogger } from '../../services/logger.js';
 
 export interface GateResult {
   granted: boolean;
@@ -48,6 +49,21 @@ export interface AgentResult {
   steps: AgentStep[];
   iterations: number;
   error?: string;
+  /** Cumul des stats de tokens renvoyées par l'API sur la boucle (dont le cache). */
+  usage?: ProviderUsage;
+}
+
+/** Détecte un refus d'API lié au mode JSON forcé (`response_format`/`format`). */
+function isJsonModeError(message: string): boolean {
+  return /response_format|json_object|json mode|json_schema|does not support|not supported/i.test(message);
+}
+
+/** Additionne les stats de tokens d'un appel dans le cumul de la boucle. */
+function accumulateUsage(total: ProviderUsage, next: ProviderUsage | undefined): void {
+  if (!next) return;
+  total.promptTokens = (total.promptTokens ?? 0) + (next.promptTokens ?? 0);
+  total.completionTokens = (total.completionTokens ?? 0) + (next.completionTokens ?? 0);
+  total.cachedTokens = (total.cachedTokens ?? 0) + (next.cachedTokens ?? 0);
 }
 
 export interface OrchestratorOptions {
@@ -64,6 +80,8 @@ export interface OrchestratorOptions {
   changeTracker?: ChangeTracker;
   /** Racine du workspace pour résoudre les chemins relatifs. */
   workspaceFolder?: string;
+  /** Signal d'annulation pour arrêter la génération en cours. */
+  abortSignal?: AbortSignal;
 }
 
 /** Réponse structurée attendue du modèle (JSON Mode, spec §8.2). */
@@ -73,7 +91,7 @@ interface AgentAction {
   final?: string;
 }
 
-const DEFAULT_MAX_ITERATIONS = 25;
+const DEFAULT_MAX_ITERATIONS = 100;
 const DEFAULT_MAX_RESULT_CHARS = 6000;
 
 /** Adaptations du prompt système au profil du modèle (spec §7 — petits modèles). */
@@ -144,8 +162,15 @@ export function buildAgentSystemPrompt(
  * réponse finale ou le nombre max d'itérations.
  */
 export class AgentOrchestrator {
+  /**
+   * Providers (par `name`) ayant rejeté le mode JSON forcé : on n'y renvoie plus
+   * `response_format`, on retombe sur le prompt + json-cleaner. Mémorisé au niveau
+   * du process pour ne pas retenter à chaque requête.
+   */
+  private static jsonModeUnsupported = new Set<string>();
+
   constructor(
-    private provider: IModelProvider,
+    public provider: IModelProvider,
     private tools: ToolRegistry,
     private options: OrchestratorOptions = {}
   ) {}
@@ -163,36 +188,56 @@ export class AgentOrchestrator {
     ];
 
     const steps: AgentStep[] = [];
+    let retryCount = 0;
+    // Structured Outputs : on force un JSON parsable via l'API tant que le provider l'accepte.
+    let useJsonMode = !AgentOrchestrator.jsonModeUnsupported.has(this.provider.name);
+    const totalUsage: ProviderUsage = { promptTokens: 0, completionTokens: 0, cachedTokens: 0 };
 
     for (let iteration = 1; iteration <= maxIterations; iteration++) {
+      this.options.abortSignal?.throwIfAborted();
+
       if (iteration === maxIterations) {
         const msg = `J'ai atteint la limite de ${maxIterations} itérations. Souhaitez-vous que je continue ?`;
         events.onFinal?.(msg);
         steps.push({ success: true, result: msg });
-        return { success: true, finalText: msg, steps, iterations: iteration };
+        return { success: true, finalText: msg, steps, iterations: iteration, usage: totalUsage };
       }
 
       let raw = '';
+      let nativeToolCalls: import('../../models/abstract.js').NativeToolCall[] | undefined = undefined;
       let lastThoughtLength = 0;
       let lastFinalLength = 0;
+      const sendOptions = useJsonMode ? ({ responseFormat: 'json_object' } as const) : undefined;
       try {
         if (this.provider.sendPromptStream) {
           await this.provider.sendPromptStream(
             messages,
             chunk => {
               raw += chunk;
-              // Extraction rudimentaire de la "thought" pour streaming partiel
-              const thoughtMatch = raw.match(/"thought"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)/);
-              if (thoughtMatch) {
-                try {
-                  const thoughtText = JSON.parse(`"${thoughtMatch[1]}"`);
-                  const newText = thoughtText.slice(lastThoughtLength);
-                  if (newText) {
-                    events.onThinkingChunk?.(newText);
-                    lastThoughtLength = thoughtText.length;
-                  }
-                } catch { /* Ignore */ }
+              // Extraction streaming de <thinking>
+              const thinkingMatch = raw.match(/<thinking>([\s\S]*?)(?:<\/thinking>|$)/i);
+              if (thinkingMatch) {
+                const thinkingText = thinkingMatch[1];
+                const newText = thinkingText.slice(lastThoughtLength);
+                if (newText) {
+                  events.onThinkingChunk?.(newText);
+                  lastThoughtLength = thinkingText.length;
+                }
+              } else {
+                // Extraction rudimentaire de la "thought" pour streaming partiel
+                const thoughtMatch = raw.match(/"thought"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)/);
+                if (thoughtMatch) {
+                  try {
+                    const thoughtText = JSON.parse(`"${thoughtMatch[1]}"`);
+                    const newText = thoughtText.slice(lastThoughtLength);
+                    if (newText) {
+                      events.onThinkingChunk?.(newText);
+                      lastThoughtLength = thoughtText.length;
+                    }
+                  } catch { /* Ignore */ }
+                }
               }
+
               // Extraction rudimentaire de la "final" pour streaming partiel
               const finalMatch = raw.match(/"final"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)/);
               if (finalMatch) {
@@ -206,89 +251,164 @@ export class AgentOrchestrator {
                 } catch { /* Ignore */ }
               }
             },
-            () => {},
-            err => { throw err; }
+            (toolCalls, usage) => { nativeToolCalls = toolCalls; accumulateUsage(totalUsage, usage); },
+            err => { throw err; },
+            this.tools.list(),
+            this.options.abortSignal,
+            sendOptions
           );
         } else {
-          raw = await this.provider.sendPrompt(messages);
+          const res = await this.provider.sendPrompt(messages, this.tools.list(), this.options.abortSignal, sendOptions);
+          if (typeof res === 'string') {
+            raw = res;
+          } else {
+            raw = res.text;
+            nativeToolCalls = res.toolCalls;
+            accumulateUsage(totalUsage, res.usage);
+          }
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        return { success: false, finalText: '', steps, iterations: iteration, error: `Erreur du modèle: ${msg}` };
+        // Fallback Structured Outputs : le provider refuse `response_format` → on
+        // désactive le mode JSON (mémorisé) et on rejoue l'itération sans lui.
+        if (useJsonMode && isJsonModeError(msg)) {
+          useJsonMode = false;
+          AgentOrchestrator.jsonModeUnsupported.add(this.provider.name);
+          operationLogger.log('agent', `Mode JSON non supporté par ${this.provider.name} — repli sur le prompt (${msg.slice(0, 120)})`, 'error');
+          iteration--; // le for(...) réincrémente : on rejoue la même itération
+          continue;
+        }
+        return { success: false, finalText: '', steps, iterations: iteration, error: `Erreur du modèle: ${msg}`, usage: totalUsage };
       }
 
       const parsed = extractJson<AgentAction>(raw);
 
-      // Pas de JSON exploitable → on considère la réponse brute comme finale.
-      if (!parsed.ok || !parsed.value) {
-        const finalText = (parsed.surroundingText ?? raw).trim();
-        events.onFinal?.(finalText);
-        steps.push({ success: true, result: finalText });
-        return { success: true, finalText, steps, iterations: iteration };
+      let action: Partial<AgentAction> = parsed.value || {};
+      let isNativeTool = false;
+
+      if (nativeToolCalls && nativeToolCalls.length > 0) {
+        const tc = nativeToolCalls[0];
+        try {
+          const args = tc.function.arguments ? JSON.parse(tc.function.arguments) : {};
+          action = {
+            thought: parsed.surroundingText || raw,
+            action: {
+              tool: tc.function.name,
+              args
+            }
+          };
+          isNativeTool = true;
+          parsed.ok = true;
+        } catch {
+          // Args parse error -> will trigger retry or error
+        }
       }
 
-      const action = parsed.value;
+      // Système de Retry
+      if (!isNativeTool && (!parsed.ok || (!action.action?.tool && action.final === undefined))) {
+        if (retryCount < 3) {
+          retryCount++;
+          messages.push({ role: 'assistant', content: raw });
+          messages.push({ role: 'user', content: "Erreur : Format inattendu. Tu dois utiliser un appel d'outil natif ou fournir un objet JSON valide avec 'action' ou 'final'. Refais ta réponse." });
+          events.onThinkingChunk?.('\n\n*(Nouvelle tentative suite à une erreur de format)*\n\n');
+          continue;
+        } else {
+          // Pas de JSON exploitable → on considère la réponse brute comme finale.
+          const finalText = (parsed.surroundingText ?? raw).trim();
+          events.onFinal?.(finalText);
+          steps.push({ success: true, result: finalText });
+          return { success: true, finalText, steps, iterations: iteration, usage: totalUsage };
+        }
+      }
+
+      retryCount = 0;
+      const thoughtText = action.thought || parsed.surroundingText;
+
       // On ne renvoie pas onThinking ici si on a déjà streamé
-      if (action.thought && lastThoughtLength === 0) {
-        events.onThinking?.(action.thought);
+      if (thoughtText && lastThoughtLength === 0) {
+        events.onThinking?.(thoughtText);
       }
 
       if (action.final !== undefined || !action.action?.tool) {
-        const finalText = action.final ?? action.thought ?? raw;
+        const finalText = action.final ?? thoughtText ?? raw;
         if (lastFinalLength === 0) events.onFinal?.(finalText);
-        steps.push({ thought: action.thought, success: true, result: finalText });
-        return { success: true, finalText, steps, iterations: iteration };
+        steps.push({ thought: thoughtText, success: true, result: finalText });
+        return { success: true, finalText, steps, iterations: iteration, usage: totalUsage };
       }
 
-      const toolName = action.action.tool;
-      const args = action.action.args ?? {};
-      const tool = this.tools.get(toolName);
+      const assistantMsg: ChatMessage = { role: 'assistant', content: raw };
+      if (nativeToolCalls) {
+        assistantMsg.tool_calls = nativeToolCalls;
+      }
+      messages.push(assistantMsg);
 
-      messages.push({ role: 'assistant', content: raw });
-
-      if (!tool) {
-        const errText = `Outil inconnu: "${toolName}". Outils disponibles: ${this.tools.list().map(t => t.name).join(', ')}`;
-        steps.push({ thought: action.thought, tool: toolName, args, result: errText, success: false });
-        messages.push({ role: 'user', content: errText });
-        continue;
+      const toolsToExecute: Array<{ toolName: string; args: Record<string, unknown>; id?: string }> = [];
+      if (isNativeTool && nativeToolCalls) {
+        for (const tc of nativeToolCalls) {
+          let tcArgs = {};
+          try { tcArgs = JSON.parse(tc.function.arguments || '{}'); } catch {}
+          toolsToExecute.push({ toolName: tc.function.name, args: tcArgs, id: tc.id });
+        }
+      } else {
+        toolsToExecute.push({ toolName: action.action!.tool, args: action.action!.args ?? {} });
       }
 
-      events.onToolCall?.(toolName, args);
+      for (const t of toolsToExecute) {
+        const toolName = t.toolName;
+        const args = t.args;
+        const tool = this.tools.get(toolName);
 
-      const gate = await this.gate(tool, toolName, args);
-      if (!gate.granted) {
-        // Avec des instructions de l'utilisateur, l'agent repart dessus au lieu
-        // d'abandonner (option « Refuser et décrire les étapes »).
-        steps.push({ thought: action.thought, tool: toolName, args, result: gate.refusal, success: false });
-        events.onToolResult?.(toolName, gate.refusal, false, args);
-        messages.push({ role: 'user', content: gate.refusal });
-        continue;
+        if (!tool) {
+          const errText = `Outil inconnu: "${toolName}". Outils disponibles: ${this.tools.list().map(td => td.name).join(', ')}`;
+          steps.push({ thought: thoughtText, tool: toolName, args, result: errText, success: false });
+          messages.push({ 
+            role: isNativeTool ? 'tool' : 'user', 
+            content: errText,
+            tool_call_id: t.id 
+          });
+          continue;
+        }
+
+        events.onToolCall?.(toolName, args);
+
+        const gate = await this.gate(tool, toolName, args);
+        if (!gate.granted) {
+          steps.push({ thought: thoughtText, tool: toolName, args, result: gate.refusal, success: false });
+          events.onToolResult?.(toolName, gate.refusal, false, args);
+          messages.push({ 
+            role: isNativeTool ? 'tool' : 'user', 
+            content: gate.refusal,
+            tool_call_id: t.id 
+          });
+          continue;
+        }
+
+        let result: string;
+        let success = true;
+        try {
+          result = await this.executeWithTracking(tool, toolName, args);
+        } catch (err) {
+          result = `Erreur: ${err instanceof Error ? err.message : String(err)}`;
+          success = false;
+        }
+
+        if (result.length > maxResultChars) {
+          result = result.slice(0, maxResultChars) + `\n… (tronqué, ${result.length} caractères au total)`;
+        }
+
+        steps.push({ thought: thoughtText, tool: toolName, args, result, success });
+        events.onToolResult?.(toolName, result, success, args);
+
+        messages.push({
+          role: isNativeTool ? 'tool' : 'user',
+          content: isNativeTool ? scrub(result) : scrub(`Résultat de l'outil ${toolName}:\n${result}\n\nContinue (JSON ou appel d'outil natif uniquement).`),
+          tool_call_id: t.id
+        });
       }
-
-      let result: string;
-      let success = true;
-      try {
-        result = await this.executeWithTracking(tool, toolName, args);
-      } catch (err) {
-        result = `Erreur: ${err instanceof Error ? err.message : String(err)}`;
-        success = false;
-      }
-
-      if (result.length > maxResultChars) {
-        result = result.slice(0, maxResultChars) + `\n… (tronqué, ${result.length} caractères au total)`;
-      }
-
-      steps.push({ thought: action.thought, tool: toolName, args, result, success });
-      events.onToolResult?.(toolName, result, success, args);
-
-      messages.push({
-        role: 'user',
-        content: scrub(`Résultat de l'outil ${toolName}:\n${result}\n\nContinue (JSON uniquement).`)
-      });
     }
 
     const error = `Nombre maximum d'itérations atteint (${maxIterations})`;
-    return { success: false, finalText: '', steps, iterations: maxIterations, error };
+    return { success: false, finalText: '', steps, iterations: maxIterations, error, usage: totalUsage };
   }
 
   /** Contrôle HITL d'un appel d'outil (partagé par les deux boucles). */

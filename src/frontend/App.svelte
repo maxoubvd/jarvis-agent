@@ -6,6 +6,7 @@
   import AnalyticsPanel from './components/AnalyticsPanel.svelte';
   import SettingsPanel from './components/SettingsPanel.svelte';
   import DiffReviewPanel from './components/DiffReviewPanel.svelte';
+  import WelcomeScreen from './components/WelcomeScreen.svelte';
   import Icon from './components/Icon.svelte';
 
   import { fly, fade } from 'svelte/transition';
@@ -39,7 +40,20 @@
   // est la largeur du panneau — c'est notre breakpoint « conteneur ».
   let innerWidth = $state(600);
   const isNarrow = $derived(innerWidth < 500);
-  let drawerOpen = $state(false);
+  let sidebarOpen = $state(true);
+
+  // État UI léger persisté côté webview (survit au reload de la fenêtre).
+  const persistedUi = (vscode?.getState() as { activeTab?: Tab } | undefined) ?? {};
+
+  // Synchronisation de sidebarOpen lors des transitions de taille (narrow <=> wide)
+  let wasNarrow = false;
+  $effect(() => {
+    const narrow = isNarrow;
+    if (narrow !== wasNarrow) {
+      sidebarOpen = !narrow;
+      wasNarrow = narrow;
+    }
+  });
 
   let connectionStatus = $state('Connecting…');
   let tokensUsed = $state(0);
@@ -47,7 +61,7 @@
   let tokenUsage = $state<TokenUsage | null>(null);
   let messages = $state<Message[]>([]);
   let isSending = $state(false);
-  let activeTab = $state<Tab>('chat');
+  let activeTab = $state<Tab>(persistedUi.activeTab ?? 'chat');
   let checkpoints = $state<Checkpoint[]>([]);
   let analyticsStats = $state<AnalyticsStats | null>(null);
   let availableModels = $state<string[]>([]);
@@ -61,6 +75,13 @@
   let activeWorkspaceId = $state<string | null>(null);
   let indexStatus = $state<{ indexing: boolean; fileCount: number } | null>(null);
   let needsSetup = $state(false);
+  // Onboarding : `true` par défaut pour ne pas flasher l'écran d'accueil chez les
+  // utilisateurs déjà configurés (le backend corrige via `onboardingState`).
+  let onboardingDone = $state(true);
+  let welcomeDismissed = $state(false);
+  let connectionResult = $state<{ ok: boolean; error?: string; sample?: string } | null>(null);
+  let testingConnection = $state(false);
+  const showWelcome = $derived(!welcomeDismissed && (needsSetup || !onboardingDone));
   let saveStatus = $state<{ ok: boolean; error?: string; pending?: boolean } | null>(null);
   let saveStatusTimer: ReturnType<typeof setTimeout> | undefined;
   let extraCommands = $state<CommandItem[]>([]);
@@ -88,16 +109,38 @@
     }
   }
 
-  function appendToLastThinking(text: string) {
-    const last = messages[messages.length - 1];
-    if (last && last.role === 'assistant' && last.kind === 'thinking') {
-      messages = [
-        ...messages.slice(0, -1),
-        { ...last, content: last.content + text }
-      ];
-    } else {
-      pushMessage('assistant', text, 'thinking', [{ icon: '', label: 'Thinking', variant: 'info' }]);
+  function appendToProcessSteps(kind: 'thinking' | 'tool' | 'step', content: string, badges?: Badge[]) {
+    let lastMsg = messages.length > 0 ? messages[messages.length - 1] : null;
+    if (!lastMsg || lastMsg.role !== 'assistant') {
+      const newMsg: Message = { id: crypto.randomUUID(), role: 'assistant', content: '', timestamp: Date.now(), processSteps: [] };
+      messages = [...messages, newMsg];
+      lastMsg = newMsg;
     }
+
+    const processSteps = lastMsg.processSteps || [];
+
+    if (kind === 'thinking' && !badges) {
+      const lastStep = processSteps.length > 0 ? processSteps[processSteps.length - 1] : null;
+      if (lastStep && lastStep.kind === 'thinking') {
+        const newSteps = [...processSteps];
+        newSteps[newSteps.length - 1] = { ...lastStep, content: lastStep.content + content };
+        messages = [
+          ...messages.slice(0, -1),
+          { ...lastMsg, processSteps: newSteps }
+        ];
+        return;
+      }
+    }
+
+    const newSteps = [
+      ...processSteps,
+      { id: crypto.randomUUID(), kind, content, badges }
+    ];
+
+    messages = [
+      ...messages.slice(0, -1),
+      { ...lastMsg, processSteps: newSteps }
+    ];
   }
 
   function onWindowMessage(event: MessageEvent) {
@@ -142,6 +185,9 @@
       description?: string;
       detail?: string;
       changes?: PendingFileChange[];
+      done?: boolean;
+      sample?: string;
+      messages?: Array<{ role: string; content: string }>;
     };
 
     switch (msg.type) {
@@ -230,6 +276,24 @@
           if (msg.tokensLimit !== undefined) tokensLimit = msg.tokensLimit;
         }
         break;
+      case 'onboardingState':
+        if (msg.done !== undefined) onboardingDone = msg.done;
+        break;
+      case 'connectionResult':
+        testingConnection = false;
+        connectionResult = { ok: msg.ok ?? false, error: msg.error, sample: msg.sample };
+        break;
+      case 'chatHistory':
+        if (msg.messages && msg.messages.length > 0) {
+          messages = msg.messages.map(m => ({
+            id: crypto.randomUUID(),
+            role: (m.role === 'user' ? 'user' : 'assistant') as Message['role'],
+            content: m.content,
+            timestamp: Date.now(),
+            kind: 'text' as const
+          }));
+        }
+        break;
       case 'sessionStarted':
         messages = [];
         isSending = false;
@@ -262,44 +326,27 @@
         break;
       case 'agentThinking':
         if (msg.text) {
-          pushMessage('assistant', msg.text, 'thinking', [
-            { icon: '', label: 'Thinking', variant: 'info' }
-          ]);
+          appendToProcessSteps('thinking', msg.text, [{ icon: '', label: 'Thinking', variant: 'info' }]);
         }
         break;
       case 'agentThinkingChunk':
-        if (msg.chunk) appendToLastThinking(msg.chunk);
+        if (msg.chunk) appendToProcessSteps('thinking', msg.chunk);
         break;
       case 'agentFinalChunk':
         if (msg.chunk) appendToLastAssistant(msg.chunk);
         break;
       case 'agentTool':
-        pushMessage(
-          'assistant',
-          '',
-          'tool',
-          [{ icon: '', label: `Tool: ${msg.tool}`, variant: 'info' }]
-        );
+        appendToProcessSteps('tool', '', [{ icon: '', label: `Tool: ${msg.tool}`, variant: 'info' }]);
         break;
       case 'agentToolResult':
-        pushMessage(
-          'assistant',
-          msg.summary ?? '',
-          'tool',
-          [
-            msg.success
-              ? { icon: '', label: 'Success', variant: 'success' }
-              : { icon: '', label: 'Failed', variant: 'error' }
-          ]
-        );
+        appendToProcessSteps('tool', msg.summary ?? '', [
+          msg.success
+            ? { icon: '', label: 'Success', variant: 'success' }
+            : { icon: '', label: 'Failed', variant: 'error' }
+        ]);
         break;
       case 'workflowStep':
-        pushMessage(
-          'assistant',
-          `Step ${msg.index}/${msg.total}: ${msg.step}`,
-          'step',
-          [{ icon: '', label: 'Workflow', variant: 'info' }]
-        );
+        appendToProcessSteps('step', `Step ${msg.index}/${msg.total}: ${msg.step}`, [{ icon: '', label: 'Workflow', variant: 'info' }]);
         break;
       case 'agentFinal':
         if (msg.text) {
@@ -348,9 +395,26 @@
     vscode?.postMessage({ type: 'chatMessage', text: text.trim(), mode });
   }
 
+  function persistUiState() {
+    vscode?.setState({ ...(vscode?.getState() ?? {}), activeTab });
+  }
+
+  function handleTestConnection(item: unknown) {
+    testingConnection = true;
+    connectionResult = null;
+    vscode?.postMessage({ type: 'testConnection', model: item });
+  }
+
+  function handleCompleteOnboarding() {
+    welcomeDismissed = true;
+    onboardingDone = true;
+    vscode?.postMessage({ type: 'completeOnboarding' });
+  }
+
   function handleTabChange(tab: string) {
     activeTab = tab as Tab;
-    drawerOpen = false;
+    persistUiState();
+    if (isNarrow) sidebarOpen = false;
     if (tab === 'checkpoints') {
       vscode?.postMessage({ type: 'listCheckpoints' });
     } else if (tab === 'analytics') {
@@ -382,6 +446,10 @@
 
   function handleOpenConfig() {
     vscode?.postMessage({ type: 'openConfigFile' });
+  }
+
+  function handleOpenGuide() {
+    vscode?.postMessage({ type: 'openUserGuide' });
   }
 
   function handleWorkspaceChange(id: string | null) {
@@ -444,8 +512,8 @@
 
 
   function handleWindowKeydown(event: KeyboardEvent) {
-    if (event.key === 'Escape' && drawerOpen) {
-      drawerOpen = false;
+    if (event.key === 'Escape' && sidebarOpen && isNarrow) {
+      sidebarOpen = false;
     }
   }
 </script>
@@ -453,18 +521,27 @@
 <svelte:window onmessage={onWindowMessage} onkeydown={handleWindowKeydown} bind:innerWidth />
 
 <div class="app-shell">
+  {#if showWelcome}
+    <WelcomeScreen
+      baseConfig={settings}
+      hasModel={!needsSetup}
+      {connectionResult}
+      testing={testingConnection}
+      onTest={handleTestConnection}
+      onSave={handleSaveSettings}
+      onComplete={handleCompleteOnboarding}
+    />
+  {:else}
   <header class="app-header">
     <div class="header-left">
-      {#if isNarrow}
-        <button
-          class="menu-btn"
-          title="Menu"
-          aria-label="Toggle navigation"
-          onclick={() => (drawerOpen = !drawerOpen)}
-        >
-          <Icon name={drawerOpen ? 'close' : 'menu'} />
-        </button>
-      {/if}
+      <button
+        class="menu-btn"
+        title="Menu"
+        aria-label="Toggle navigation"
+        onclick={() => (sidebarOpen = !sidebarOpen)}
+      >
+        <Icon name={sidebarOpen ? 'close' : 'menu'} />
+      </button>
       <h1>{APP_NAME}</h1>
       <div class="header-actions" style="display: flex; gap: 4px; margin-left: 8px;">
         <button
@@ -494,8 +571,8 @@
     </div>
   </header>
 
-  <div class="app-layout" class:narrow={isNarrow}>
-    {#if !isNarrow}
+  <div class="app-layout" class:narrow={isNarrow || !sidebarOpen}>
+    {#if !isNarrow && sidebarOpen}
       <Sidebar {activeTab} onTabChange={handleTabChange} />
     {/if}
     <main class="main-content">
@@ -537,6 +614,7 @@
           limit={tokensLimit}
           inputTokens={tokenUsage?.inputTokens ?? 0}
           outputTokens={tokenUsage?.outputTokens ?? 0}
+          cachedTokens={tokenUsage?.cachedTokens ?? 0}
           history={tokenUsage?.history ?? []}
         />
       {:else if activeTab === 'settings'}
@@ -552,6 +630,7 @@
           onIndexDocs={handleIndexDocs}
           onReindex={handleReindex}
           onOpenConfig={handleOpenConfig}
+          onOpenGuide={handleOpenGuide}
         />
       {:else if activeTab === 'checkpoints'}
         <CheckpointPanel
@@ -569,12 +648,12 @@
     </main>
   </div>
 
-  {#if isNarrow && drawerOpen}
+  {#if isNarrow && sidebarOpen}
     <div
       class="drawer-backdrop"
       transition:fade={{ duration: 120 }}
-      onclick={() => (drawerOpen = false)}
-      onkeydown={e => e.key === 'Enter' && (drawerOpen = false)}
+      onclick={() => (sidebarOpen = false)}
+      onkeydown={e => e.key === 'Enter' && (sidebarOpen = false)}
       role="button"
       tabindex="-1"
       aria-label="Close navigation"
@@ -582,6 +661,7 @@
     <div class="drawer" transition:fly={{ x: -240, duration: 180 }}>
       <Sidebar {activeTab} onTabChange={handleTabChange} />
     </div>
+  {/if}
   {/if}
 </div>
 

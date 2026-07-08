@@ -1,3 +1,4 @@
+import * as vscode from 'vscode';
 import { computeHunks, resolveHunk, type DiffHunk } from './diff.js';
 
 /** Vue d'un fichier en attente de revue, envoyée au webview. */
@@ -37,6 +38,8 @@ export class ChangeTracker {
   private files = new Map<string, PendingFile>();
   /** true pendant l'application d'une résolution : nos propres écritures ne sont pas re-suivies. */
   private applying = false;
+  
+  public readonly onDidChange = new vscode.EventEmitter<void>();
 
   /** Enregistre une écriture de l'IA (appelé par le listener fileSystem). */
   public record(path: string, before: string | null, after: string): void {
@@ -51,6 +54,7 @@ export class ChangeTracker {
     }
     if (before !== null && before === after) return;
     this.files.set(path, { path, before, after, revision: 1 });
+    this.onDidChange.fire();
   }
 
   /** Exécute `fn` sans suivre les écritures qu'elle déclenche. */
@@ -106,6 +110,8 @@ export class ChangeTracker {
     file.after = resolved.after;
     file.revision++;
     if (file.before === file.after) this.files.delete(path);
+    
+    this.onDidChange.fire();
 
     return action === 'reject' ? { path, content: resolved.after } : null;
   }
@@ -115,6 +121,7 @@ export class ChangeTracker {
     const file = this.files.get(path);
     if (!file) return null;
     this.files.delete(path);
+    this.onDidChange.fire();
     if (action === 'accept') return null;
     return { path, content: file.before };
   }

@@ -164,7 +164,7 @@ export class DocsService {
       if (text) {
         const file = crypto.createHash('sha1').update(url).digest('hex') + '.txt';
         await fs.writeFile(path.join(pagesDir, file), text, 'utf-8');
-        this.index.addDocument(this.indexPrefix(site.id) + url, text);
+        await this.index.addDocument(this.indexPrefix(site.id) + url, text);
         pages.push({ url, title: title || url, file });
         onProgress?.(pages.length);
       }
@@ -236,7 +236,7 @@ export class DocsService {
       for (const page of meta.pages) {
         try {
           const text = await fs.readFile(path.join(this.siteDir(site.id), 'pages', page.file), 'utf-8');
-          this.index.addDocument(this.indexPrefix(site.id) + page.url, text);
+          await this.index.addDocument(this.indexPrefix(site.id) + page.url, text);
         } catch {
           /* page manquante — ignorée */
         }
@@ -268,7 +268,7 @@ export class DocsService {
     return statuses;
   }
 
-  public search(query: string, topK = 5): RagSearchResult[] {
+  public async search(query: string, topK = 5): Promise<RagSearchResult[]> {
     return this.index.search(query, topK);
   }
 }

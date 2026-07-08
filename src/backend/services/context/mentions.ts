@@ -3,7 +3,7 @@ import { RagSearchResult } from './rag.js';
 export interface MentionDeps {
   readFile(path: string): Promise<string>;
   /** Recherche RAG limitée à la documentation (fichiers .md). */
-  searchDocs?(query: string): RagSearchResult[];
+  searchDocs?(query: string): Promise<RagSearchResult[]>;
 }
 
 export interface ExpandedPrompt {
@@ -40,7 +40,7 @@ export async function expandMentions(text: string, deps: MentionDeps): Promise<E
 
   for (const match of [...text.matchAll(DOCS_MENTION)]) {
     const query = match[1].replace(/[-_]/g, ' ');
-    const results = deps.searchDocs?.(query) ?? [];
+    const results = (await deps.searchDocs?.(query)) ?? [];
     if (results.length > 0) {
       const snippets = results
         .slice(0, 3)

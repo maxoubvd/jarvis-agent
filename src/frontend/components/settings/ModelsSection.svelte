@@ -28,6 +28,7 @@
     { value: 'sambanova', label: 'sambanova' },
     { value: 'ollama', label: 'ollama' },
     { value: 'lmstudio', label: 'lmstudio' },
+    { value: 'huggingface', label: 'huggingface' },
     { value: 'openai-compatible', label: 'autre (openai-compatible)' }
   ];
 
@@ -40,6 +41,7 @@
     sambanova: 'Meta-Llama-3.3-70B-Instruct',
     ollama: 'qwen2.5-coder:7b',
     lmstudio: 'local-model',
+    huggingface: 'meta-llama/Llama-3.3-70B-Instruct',
     'openai-compatible': 'model-id'
   };
 

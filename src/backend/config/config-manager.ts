@@ -15,6 +15,7 @@ export type ProviderType =
   | 'gemini'
   | 'anthropic'
   | 'sambanova'
+  | 'huggingface'
   | 'openai-compatible';
 
 export const PROVIDER_TYPES: ProviderType[] = [
@@ -26,6 +27,7 @@ export const PROVIDER_TYPES: ProviderType[] = [
   'anthropic',
   'sambanova',
   'mistral',
+  'huggingface',
   'openai-compatible'
 ];
 
@@ -40,6 +42,7 @@ export const DEFAULT_BASE_URL: Record<ProviderType, string> = {
   gemini: 'https://generativelanguage.googleapis.com/v1beta/openai',
   anthropic: 'https://api.anthropic.com/v1',
   sambanova: 'https://api.sambanova.ai/v1',
+  huggingface: 'https://api-inference.huggingface.co/v1',
   'openai-compatible': 'https://api.openai.com/v1'
 };
 

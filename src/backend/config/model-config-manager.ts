@@ -20,6 +20,11 @@ export type { JarvisConfig, ModelItem, ModelRole, ProviderType };
 
 const LOCAL_PROVIDERS: ProviderType[] = ['ollama', 'lmstudio'];
 
+/** Instancie un provider isolé depuis une config de modèle (test de connexion onboarding). */
+export function createProviderFromItem(item: ModelItem): IModelProvider {
+  return createProvider(item);
+}
+
 function createProvider(item: ModelItem): IModelProvider {
   const baseUrl = item.apiBase ?? DEFAULT_BASE_URL[item.provider];
   const common = {

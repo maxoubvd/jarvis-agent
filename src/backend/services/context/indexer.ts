@@ -33,7 +33,7 @@ export class WorkspaceIndexer {
       for (let i = 0; i < files.length; i++) {
         try {
           const content = await readFileTool(files[i].path);
-          this.index.addDocument(files[i].path, content);
+          await this.index.addDocument(files[i].path, content);
           this.indexedFiles++;
         } catch {
           // fichier illisible ou bloqué — on continue
@@ -51,13 +51,13 @@ export class WorkspaceIndexer {
     if (!isIndexableFile(relativePath)) return;
     try {
       const content = await readFileTool(relativePath);
-      this.index.addDocument(relativePath, content);
+      await this.index.addDocument(relativePath, content);
     } catch {
       this.index.removeDocument(relativePath);
     }
   }
 
-  public search(query: string, topK = 5): RagSearchResult[] {
+  public async search(query: string, topK = 5): Promise<RagSearchResult[]> {
     return this.index.search(query, topK);
   }
 
@@ -67,7 +67,8 @@ export class WorkspaceIndexer {
   }
 
   /** Recherche restreinte à la documentation Markdown (mentions @docs). */
-  public searchDocs(query: string, topK = 5): RagSearchResult[] {
-    return this.index.search(query, topK * 3).filter(r => r.path.endsWith('.md')).slice(0, topK);
+  public async searchDocs(query: string, topK = 5): Promise<RagSearchResult[]> {
+    const results = await this.index.search(query, topK * 3);
+    return results.filter(r => r.path.endsWith('.md')).slice(0, topK);
   }
 }

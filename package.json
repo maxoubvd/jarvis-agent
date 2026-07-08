@@ -130,6 +130,18 @@
       {
         "command": "jarvis.rejectAll",
         "title": "Jarvis: Reject All AI Changes"
+      },
+      {
+        "command": "jarvis.inlineEdit",
+        "title": "Jarvis: Inline Edit (Cmd+K)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "jarvis.inlineEdit",
+        "key": "ctrl+k ctrl+k",
+        "mac": "cmd+k cmd+k",
+        "when": "editorTextFocus"
       }
     ],
     "menus": {

@@ -38,6 +38,7 @@
     onIndexDocs?: (id: string) => void;
     onReindex?: () => void;
     onOpenConfig?: () => void;
+    onOpenGuide?: () => void;
   }
 
   let {
@@ -51,7 +52,8 @@
     onSave = () => {},
     onIndexDocs = () => {},
     onReindex = () => {},
-    onOpenConfig = () => {}
+    onOpenConfig = () => {},
+    onOpenGuide = () => {}
   }: Props = $props();
 
   let modelItems = $state<ModelItem[]>([]);
@@ -273,6 +275,9 @@
               : (saveStatus.error ?? 'Error')}
         </span>
       {/if}
+      <button title="Open User Guide" onclick={onOpenGuide}>
+        User Guide
+      </button>
       <button title="Open ~/.jarvis/config.json in the editor" onclick={onOpenConfig}>
         Edit config file
       </button>

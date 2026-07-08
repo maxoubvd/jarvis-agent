@@ -178,7 +178,11 @@ export class SandboxManager {
     const normalized = path.resolve(filePath).replace(/\\/g, '/');
     const workspaceNorm = this.workspaceRoot;
 
-    if (normalized !== workspaceNorm && !normalized.startsWith(workspaceNorm + '/')) {
+    const isWindows = process.platform === 'win32';
+    const compNormalized = isWindows ? normalized.toLowerCase() : normalized;
+    const compWorkspace = isWindows ? workspaceNorm.toLowerCase() : workspaceNorm;
+
+    if (compNormalized !== compWorkspace && !compNormalized.startsWith(compWorkspace + '/')) {
       return { allowed: false, reason: `Chemin hors du workspace: ${filePath}` };
     }
 
