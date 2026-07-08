@@ -18,11 +18,13 @@
     return statuses.find(s => s.id === id);
   }
 
+  /** Cartes dépliées (nouveau site = ouvert en édition). */
+  let expanded = $state<Record<string, boolean>>({});
+
   function addSite() {
-    onChange([
-      ...sites,
-      { id: crypto.randomUUID(), title: '', startUrl: '', enabled: true }
-    ]);
+    const id = crypto.randomUUID();
+    expanded[id] = true;
+    onChange([...sites, { id, title: '', startUrl: '', enabled: true }]);
   }
 
   function removeSite(index: number) {
@@ -62,19 +64,15 @@
     {@const status = statusFor(site.id)}
     <div class="j-card" class:disabled={!site.enabled}>
       <div class="j-row">
-        <input
-          class="j-input"
-          style="width: 10rem"
-          placeholder="Title (e.g. Svelte 5)"
-          value={site.title}
-          oninput={e => patch(index, { title: (e.target as HTMLInputElement).value })}
-        />
-        <input
-          class="j-input j-grow"
-          placeholder="https://svelte.dev/docs"
-          value={site.startUrl}
-          oninput={e => patch(index, { startUrl: (e.target as HTMLInputElement).value })}
-        />
+        <button
+          class="j-expand"
+          title={expanded[site.id] ? 'Collapse' : 'Edit site'}
+          onclick={() => (expanded[site.id] = !expanded[site.id])}
+        >
+          <Icon name={expanded[site.id] ? 'chevron-up' : 'chevron-down'} size={13} />
+        </button>
+        <span class="j-title">{site.title.trim() || site.startUrl.trim() || '(unnamed site)'}</span>
+        <span class="j-sub j-grow">{site.title.trim() ? site.startUrl : ''}</span>
         <Toggle
           checked={site.enabled}
           label="Enabled"
@@ -84,6 +82,29 @@
           <Icon name="trash" size={13} />
         </button>
       </div>
+
+      {#if expanded[site.id]}
+        <div class="j-row">
+          <input
+            class="j-input"
+            style="width: 10rem"
+            placeholder="Title (e.g. Svelte 5)"
+            value={site.title}
+            oninput={e => patch(index, { title: (e.target as HTMLInputElement).value })}
+          />
+          <input
+            class="j-input j-grow"
+            placeholder="https://svelte.dev/docs"
+            value={site.startUrl}
+            oninput={e => patch(index, { startUrl: (e.target as HTMLInputElement).value })}
+          />
+        </div>
+        <div class="j-row j-end">
+          <button class="j-btn j-btn-primary" onclick={() => (expanded[site.id] = false)}>
+            <Icon name="check" size={13} /> Validate
+          </button>
+        </div>
+      {/if}
 
       <div class="status-row">
         {#if status?.state === 'indexing'}

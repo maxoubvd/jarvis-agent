@@ -4,6 +4,7 @@ import { OpenRouterProvider } from '../models/providers/openrouter.js';
 import { LMStudioProvider } from '../models/providers/lmstudio.js';
 import { MistralProvider } from '../models/providers/mistral.js';
 import { OpenAICompatibleProvider } from '../models/providers/openai-compatible-provider.js';
+import { defaultContextLength, effectiveTemperature } from '../services/model-profiles.js';
 import {
   ConfigManager,
   getConfigManager,
@@ -21,7 +22,14 @@ const LOCAL_PROVIDERS: ProviderType[] = ['ollama', 'lmstudio'];
 
 function createProvider(item: ModelItem): IModelProvider {
   const baseUrl = item.apiBase ?? DEFAULT_BASE_URL[item.provider];
-  const common = { baseUrl, apiKey: item.apiKey, model: item.model, maxTokens: item.maxTokens };
+  const common = {
+    baseUrl,
+    apiKey: item.apiKey,
+    model: item.model,
+    maxTokens: item.maxTokens,
+    // Réglage utilisateur > profil du modèle (devstral/codestral/qwen-coder) > défaut API.
+    temperature: effectiveTemperature(item)
+  };
   switch (item.provider) {
     case 'ollama':
       return new OllamaProvider(common);
@@ -127,9 +135,13 @@ export class ModelConfigManager {
     return item?.provider;
   }
 
-  /** Longueur de contexte du modèle, ou `null` si inconnue / aucun modèle. */
+  /**
+   * Longueur de contexte du modèle : config > défaut de la famille de modèle
+   * (voir `defaultContextLength`) > `null` si inconnue / aucun modèle.
+   */
   public getContextLength(modelName: string | null): number | null {
-    return this.getModelItem(modelName)?.contextLength ?? null;
+    const item = this.getModelItem(modelName);
+    return item?.contextLength ?? defaultContextLength(item) ?? null;
   }
 
   /** Change le modèle par défaut (persisté dans la config globale) et ré-instancie. */

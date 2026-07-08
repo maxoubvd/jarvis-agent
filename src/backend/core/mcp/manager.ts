@@ -1,5 +1,5 @@
 import { JarvisMcpClient, McpToolInfo } from './client.js';
-import type { ConfigManager, McpServerConfig } from '../../config/config-manager.js';
+import type { ConfigManager, McpServerConfig, ToolPolicy } from '../../config/config-manager.js';
 import { getConfigManager } from '../../config/config-manager.js';
 import { getBuiltinMcpServers } from './builtin.js';
 import { IN_PROCESS_SERVERS } from './in-process.js';
@@ -7,11 +7,25 @@ import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import type { ToolDefinition, ToolParameter } from '../agent/tool-registry.js';
 import { operationLogger } from '../../services/logger.js';
 
-/** Statut d'un tool exposé par un serveur (activable individuellement). */
+/** Statut d'un tool exposé par un serveur (politique auto/ask/excluded). */
 export interface McpToolStatus {
   name: string;
   description: string;
   enabled: boolean;
+  /** Politique effective (défaut MCP : `ask`). */
+  policy: ToolPolicy;
+}
+
+/**
+ * Politique effective d'un tool serveur : config explicite > legacy
+ * `disabledTools` (= excluded) > défaut `ask` (tout tool MCP demande
+ * confirmation tant que l'utilisateur ne l'a pas passé en auto).
+ */
+export function mcpToolPolicy(config: McpServerConfig, tool: string): ToolPolicy {
+  const explicit = config.toolPolicies?.[tool];
+  if (explicit) return explicit;
+  if (config.disabledTools?.includes(tool)) return 'excluded';
+  return 'ask';
 }
 
 export interface McpServerStatus {
@@ -36,18 +50,42 @@ interface ResolvedServer {
 
 /** Convertit un JSON Schema MCP en liste de ToolParameter du registre. */
 export function parametersFromJsonSchema(schema: Record<string, unknown>): ToolParameter[] {
-  const properties = (schema.properties ?? {}) as Record<string, { type?: string; description?: string }>;
+  const properties = (schema.properties ?? {}) as Record<string, Record<string, unknown>>;
   const required = new Set((schema.required as string[] | undefined) ?? []);
-  return Object.entries(properties).map(([name, prop]) => ({
-    name,
-    type: prop.type === 'number' || prop.type === 'integer'
-      ? 'number'
-      : prop.type === 'boolean'
-        ? 'boolean'
-        : 'string',
-    description: prop.description ?? '',
-    required: required.has(name)
-  }));
+  return Object.entries(properties).map(([name, prop]) => {
+    const propType = prop.type as string | undefined;
+
+    if (propType === 'array') {
+      return {
+        name,
+        type: 'array' as const,
+        description: (prop.description as string) ?? '',
+        required: required.has(name),
+        jsonSchema: { type: 'array', items: prop.items }
+      };
+    }
+
+    if (propType === 'object') {
+      return {
+        name,
+        type: 'object' as const,
+        description: (prop.description as string) ?? '',
+        required: required.has(name),
+        jsonSchema: { type: 'object', properties: prop.properties, required: prop.required }
+      };
+    }
+
+    return {
+      name,
+      type: propType === 'number' || propType === 'integer'
+        ? 'number' as const
+        : propType === 'boolean'
+          ? 'boolean' as const
+          : 'string' as const,
+      description: (prop.description as string) ?? '',
+      required: required.has(name)
+    };
+  });
 }
 
 interface ConnectedServer {
@@ -99,7 +137,8 @@ export class McpManager {
             b.requiresWorkspace && !this.workspaceFolder
               ? false
               : overrides[b.id]?.enabled ?? b.config.enabled,
-          disabledTools: overrides[b.id]?.disabledTools
+          disabledTools: overrides[b.id]?.disabledTools,
+          toolPolicies: overrides[b.id]?.toolPolicies
         },
         builtin: true,
         description: b.description,
@@ -159,17 +198,20 @@ export class McpManager {
   public getStatuses(): McpServerStatus[] {
     return this.resolveServers().map(({ name, config, builtin, description }) => {
       const connected = this.servers.get(name);
-      const disabled = new Set(config.disabledTools ?? []);
       return {
         name,
         enabled: config.enabled,
         connected: !!connected,
         tools:
-          connected?.tools.map(t => ({
-            name: t.name,
-            description: t.description,
-            enabled: !disabled.has(t.name)
-          })) ?? [],
+          connected?.tools.map(t => {
+            const policy = mcpToolPolicy(config, t.name);
+            return {
+              name: t.name,
+              description: t.description,
+              enabled: policy !== 'excluded',
+              policy
+            };
+          }) ?? [],
         error: this.errors.get(name),
         builtin,
         description
@@ -177,21 +219,60 @@ export class McpManager {
     });
   }
 
+  /**
+   * Politique effective de chaque tool MCP connecté, indexée par le nom
+   * enregistré dans le registre agentique (`mcp__<serveur>__<tool>`).
+   * Fusionnée dans `OrchestratorOptions.toolPolicies` (défaut : `ask`).
+   */
+  public toolPolicies(): Record<string, ToolPolicy> {
+    const configs = new Map(this.resolveServers().map(s => [s.name, s.config]));
+    const map: Record<string, ToolPolicy> = {};
+    for (const [serverName, { tools }] of this.servers) {
+      const config = configs.get(serverName);
+      for (const tool of tools) {
+        map[`mcp__${serverName}__${tool.name}`] = config ? mcpToolPolicy(config, tool.name) : 'ask';
+      }
+    }
+    return map;
+  }
+
+  /**
+   * Noms bruts des tools par serveur CONNECTÉ, hors politique `excluded`.
+   * Alimente la déduplication des builtins doublonnés (builtin-dedup.ts) :
+   * un serveur désactivé ou injoignable n'apparaît pas ici, donc ses
+   * équivalents builtin restent disponibles.
+   */
+  public activeToolNames(): Map<string, Set<string>> {
+    const configs = new Map(this.resolveServers().map(s => [s.name, s.config]));
+    const map = new Map<string, Set<string>>();
+    for (const [serverName, { tools }] of this.servers) {
+      const config = configs.get(serverName);
+      const names = tools
+        .filter(t => !config || mcpToolPolicy(config, t.name) !== 'excluded')
+        .map(t => t.name);
+      if (names.length > 0) map.set(serverName, new Set(names));
+    }
+    return map;
+  }
+
   /** Tools MCP découverts, adaptés au registre agentique (HITL `mcp`). */
   public toToolDefinitions(): ToolDefinition[] {
-    const disabledByServer = new Map(
-      this.resolveServers().map(s => [s.name, new Set(s.config.disabledTools ?? [])])
-    );
+    const configByServer = new Map(this.resolveServers().map(s => [s.name, s.config]));
     const definitions: ToolDefinition[] = [];
     for (const [serverName, { client, tools }] of this.servers) {
-      const disabled = disabledByServer.get(serverName) ?? new Set<string>();
+      const config = configByServer.get(serverName);
       for (const tool of tools) {
-        if (disabled.has(tool.name)) continue;
+        if (config && mcpToolPolicy(config, tool.name) === 'excluded') continue;
         definitions.push({
           name: `mcp__${serverName}__${tool.name}`,
           description: `[MCP:${serverName}] ${tool.description}`,
           parameters: parametersFromJsonSchema(tool.inputSchema),
-          hitlAction: 'mcp',
+          hitlAction: tool.name.includes('write_file') ? 'edit_existing_file' :
+                      tool.name.includes('read_file') ? 'read_file' :
+                      tool.name.includes('list_directory') ? 'list_directory' :
+                      tool.name.includes('search') ? 'search' :
+                      tool.name.includes('run_command') ? 'run_terminal_command' :
+                      'mcp_custom',
           execute: async args => {
             operationLogger.log('mcp', `${serverName}/${tool.name} ${JSON.stringify(args)}`);
             return client.callTool(tool.name, args);

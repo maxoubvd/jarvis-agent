@@ -58,6 +58,18 @@ export class RagIndex {
     this.documentFrequency = new Map();
   }
 
+  public getFiles(query: string, maxResults = 50): string[] {
+    const q = query.toLowerCase();
+    const uniquePaths = new Set<string>();
+    for (const chunk of this.chunks) {
+      if (!chunk.path.startsWith('docs:') && chunk.path.toLowerCase().includes(q)) {
+        uniquePaths.add(chunk.path);
+        if (uniquePaths.size >= maxResults) break;
+      }
+    }
+    return Array.from(uniquePaths);
+  }
+
   /** Découpe un fichier en chunks avec chevauchement et les indexe. */
   public addDocument(filePath: string, content: string): void {
     // Ré-indexation d'un fichier : retirer ses anciens chunks

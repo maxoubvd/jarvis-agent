@@ -1,8 +1,11 @@
 <script lang="ts">
-  import type { Message } from '../shared/types';
+  import type { Message, ApprovalRequest } from '../shared/types';
   import { marked } from 'marked';
+  import { untrack } from 'svelte';
   import { matchTrigger, filterCommands, type CommandItem } from '../shared/commands';
   import Icon from './Icon.svelte';
+  import ApprovalCard from './ApprovalCard.svelte';
+  import vscode from '../lib/vscode-api';
 
   const BADGE_ICONS: Record<string, string> = {
     success: 'check',
@@ -18,11 +21,22 @@
     showThinking?: boolean;
     /** Items dynamiques (agents/workflows) fusionnés dans l'autocomplétion. */
     extraCommands?: CommandItem[];
+    /** Suggestions de fichiers du workspace pour la mention `@`. */
+    fileSuggestions?: string[];
     /** Profils de workspace sélectionnables (Settings > Workspaces). */
     workspaces?: Array<{ id: string; name: string }>;
     activeWorkspaceId?: string | null;
+    /** Demande d'approbation HITL en attente (carte dans le chat). */
+    approvalRequest?: ApprovalRequest | null;
     onSend?: (text: string) => void;
+    /** Demande au backend les fichiers correspondant à la saisie. */
+    onQueryFiles?: (query: string) => void;
     onWorkspaceChange?: (id: string | null) => void;
+    onApprovalRespond?: (decision: 'allow' | 'allow-session' | 'deny', feedback?: string) => void;
+    availableModels?: string[];
+    onModelChange?: (model: string) => void;
+    onNewChat?: () => void;
+    onResumeChat?: () => void;
   }
 
   let {
@@ -31,11 +45,22 @@
     isSending = false,
     showThinking = true,
     extraCommands = [],
+    fileSuggestions = [],
     workspaces = [],
     activeWorkspaceId = null,
+    approvalRequest = null,
     onSend = () => {},
-    onWorkspaceChange = () => {}
+    onQueryFiles = () => {},
+    onWorkspaceChange = () => {},
+    onApprovalRespond = () => {},
+    availableModels = [],
+    currentModel = '',
+    onModelChange = () => {},
+    onNewChat = () => {},
+    onResumeChat = () => {}
   }: Props = $props();
+
+  let mode = $state('Automatique');
 
   let inputText = $state('');
   let listEl: HTMLUListElement | undefined = $state();
@@ -47,28 +72,67 @@
   let selectedIndex = $state(0);
   let tokenStart = $state(0);
 
+  /** Dernière requête fichiers envoyée — évite de re-demander à chaque re-rendu. */
+  let lastFileQuery: string | null = null;
+
+  /** Requête fichiers dérivée du token `@` courant (`@file:src/a` → `src/a`). */
+  function fileQueryFor(partial: string): string {
+    return partial.startsWith('file:') ? partial.slice('file:'.length) : partial;
+  }
+
+  /** Un chemin avec espaces doit être cité pour rester une seule mention. */
+  function fileInsert(path: string): string {
+    return /\s/.test(path) ? `@file:"${path}" ` : `@file:${path} `;
+  }
+
   function refreshMenu() {
     if (!textareaEl) return;
     const caret = textareaEl.selectionStart ?? inputText.length;
     const match = matchTrigger(inputText, caret);
     if (!match) {
       showMenu = false;
+      lastFileQuery = null;
       return;
     }
-    const items = filterCommands(match, extraCommands);
+    let items = filterCommands(match, extraCommands);
+    if (match.trigger === '@') {
+      // Mention de fichier : les fichiers du workspace sont proposés
+      // directement sous les commandes @.
+      const query = fileQueryFor(match.partial);
+      if (query !== lastFileQuery) {
+        lastFileQuery = query;
+        onQueryFiles(query);
+      }
+      const q = query.toLowerCase();
+      const fileItems: CommandItem[] = fileSuggestions
+        .filter(p => !q || p.toLowerCase().includes(q))
+        .map(p => ({ trigger: '@' as const, insert: fileInsert(p), label: p, detail: 'Workspace file' }));
+      // Dédoublonne au cas où un chemin serait déjà présent.
+      const seen = new Set(items.map(i => i.insert));
+      items = [...items, ...fileItems.filter(i => !seen.has(i.insert))];
+    }
     if (items.length === 0) {
       showMenu = false;
       return;
     }
     menuItems = items;
     tokenStart = match.tokenStart;
-    selectedIndex = 0;
+    selectedIndex = Math.min(selectedIndex, items.length - 1);
     showMenu = true;
   }
 
   function handleInput() {
+    selectedIndex = 0;
     refreshMenu();
   }
+
+  // Les suggestions arrivent en asynchrone : on rafraîchit le menu ouvert.
+  // untrack : l'effet ne doit dépendre QUE de fileSuggestions (refreshMenu
+  // lit/écrit selectedIndex & co, ce qui re-déclencherait l'effet).
+  $effect(() => {
+    void fileSuggestions;
+    untrack(() => refreshMenu());
+  });
 
   function accept(item: CommandItem) {
     const caret = textareaEl?.selectionStart ?? inputText.length;
@@ -118,9 +182,21 @@
     }
   }
 
-  /** Copie de code en un clic : délégation sur les <pre> rendus. */
+  /** Copie de code en un clic et interception des liens de fichiers. */
   function handleListClick(event: MouseEvent) {
     const target = event.target as HTMLElement;
+
+    // Interception des clics sur les liens file:// pour ouvrir le fichier dans VS Code
+    const link = target.closest('a');
+    if (link && listEl?.contains(link)) {
+      const href = link.getAttribute('href');
+      if (href && href.startsWith('file://')) {
+        event.preventDefault();
+        vscode?.postMessage({ type: 'openFile', path: href });
+        return;
+      }
+    }
+
     const pre = target.closest('pre');
     if (!pre || !listEl?.contains(pre)) return;
     const code = pre.querySelector('code')?.textContent ?? pre.textContent ?? '';
@@ -177,7 +253,7 @@
     if (!text || isSending) return;
     showMenu = false;
     inputText = '';
-    onSend(text);
+    onSend(`${mode}|${text}`);
   }
 </script>
 
@@ -229,7 +305,7 @@
             {#if message.badges?.length}
               <div class="badges">
                 {#each message.badges as badge}
-                  <span class="badge {badge.variant ?? 'info'}">
+                  <span class="badge {badge.variant ?? 'info'}" class:wavelight={isSending && badge.label === 'Thinking' && message.id === messages[messages.length - 1].id}>
                     <Icon name={BADGE_ICONS[badge.variant ?? 'info'] ?? 'info'} size={11} />
                     {badge.label}
                   </span>
@@ -238,14 +314,17 @@
             {/if}
 
             {#if message.kind === 'thinking'}
-              <div class="thinking-block">{message.content}</div>
+              <details class="thinking-details" open={isSending && message.id === messages[messages.length - 1].id}>
+                <summary><Icon name="lightbulb" size={12} /> Thinking process <span class="expand-icon"><Icon name="chevron-down" size={12} /></span></summary>
+                <div class="thinking-block">{message.content}</div>
+              </details>
             {:else if message.role === 'assistant'}
               {#if message.content}
                 {#each segment(message.content) as seg}
                   {#if seg.type === 'thinking'}
                     {#if showThinking}
-                      <details class="thinking-details" open>
-                        <summary><Icon name="lightbulb" size={12} /> Thinking</summary>
+                      <details class="thinking-details" open={isSending && message.id === messages[messages.length - 1].id}>
+                        <summary><Icon name="lightbulb" size={12} /> Thinking process <span class="expand-icon"><Icon name="chevron-down" size={12} /></span></summary>
                         <div class="thinking-block">{seg.content}</div>
                       </details>
                     {/if}
@@ -257,7 +336,7 @@
               {:else}
                 <p class="pending">…</p>
               {/if}
-            {:else}
+            {:else if message.kind !== 'tool'}
               <p>{message.content}</p>
             {/if}
           </li>
@@ -265,6 +344,25 @@
       {/each}
     </ul>
   {/if}
+
+  {#if approvalRequest}
+    <ApprovalCard request={approvalRequest} onRespond={onApprovalRespond} />
+  {/if}
+
+  <div class="controls-row">
+    <select class="mode-select" bind:value={mode}>
+      <option value="Automatique">Automatique</option>
+      <option value="Rapide">Rapide</option>
+      <option value="Plan">Plan</option>
+    </select>
+    {#if availableModels.length > 0}
+      <select class="model-select" value={currentModel} onchange={e => onModelChange((e.target as HTMLSelectElement).value)}>
+        {#each availableModels as mod (mod)}
+          <option value={mod}>{mod}</option>
+        {/each}
+      </select>
+    {/if}
+  </div>
 
   <div class="input-row">
     <div class="input-wrap">
@@ -287,7 +385,7 @@
       {/if}
       <textarea
         class="input"
-        placeholder="Type a message… (Enter to send, Shift+Enter for a new line)"
+        placeholder="Ask anything… (@ to mention, / for action)"
         rows={2}
         disabled={isSending}
         bind:this={textareaEl}
@@ -471,6 +569,17 @@
     display: flex;
     align-items: center;
     gap: 4px;
+    user-select: none;
+  }
+
+  .expand-icon {
+    display: inline-flex;
+    opacity: 0.6;
+    transition: transform 0.2s ease;
+  }
+
+  .thinking-details[open] .expand-icon {
+    transform: rotate(180deg);
   }
 
   .thinking-block {
@@ -557,9 +666,47 @@
     animation: pulse 1.2s ease-in-out infinite;
   }
 
+  .wavelight {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .wavelight::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 50%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(100, 150, 255, 0.15), transparent);
+    animation: wave 2s infinite linear;
+    pointer-events: none;
+  }
+
+  @keyframes wave {
+    0% { left: -100%; }
+    100% { left: 200%; }
+  }
+
   @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.4; }
+  }
+
+  .controls-row {
+    display: flex;
+    gap: var(--jarvis-space-2);
+    margin-bottom: var(--jarvis-space-2);
+  }
+
+  .mode-select, .model-select {
+    padding: 3px 8px;
+    background: var(--vscode-dropdown-background, var(--vscode-input-background));
+    color: var(--vscode-dropdown-foreground, var(--vscode-input-foreground));
+    border: 1px solid var(--vscode-dropdown-border, var(--vscode-input-border));
+    border-radius: var(--jarvis-radius-sm);
+    font-size: var(--jarvis-text-xs);
+    min-width: 0;
   }
 
   .input-row {

@@ -57,6 +57,47 @@ describe('OllamaProvider streaming', () => {
   });
 });
 
+describe('temperature forwarding (model profiles)', () => {
+  it('OpenAI-compatible providers send temperature when configured', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ choices: [{ message: { content: 'ok' } }] })));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const provider = new LMStudioProvider({ model: 'codestral-latest', temperature: 0.1 });
+    await provider.sendPrompt(messages);
+
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.temperature).toBe(0.1);
+  });
+
+  it('omits temperature when not configured (API default)', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ choices: [{ message: { content: 'ok' } }] })));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const provider = new LMStudioProvider({ model: 'test' });
+    await provider.sendPrompt(messages);
+
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect('temperature' in body).toBe(false);
+  });
+
+  it('Ollama sends temperature via options', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ message: { content: 'ok' } })));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const provider = new OllamaProvider({ model: 'qwen2.5-coder:7b', temperature: 0.15 });
+    await provider.sendPrompt(messages);
+
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.options.temperature).toBe(0.15);
+  });
+});
+
 describe('LMStudioProvider streaming (OpenAI-compatible SSE)', () => {
   it('parses SSE data lines and stops at [DONE]', async () => {
     const body = streamingResponse([

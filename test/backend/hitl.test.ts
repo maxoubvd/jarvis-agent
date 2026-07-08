@@ -32,4 +32,37 @@ describe('HITLManager', () => {
     hitl.setMode('free');
     expect(hitl.getMode()).toBe('free');
   });
+
+  it('delegates prompts to the chat handler; allow-session is remembered', async () => {
+    const hitl = new HITLManager('strict');
+    const handler = vi.fn().mockResolvedValue({ decision: 'allow-session' });
+    hitl.setPromptHandler(handler);
+
+    const first = await hitl.checkApproval('terminal', { command: 'npm run build' });
+    expect(first.granted).toBe(true);
+    expect(handler).toHaveBeenCalledTimes(1);
+
+    // Même action : l'autorisation de session court-circuite le prompt.
+    const second = await hitl.checkApproval('terminal', { command: 'npm run build' });
+    expect(second.granted).toBe(true);
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it('a denial through the handler carries the user instructions', async () => {
+    const hitl = new HITLManager('strict');
+    hitl.setPromptHandler(async () => ({ decision: 'deny', feedback: 'corrige le lint d\'abord' }));
+
+    const result = await hitl.askApproval('terminal', { command: 'npm test' });
+    expect(result.granted).toBe(false);
+    expect(result.feedback).toBe('corrige le lint d\'abord');
+  });
+
+  it('falls back to the native dialog when the handler returns null', async () => {
+    const hitl = new HITLManager('strict');
+    hitl.setPromptHandler(async () => null);
+    // Le mock vscode répond « Refuser » → refus via le dialogue natif.
+    const result = await hitl.checkApproval('terminal', { command: 'npm test' });
+    expect(result.granted).toBe(false);
+    expect(result.feedback).toBeUndefined();
+  });
 });

@@ -25,6 +25,10 @@
 
 <style>
   .toggle {
+    /* position:relative ancre la checkbox masquée (position:absolute) DANS le
+       switch. Sans ça, l'input est ancré en haut du conteneur scrollable et le
+       focus au clic fait « sauter » la vue vers le haut. */
+    position: relative;
     display: inline-flex;
     align-items: center;
     gap: var(--jarvis-space-1);

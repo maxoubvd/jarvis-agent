@@ -47,6 +47,14 @@
 
   {#if showDetails}
     <div class="details">
+      <p class="explain">
+        Counts are estimates (~4 characters ≈ 1 token), accumulated over this whole discussion.
+        The limit is the model's context window — from your model settings, or a built-in default
+        for known model families. Past 80% a warning appears: the model may start losing earlier
+        context, and a request exceeding the limit usually fails with a provider error — local
+        runtimes like Ollama instead silently drop the oldest messages. Use /new to start a fresh
+        discussion and reset the counter.
+      </p>
       <div class="split">
         <span>Input: {inputTokens.toLocaleString()}</span>
         <span>Output: {outputTokens.toLocaleString()}</span>
@@ -136,6 +144,13 @@
   .details {
     margin-top: 0.5rem;
     font-size: 0.78rem;
+    color: var(--vscode-descriptionForeground);
+  }
+
+  .explain {
+    margin: 0 0 0.4rem;
+    font-size: var(--jarvis-text-xs);
+    line-height: 1.5;
     color: var(--vscode-descriptionForeground);
   }
 

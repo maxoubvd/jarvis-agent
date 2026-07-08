@@ -13,31 +13,40 @@
 </script>
 
 <script lang="ts">
-  import type { McpServerStatus, SettingsDefaults } from '../../shared/types';
+  import type { McpServerStatus, SettingsDefaults, ToolPolicy } from '../../shared/types';
   import Icon from '../Icon.svelte';
   import Toggle from '../Toggle.svelte';
+  import ToolsSection from './ToolsSection.svelte';
 
   interface Props {
     builtins?: NonNullable<SettingsDefaults['builtinMcp']>;
     builtinToggles?: Record<string, boolean>;
-    builtinDisabledTools?: Record<string, string[]>;
+    /** Politique par tool des serveurs intégrés (id → tool → policy ; absent = ask). */
+    builtinToolPolicies?: Record<string, Record<string, ToolPolicy>>;
     entries?: McpEntry[];
     statuses?: McpServerStatus[];
+    /** Outils intégrés de l'agent — politiques auto/ask/excluded. */
+    agentTools?: Array<{ name: string; description: string }>;
     customTools?: Array<{ name: string; description: string }>;
+    toolPolicies?: Record<string, ToolPolicy>;
+    onToolPoliciesChange?: (next: Record<string, ToolPolicy>) => void;
     onBuiltinToggle?: (id: string, enabled: boolean) => void;
-    onBuiltinToolToggle?: (id: string, tool: string, enabled: boolean) => void;
+    onBuiltinToolPolicy?: (id: string, tool: string, policy: ToolPolicy) => void;
     onEntriesChange?: (next: McpEntry[]) => void;
   }
 
   let {
     builtins = [],
     builtinToggles = {},
-    builtinDisabledTools = {},
+    builtinToolPolicies = {},
     entries = [],
     statuses = [],
+    agentTools = [],
     customTools = [],
+    toolPolicies = {},
+    onToolPoliciesChange = () => {},
     onBuiltinToggle = () => {},
-    onBuiltinToolToggle = () => {},
+    onBuiltinToolPolicy = () => {},
     onEntriesChange = () => {}
   }: Props = $props();
 
@@ -56,6 +65,8 @@
     let i = 1;
     const used = new Set(entries.map(e => e.key));
     while (used.has(key)) key = `server-${++i}`;
+    // Nouveau serveur : carte ouverte en mode édition.
+    expanded[`custom:${entries.length}`] = true;
     onEntriesChange([
       ...entries,
       { key, value: { enabled: true, transport: 'stdio', command: '' }, argsText: '', envText: '' }
@@ -63,6 +74,10 @@
   }
 
   function removeServer(index: number) {
+    // Les clés custom:<index> se décalent après suppression — on les replie toutes.
+    expanded = Object.fromEntries(
+      Object.entries(expanded).filter(([key]) => !key.startsWith('custom:'))
+    );
     onEntriesChange(entries.filter((_, i) => i !== index));
   }
 
@@ -74,42 +89,49 @@
     patchEntry(index, { value: { ...entries[index].value, ...partial } });
   }
 
-  function toggleEntryTool(index: number, tool: string, enabled: boolean) {
-    const current = entries[index].value.disabledTools ?? [];
-    const next = enabled ? current.filter(t => t !== tool) : [...current, tool];
-    patchEntryValue(index, { disabledTools: next.length > 0 ? next : undefined });
+  function builtinToolPolicy(id: string, tool: string): ToolPolicy {
+    return builtinToolPolicies[id]?.[tool] ?? 'ask';
   }
 
-  function isBuiltinToolEnabled(id: string, tool: string): boolean {
-    return !(builtinDisabledTools[id] ?? []).includes(tool);
+  function entryToolPolicy(entry: McpEntry, tool: string): ToolPolicy {
+    return entry.value.toolPolicies?.[tool] ?? 'ask';
   }
 
-  function isEntryToolEnabled(entry: McpEntry, tool: string): boolean {
-    return !(entry.value.disabledTools ?? []).includes(tool);
+  function setEntryToolPolicy(index: number, tool: string, policy: ToolPolicy) {
+    const current = { ...(entries[index].value.toolPolicies ?? {}) };
+    // `ask` est le défaut MCP — on n'écrit que les écarts.
+    if (policy === 'ask') delete current[tool];
+    else current[tool] = policy;
+    patchEntryValue(index, { toolPolicies: Object.keys(current).length > 0 ? current : undefined });
   }
 </script>
 
 {#snippet toolList(
   status: McpServerStatus | undefined,
   serverEnabled: boolean,
-  isToolEnabled: (tool: string) => boolean,
-  onToolToggle: (tool: string, enabled: boolean) => void
+  policyFor: (tool: string) => ToolPolicy,
+  onPolicy: (tool: string, policy: ToolPolicy) => void
 )}
   {#if status?.connected && status.tools.length > 0}
     <div class="tools">
       {#each status.tools as tool (tool.name)}
-        <div class="tool-row" class:off={!isToolEnabled(tool.name)}>
-          <Toggle
-            checked={isToolEnabled(tool.name)}
-            onchange={on => onToolToggle(tool.name, on)}
-            title={`Enable/disable ${tool.name}`}
-          />
+        <div class="tool-row" class:off={policyFor(tool.name) === 'excluded'}>
           <div class="tool-info">
             <span class="tool-name">{tool.name}</span>
             {#if tool.description}
               <span class="tool-desc">{tool.description}</span>
             {/if}
           </div>
+          <select
+            class="j-select tool-policy"
+            title={`Execution policy for ${tool.name}`}
+            value={policyFor(tool.name)}
+            onchange={e => onPolicy(tool.name, (e.target as HTMLSelectElement).value as ToolPolicy)}
+          >
+            <option value="ask">ask first</option>
+            <option value="auto">auto</option>
+            <option value="excluded">excluded</option>
+          </select>
         </div>
       {/each}
     </div>
@@ -136,10 +158,23 @@
 
 <div class="group j-group">
   <div class="group-head j-row">
-    <h3><Icon name="server" size={14} /> MCP Servers</h3>
+    <h3><Icon name="server" size={14} /> Tools & MCP Servers</h3>
     <button class="j-btn" onclick={addServer}><Icon name="add" size={13} /> Add server</button>
   </div>
 
+  <div class="subhead">Agent tools</div>
+  <p class="j-hint">
+    Built-in tools with an equivalent on a connected MCP server are hidden — the MCP tool is used
+    instead.
+  </p>
+  <ToolsSection
+    builtinTools={agentTools}
+    {customTools}
+    policies={toolPolicies}
+    onChange={onToolPoliciesChange}
+  />
+
+  <div class="subhead">MCP servers</div>
   <p class="j-hint">
     Servers expose tools to the agent. Click a server to list its tools and enable/disable them
     individually.
@@ -153,8 +188,8 @@
       <div class="j-card" class:disabled={!enabled}>
         <div class="j-row">
           <button
-            class="expand-btn"
-            title={expanded[builtin.id] ? 'Collapse' : 'Expand tools'}
+            class="j-expand"
+            title={expanded[builtin.id] ? 'Collapse' : 'Show details & tools'}
             onclick={() => toggleExpanded(builtin.id)}
           >
             <Icon name={expanded[builtin.id] ? 'chevron-up' : 'chevron-down'} size={13} />
@@ -167,14 +202,14 @@
           />
           {@render statusBadge(status)}
         </div>
-        <div class="server-desc">{builtin.description}</div>
-        <code class="server-cmd">{builtin.command}</code>
         {#if expanded[builtin.id]}
+          <div class="server-desc">{builtin.description}</div>
+          <code class="server-cmd">{builtin.command}</code>
           {@render toolList(
             status,
             enabled,
-            tool => isBuiltinToolEnabled(builtin.id, tool),
-            (tool, on) => onBuiltinToolToggle(builtin.id, tool, on)
+            tool => builtinToolPolicy(builtin.id, tool),
+            (tool, policy) => onBuiltinToolPolicy(builtin.id, tool, policy)
           )}
         {/if}
       </div>
@@ -191,30 +226,18 @@
     <div class="j-card" class:disabled={!entry.value.enabled}>
       <div class="j-row">
         <button
-          class="expand-btn"
-          title={expanded[`custom:${sIndex}`] ? 'Collapse' : 'Expand tools'}
+          class="j-expand"
+          title={expanded[`custom:${sIndex}`] ? 'Collapse' : 'Edit server & tools'}
           onclick={() => toggleExpanded(`custom:${sIndex}`)}
         >
           <Icon name={expanded[`custom:${sIndex}`] ? 'chevron-up' : 'chevron-down'} size={13} />
         </button>
-        <input
-          class="j-input j-grow"
-          placeholder="server id"
-          value={entry.key}
-          oninput={e => patchEntry(sIndex, { key: (e.target as HTMLInputElement).value })}
-        />
+        <span class="j-title">{entry.key.trim() || '(unnamed server)'}</span>
+        <span class="j-sub">{entry.value.transport}</span>
         {#if builtins.some(b => b.id === entry.key.trim())}
           <span class="mcp-status ko">shadows the “{entry.key.trim()}” built-in server</span>
         {/if}
-        <select
-          class="j-select"
-          value={entry.value.transport}
-          onchange={e =>
-            patchEntryValue(sIndex, { transport: (e.target as HTMLSelectElement).value as 'stdio' | 'sse' })}
-        >
-          <option value="stdio">stdio</option>
-          <option value="sse">sse</option>
-        </select>
+        <span class="j-grow"></span>
         <Toggle
           checked={entry.value.enabled}
           label="Enabled"
@@ -226,75 +249,90 @@
         </button>
       </div>
 
-      {#if entry.value.transport === 'stdio'}
-        <label class="j-field">
-          <span>Command</span>
-          <input
-            class="j-input"
-            placeholder="npx"
-            value={entry.value.command ?? ''}
-            oninput={e => patchEntryValue(sIndex, { command: (e.target as HTMLInputElement).value })}
-          />
-        </label>
-        <label class="j-field">
-          <span>Arguments (one per line)</span>
-          <textarea
-            class="j-textarea"
-            rows="2"
-            placeholder="-y&#10;@modelcontextprotocol/server-filesystem"
-            value={entry.argsText}
-            oninput={e => patchEntry(sIndex, { argsText: (e.target as HTMLTextAreaElement).value })}
-          ></textarea>
-        </label>
-        <label class="j-field">
-          <span>Environment (KEY=value, one per line)</span>
-          <textarea
-            class="j-textarea"
-            rows="2"
-            placeholder="API_TOKEN=…"
-            value={entry.envText}
-            oninput={e => patchEntry(sIndex, { envText: (e.target as HTMLTextAreaElement).value })}
-          ></textarea>
-        </label>
-      {:else}
-        <label class="j-field">
-          <span>URL</span>
-          <input
-            class="j-input"
-            placeholder="https://host/sse"
-            value={entry.value.url ?? ''}
-            oninput={e => patchEntryValue(sIndex, { url: (e.target as HTMLInputElement).value })}
-          />
-        </label>
-      {/if}
-
       {#if expanded[`custom:${sIndex}`]}
+        <div class="j-row">
+          <label class="j-field j-grow">
+            <span>Server id</span>
+            <input
+              class="j-input"
+              placeholder="server id"
+              value={entry.key}
+              oninput={e => patchEntry(sIndex, { key: (e.target as HTMLInputElement).value })}
+            />
+          </label>
+          <label class="j-field">
+            <span>Transport</span>
+            <select
+              class="j-select"
+              value={entry.value.transport}
+              onchange={e =>
+                patchEntryValue(sIndex, { transport: (e.target as HTMLSelectElement).value as 'stdio' | 'sse' })}
+            >
+              <option value="stdio">stdio</option>
+              <option value="sse">sse</option>
+            </select>
+          </label>
+        </div>
+
+        {#if entry.value.transport === 'stdio'}
+          <label class="j-field">
+            <span>Command</span>
+            <input
+              class="j-input"
+              placeholder="npx"
+              value={entry.value.command ?? ''}
+              oninput={e => patchEntryValue(sIndex, { command: (e.target as HTMLInputElement).value })}
+            />
+          </label>
+          <label class="j-field">
+            <span>Arguments (one per line)</span>
+            <textarea
+              class="j-textarea"
+              rows="2"
+              placeholder="-y&#10;@modelcontextprotocol/server-filesystem"
+              value={entry.argsText}
+              oninput={e => patchEntry(sIndex, { argsText: (e.target as HTMLTextAreaElement).value })}
+            ></textarea>
+          </label>
+          <label class="j-field">
+            <span>Environment (KEY=value, one per line)</span>
+            <textarea
+              class="j-textarea"
+              rows="2"
+              placeholder="API_TOKEN=…"
+              value={entry.envText}
+              oninput={e => patchEntry(sIndex, { envText: (e.target as HTMLTextAreaElement).value })}
+            ></textarea>
+          </label>
+        {:else}
+          <label class="j-field">
+            <span>URL</span>
+            <input
+              class="j-input"
+              placeholder="https://host/sse"
+              value={entry.value.url ?? ''}
+              oninput={e => patchEntryValue(sIndex, { url: (e.target as HTMLInputElement).value })}
+            />
+          </label>
+        {/if}
+
         {@render toolList(
           status,
           entry.value.enabled,
-          tool => isEntryToolEnabled(entry, tool),
-          (tool, on) => toggleEntryTool(sIndex, tool, on)
+          tool => entryToolPolicy(entry, tool),
+          (tool, policy) => setEntryToolPolicy(sIndex, tool, policy)
         )}
+
+        <div class="j-row j-end">
+          <button class="j-btn j-btn-primary" onclick={() => (expanded[`custom:${sIndex}`] = false)}>
+            <Icon name="check" size={13} /> Validate
+          </button>
+        </div>
       {/if}
     </div>
   {/each}
 
-  {#if customTools.length > 0}
-    <div class="subhead">Custom tools (jarvis-tools/*.json)</div>
-    <p class="j-hint">Defined in the workspace <code>jarvis-tools/</code> folder — edit the files to change them.</p>
-    <div class="tools">
-      {#each customTools as tool (tool.name)}
-        <div class="tool-row">
-          <div class="tool-info">
-            <span class="tool-name">{tool.name}</span>
-            {#if tool.description}
-              <span class="tool-desc">{tool.description}</span>
-            {/if}
-          </div>
-        </div>
-      {/each}
-    </div>
-  {/if}
+
 </div>
 
 <style>
@@ -321,23 +359,6 @@
     letter-spacing: 0.04em;
     color: var(--vscode-descriptionForeground);
     margin-top: var(--jarvis-space-1);
-  }
-
-  .expand-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 3px;
-    background: transparent;
-    border: none;
-    border-radius: var(--jarvis-radius-sm);
-    color: inherit;
-    cursor: pointer;
-    transition: background var(--jarvis-transition);
-  }
-
-  .expand-btn:hover {
-    background: var(--vscode-list-hoverBackground);
   }
 
   .server-label {
@@ -399,9 +420,16 @@
   }
 
   .tool-info {
+    flex: 1;
     display: flex;
     flex-direction: column;
     min-width: 0;
+  }
+
+  .tool-policy {
+    flex-shrink: 0;
+    padding: 2px 6px;
+    font-size: var(--jarvis-text-xs);
   }
 
   .tool-name {

@@ -122,6 +122,14 @@
       {
         "command": "jarvis.indexWorkspace",
         "title": "Jarvis: Index Workspace (RAG)"
+      },
+      {
+        "command": "jarvis.acceptAll",
+        "title": "Jarvis: Accept All AI Changes"
+      },
+      {
+        "command": "jarvis.rejectAll",
+        "title": "Jarvis: Reject All AI Changes"
       }
     ],
     "menus": {
@@ -152,7 +160,7 @@
         },
         "jarvis.agent.maxIterations": {
           "type": "number",
-          "default": 10,
+          "default": 25,
           "description": "Nombre maximum d'itérations de la boucle agentique"
         },
         "jarvis.tdd.maxAttempts": {

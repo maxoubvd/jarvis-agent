@@ -16,6 +16,8 @@ export interface CommandItem {
 }
 
 export const SLASH_COMMANDS: CommandItem[] = [
+  { trigger: '/', insert: '/new ', label: '/new', detail: 'Nouvelle discussion' },
+  { trigger: '/', insert: '/resume ', label: '/resume', detail: 'Reprendre une ancienne discussion' },
   { trigger: '/', insert: '/agent ', label: '/agent', detail: 'Agentic mode on a task' },
   { trigger: '/', insert: '/tdd ', label: '/tdd', detail: 'Auto-TDD loop' },
   { trigger: '/', insert: '/workflow ', label: '/workflow', detail: 'Run a predefined workflow' }

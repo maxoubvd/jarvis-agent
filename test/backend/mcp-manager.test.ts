@@ -81,7 +81,8 @@ describe('McpManager', () => {
     const defs = manager.toToolDefinitions();
     expect(defs).toHaveLength(1);
     expect(defs[0].name).toBe('mcp__srv__echo');
-    expect(defs[0].hitlAction).toBe('mcp');
+    // `echo` ne matche aucune règle de mapping → catégorie HITL par défaut.
+    expect(defs[0].hitlAction).toBe('mcp_custom');
     expect(defs[0].parameters[0].name).toBe('text');
 
     const output = await defs[0].execute({ text: 'hi' });
@@ -117,7 +118,7 @@ describe('McpManager', () => {
     const goodStatus = statuses.find(s => s.name === 'good')!;
     expect(goodStatus.connected).toBe(true);
     expect(goodStatus.tools).toEqual([
-      { name: 'echo', description: 'Echoes input', enabled: true }
+      { name: 'echo', description: 'Echoes input', enabled: true, policy: 'ask' }
     ]);
   });
 
@@ -137,8 +138,8 @@ describe('McpManager', () => {
 
     const status = manager.getStatuses().find(s => s.name === 'srv')!;
     expect(status.tools).toEqual([
-      { name: 'echo', description: 'Echoes input', enabled: false },
-      { name: 'other', description: 'Other', enabled: true }
+      { name: 'echo', description: 'Echoes input', enabled: false, policy: 'excluded' },
+      { name: 'other', description: 'Other', enabled: true, policy: 'ask' }
     ]);
   });
 
@@ -157,7 +158,79 @@ describe('McpManager', () => {
 
     expect(manager.toToolDefinitions()).toHaveLength(0);
     const memory = manager.getStatuses().find(s => s.name === 'memory')!;
-    expect(memory.tools).toEqual([{ name: 'echo', description: 'Echoes input', enabled: false }]);
+    expect(memory.tools).toEqual([
+      { name: 'echo', description: 'Echoes input', enabled: false, policy: 'excluded' }
+    ]);
+  });
+
+  it('tool policies: MCP tools default to ask, overrides are honoured', async () => {
+    const otherTool: McpToolInfo = { name: 'other', description: 'Other', inputSchema: {} };
+    const thirdTool: McpToolInfo = { name: 'third', description: 'Third', inputSchema: {} };
+    const client = fakeClient([echoTool, otherTool, thirdTool]);
+    const manager = new McpManager(
+      fakeConfigManagerFull({
+        mcpServers: {
+          srv: { ...stdioConfig, toolPolicies: { echo: 'auto', third: 'excluded' } }
+        }
+      }),
+      () => client
+    );
+    await manager.initialize();
+
+    // excluded absent du registre agentique.
+    expect(manager.toToolDefinitions().map(d => d.name)).toEqual([
+      'mcp__srv__echo',
+      'mcp__srv__other'
+    ]);
+
+    // Politique par nom de registre : configurée sinon défaut ask.
+    expect(manager.toolPolicies()).toEqual({
+      mcp__srv__echo: 'auto',
+      mcp__srv__other: 'ask',
+      mcp__srv__third: 'excluded'
+    });
+  });
+
+  it('tool policies apply to builtin server overrides too', async () => {
+    const client = fakeClient([echoTool]);
+    const manager = new McpManager(
+      fakeConfigManagerFull({
+        builtinMcp: {
+          memory: { toolPolicies: { echo: 'auto' } },
+          fetch: { enabled: false }
+        }
+      }),
+      () => client
+    );
+    await manager.initialize();
+
+    const memory = manager.getStatuses().find(s => s.name === 'memory')!;
+    expect(memory.tools[0].policy).toBe('auto');
+    expect(manager.toolPolicies()).toEqual({ mcp__memory__echo: 'auto' });
+  });
+
+  it('activeToolNames lists connected servers, filtering excluded tools', async () => {
+    const otherTool: McpToolInfo = { name: 'other', description: 'Other', inputSchema: {} };
+    const good = fakeClient([echoTool, otherTool]);
+    const bad = fakeClient([], true);
+    const manager = new McpManager(
+      fakeConfigManagerFull({
+        mcpServers: {
+          good: { ...stdioConfig, toolPolicies: { other: 'excluded' } },
+          bad: stdioConfig,
+          off: { ...stdioConfig, enabled: false }
+        }
+      }),
+      name => (name === 'good' ? good : bad)
+    );
+    await manager.initialize();
+
+    const active = manager.activeToolNames();
+    // Serveur injoignable ou désactivé : absent (ses équivalents builtin restent).
+    expect(active.has('bad')).toBe(false);
+    expect(active.has('off')).toBe(false);
+    // Tool exclu : filtré.
+    expect([...active.get('good')!]).toEqual(['echo']);
   });
 
   it('reload closes existing clients and reconnects', async () => {

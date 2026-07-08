@@ -15,10 +15,15 @@
     onChange(next);
   }
 
+  /** Cartes dépliées (nouveau prompt = ouvert en édition). */
+  let expanded = $state<Record<string, boolean>>({});
+
   function addPrompt() {
+    const id = crypto.randomUUID();
+    expanded[id] = true;
     update([
       ...items,
-      { id: crypto.randomUUID(), name: `prompt-${items.length + 1}`, description: '', content: '' }
+      { id, name: `prompt-${items.length + 1}`, description: '', content: '' }
     ]);
   }
 
@@ -57,20 +62,15 @@
   {#each items as prompt, index (prompt.id)}
     <div class="j-card">
       <div class="j-row">
-        <span class="slash">/</span>
-        <input
-          class="j-input"
-          style="width: 11rem"
-          placeholder="name (e.g. review)"
-          value={prompt.name}
-          oninput={e => patch(index, { name: (e.target as HTMLInputElement).value })}
-        />
-        <input
-          class="j-input j-grow"
-          placeholder="Description (optional)"
-          value={prompt.description ?? ''}
-          oninput={e => patch(index, { description: (e.target as HTMLInputElement).value || undefined })}
-        />
+        <button
+          class="j-expand"
+          title={expanded[prompt.id] ? 'Collapse' : 'Edit prompt'}
+          onclick={() => (expanded[prompt.id] = !expanded[prompt.id])}
+        >
+          <Icon name={expanded[prompt.id] ? 'chevron-up' : 'chevron-down'} size={13} />
+        </button>
+        <span class="j-title">/{prompt.name.trim() || '(unnamed)'}</span>
+        <span class="j-sub j-grow">{prompt.description ?? ''}</span>
         <button class="j-btn j-btn-danger j-btn-icon" title="Remove" onclick={() => removePrompt(index)}>
           <Icon name="trash" size={13} />
         </button>
@@ -80,16 +80,39 @@
       {:else if hasSpaces(prompt.name)}
         <div class="warn">The name must not contain spaces.</div>
       {/if}
-      <label class="j-field">
-        <span>Content</span>
-        <textarea
-          class="j-textarea"
-          rows="4"
-          placeholder="e.g. Review the following code and list potential bugs:"
-          value={prompt.content}
-          oninput={e => patch(index, { content: (e.target as HTMLTextAreaElement).value })}
-        ></textarea>
-      </label>
+      {#if expanded[prompt.id]}
+        <div class="j-row">
+          <span class="slash">/</span>
+          <input
+            class="j-input"
+            style="width: 11rem"
+            placeholder="name (e.g. review)"
+            value={prompt.name}
+            oninput={e => patch(index, { name: (e.target as HTMLInputElement).value })}
+          />
+          <input
+            class="j-input j-grow"
+            placeholder="Description (optional)"
+            value={prompt.description ?? ''}
+            oninput={e => patch(index, { description: (e.target as HTMLInputElement).value || undefined })}
+          />
+        </div>
+        <label class="j-field">
+          <span>Content</span>
+          <textarea
+            class="j-textarea"
+            rows="4"
+            placeholder="e.g. Review the following code and list potential bugs:"
+            value={prompt.content}
+            oninput={e => patch(index, { content: (e.target as HTMLTextAreaElement).value })}
+          ></textarea>
+        </label>
+        <div class="j-row j-end">
+          <button class="j-btn j-btn-primary" onclick={() => (expanded[prompt.id] = false)}>
+            <Icon name="check" size={13} /> Validate
+          </button>
+        </div>
+      {/if}
     </div>
   {/each}
 </div>

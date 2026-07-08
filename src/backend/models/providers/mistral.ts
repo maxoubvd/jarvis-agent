@@ -6,6 +6,7 @@ export interface MistralOptions {
   model?: string;
   apiKey?: string;
   maxTokens?: number;
+  temperature?: number;
 }
 
 /** Mistral API (cloud) — mistral-large, codestral (spec §3.1). */
@@ -18,7 +19,8 @@ export class MistralProvider implements IModelProvider {
       baseUrl: (options.baseUrl ?? 'https://api.mistral.ai/v1').replace(/\/$/, ''),
       model: options.model ?? 'codestral-latest',
       apiKey: options.apiKey,
-      maxTokens: options.maxTokens
+      maxTokens: options.maxTokens,
+      temperature: options.temperature
     };
   }
 

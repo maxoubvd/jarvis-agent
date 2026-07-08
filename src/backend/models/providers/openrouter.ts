@@ -6,6 +6,7 @@ export interface OpenRouterOptions {
   model?: string;
   apiKey?: string;
   maxTokens?: number;
+  temperature?: number;
 }
 
 export class OpenRouterProvider implements IModelProvider {
@@ -18,6 +19,7 @@ export class OpenRouterProvider implements IModelProvider {
       model: options.model ?? 'deepseek-coder-v3',
       apiKey: options.apiKey,
       maxTokens: options.maxTokens,
+      temperature: options.temperature,
       extraHeaders: {
         'HTTP-Referer': 'https://github.com/jarvis-agent',
         'X-Title': 'Jarvis Agent'

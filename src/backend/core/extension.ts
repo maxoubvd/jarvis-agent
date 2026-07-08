@@ -1,8 +1,10 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
 import { ModelConfigManager } from '../config/model-config-manager.js';
-import { getConfigManager, normalizeConfig, type JarvisConfig, type DocSite } from '../config/config-manager.js';
+import { getConfigManager, normalizeConfig, type JarvisConfig, type DocSite, type ToolPolicy } from '../config/config-manager.js';
 import { ChatMessage, IModelProvider } from '../models/abstract.js';
-import { HITLManager, HITLMode } from '../services/hitl.js';
+import { SessionStore, buildResumeContext } from '../services/sessions.js';
+import { HITLManager, HITLMode, ApprovalPromptDecision } from '../services/hitl.js';
 import { CheckpointManager } from '../services/checkpoint.js';
 import { AnalyticsCollector } from '../services/analytics.js';
 import { TokenCounter, TokenUsage, estimateTokens } from '../services/token-counter.js';
@@ -22,6 +24,11 @@ import { SecretScrubber } from './utils/scrubber.js';
 import { SandboxManager } from './utils/sandbox.js';
 import { AgentOrchestrator, buildAgentSystemPrompt, AgentEvents } from './agent/orchestrator.js';
 import { ToolRegistry, createBuiltinTools } from './agent/tool-registry.js';
+import { ChangeTracker } from '../services/change-tracker.js';
+import { isBuiltinShadowed, type ActiveMcpTools } from './agent/builtin-dedup.js';
+import { JarvisCodeLensProvider } from './codelens.js';
+import { DiffDecorationProvider } from './diff-decorations.js';
+import * as path from 'path';
 import { loadCustomTools } from './agent/custom-tools.js';
 import {
   readFileTool,
@@ -54,6 +61,10 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
   private toolRegistry: ToolRegistry | null = null;
   private mcpManager: McpManager | null = null;
   private docsService: DocsService | null = null;
+  private sessions: SessionStore | null = null;
+  private changeTracker = new ChangeTracker();
+  /** Approbations en attente (carte dans le chat), clé = id du prompt HITL. */
+  private pendingApprovals = new Map<string, (d: ApprovalPromptDecision | null) => void>();
 
   /** Notifie l'hôte (status bar) à chaque évolution des tokens. */
   public onTokensChanged: ((usage: TokenUsage) => void) | null = null;
@@ -103,9 +114,23 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  /** Rules + instructions du workspace actif, concaténées pour les prompts système. */
+  /** Consigne de verbosité injectée dans les prompts (vide en mode `normal`). */
+  private getVerbosityInstruction(): string {
+    switch (this.getOptimization().verbosity) {
+      case 'concise':
+        return 'STYLE DE RÉPONSE : sois bref et direct. Va à l\'essentiel, sans préambule ni récapitulatif superflu. Privilégie des phrases courtes et des listes.';
+      case 'detailed':
+        return 'STYLE DE RÉPONSE : sois détaillé et pédagogique. Explique ton raisonnement, donne du contexte et des exemples utiles.';
+      default:
+        return '';
+    }
+  }
+
+  /** Rules + instructions du workspace actif + verbosité, pour les prompts système. */
   private getPromptExtras(): string {
-    return [this.getRulesText(), this.getWorkspaceInstructionsText()].filter(Boolean).join('\n\n');
+    return [this.getRulesText(), this.getWorkspaceInstructionsText(), this.getVerbosityInstruction()]
+      .filter(Boolean)
+      .join('\n\n');
   }
 
   /** Prompt système du chat direct, rules + workspace inclus (spec §5.2). */
@@ -176,6 +201,18 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
 
     webviewView.webview.onDidReceiveMessage(
       message => this.handleMessage(webviewView.webview, message),
+      undefined,
+      this.context.subscriptions
+    );
+
+    // Webview fermé : débloque les approbations en attente (fallback natif) et
+    // détache le handler pour éviter de poster vers un webview mort.
+    webviewView.onDidDispose(
+      () => {
+        for (const resolve of this.pendingApprovals.values()) resolve(null);
+        this.pendingApprovals.clear();
+        this.hitl.setPromptHandler(null);
+      },
       undefined,
       this.context.subscriptions
     );
@@ -262,6 +299,156 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
       case 'indexWorkspace':
         await this.indexWorkspaceInBackground(webview);
         break;
+      case 'queryFiles':
+        if (typeof message.query === 'string') {
+          void this.onQueryFiles(webview, message.query);
+        }
+        break;
+      case 'openFile':
+        if (typeof message.path === 'string') {
+          await this.onOpenFile(message.path);
+        }
+        break;
+      case 'resolveHunk':
+        await this.onResolveHunk(webview, message);
+        break;
+      case 'resolveFile':
+        await this.onResolveFile(webview, message);
+        break;
+      case 'resolveAll':
+        await this.onResolveAll(webview, message);
+        break;
+      case 'approvalResponse':
+        this.onApprovalResponse(message);
+        break;
+    }
+  }
+
+  /** Résout la promesse d'approbation en attente avec la décision du chat. */
+  private onApprovalResponse(message: Record<string, unknown>): void {
+    const id = typeof message.id === 'string' ? message.id : '';
+    const resolve = this.pendingApprovals.get(id);
+    if (!resolve) return;
+    this.pendingApprovals.delete(id);
+    const raw = message.decision;
+    const decision: ApprovalPromptDecision['decision'] =
+      raw === 'allow' || raw === 'allow-session' ? raw : 'deny';
+    resolve({
+      decision,
+      feedback: typeof message.feedback === 'string' ? message.feedback : undefined
+    });
+  }
+
+  public getChangeTracker(): ChangeTracker {
+    return this.changeTracker;
+  }
+
+  public onChangesChanged: (() => void) | null = null;
+
+  public async resolveHunk(pathStr: string, hunkId: number, revision: number, action: 'accept' | 'reject'): Promise<void> {
+    const diskAction = this.changeTracker.resolveHunk(pathStr, hunkId, revision, action);
+    if (diskAction) {
+      await this.applyDiskAction(diskAction);
+    }
+    if (this._view) {
+      this.notifyPendingChanges(this._view.webview);
+    }
+  }
+
+  public async resolveFile(pathStr: string, action: 'accept' | 'reject'): Promise<void> {
+    const diskAction = this.changeTracker.resolveFile(pathStr, action);
+    if (diskAction) {
+      await this.applyDiskAction(diskAction);
+    }
+    if (this._view) {
+      this.notifyPendingChanges(this._view.webview);
+    }
+  }
+
+  private async onResolveHunk(webview: vscode.Webview, message: Record<string, unknown>): Promise<void> {
+    const { path: pathStr, hunkId, revision, action } = message as { path: string; hunkId: number; revision: number; action: 'accept' | 'reject' };
+    await this.resolveHunk(pathStr, hunkId, revision, action);
+  }
+
+  private async onResolveFile(webview: vscode.Webview, message: Record<string, unknown>): Promise<void> {
+    const { path: pathStr, action } = message as { path: string; action: 'accept' | 'reject' };
+    await this.resolveFile(pathStr, action);
+  }
+
+  private async onOpenFile(filePathUri: string): Promise<void> {
+    try {
+      const cleanUri = filePathUri.startsWith('file://') ? filePathUri : 'file://' + filePathUri;
+      const uri = vscode.Uri.parse(cleanUri);
+      const doc = await vscode.workspace.openTextDocument(uri);
+      await vscode.window.showTextDocument(doc, { preview: false });
+    } catch (err) {
+      operationLogger.log('extension', `onOpenFile échoué: ${err instanceof Error ? err.message : err}`, 'error');
+      vscode.window.showErrorMessage(`Jarvis: impossible d'ouvrir le fichier — ${err instanceof Error ? err.message : err}`);
+    }
+  }
+
+  private async onResolveAll(webview: vscode.Webview, message: Record<string, unknown>): Promise<void> {
+    const { action } = message as { action: 'accept' | 'reject' };
+    await this.resolveAllChanges(action);
+  }
+
+  /** Accepte/rejette toutes les modifications en attente (commandes + webview). */
+  public async resolveAllChanges(action: 'accept' | 'reject'): Promise<void> {
+    const diskActions = this.changeTracker.resolveAll(action);
+    for (const d of diskActions) {
+      await this.applyDiskAction(d);
+    }
+    if (this._view) {
+      this.notifyPendingChanges(this._view.webview);
+    } else {
+      this.onChangesChanged?.();
+    }
+  }
+
+  private async applyDiskAction(action: { path: string; content: string | null }): Promise<void> {
+    await this.changeTracker.runUntracked(async () => {
+      try {
+        if (action.content === null) {
+          if (fs.existsSync(action.path)) {
+            await fs.promises.unlink(action.path);
+          }
+        } else {
+          await fs.promises.writeFile(action.path, action.content, 'utf8');
+        }
+      } catch (err) {
+        operationLogger.log('diff-review', `Erreur lors de l'application de l'action sur ${action.path}: ${String(err)}`, 'error');
+      }
+    });
+  }
+
+  private notifyPendingChanges(webview: vscode.Webview): void {
+    this.post(webview, {
+      type: 'pendingChanges',
+      changes: this.changeTracker.snapshot()
+    });
+    this.onChangesChanged?.();
+  }
+
+  private async onQueryFiles(webview: vscode.Webview, query: string): Promise<void> {
+    try {
+      const q = query.trim().toLowerCase();
+      const uris = await vscode.workspace.findFiles('**/*', '**/node_modules/**', 2000);
+      const basePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
+      const filePaths: string[] = [];
+      for (const uri of uris) {
+        let p = uri.fsPath;
+        if (basePath && p.startsWith(basePath)) {
+          p = p.substring(basePath.length + 1);
+        }
+        p = p.replace(/\\/g, '/');
+        if (!q || p.toLowerCase().includes(q)) {
+          filePaths.push(p);
+        }
+        if (filePaths.length >= 50) break;
+      }
+      this.post(webview, { type: 'fileSuggestions', files: filePaths });
+    } catch {
+      this.post(webview, { type: 'fileSuggestions', files: [] });
     }
   }
 
@@ -286,6 +473,22 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
   }
 
   private onWebviewReady(webview: vscode.Webview): void {
+    // Délègue les confirmations HITL à la carte d'approbation dans le chat.
+    // Retour `null` impossible ici (webview prêt) → jamais de dialogue natif.
+    this.hitl.setPromptHandler(
+      request =>
+        new Promise<ApprovalPromptDecision | null>(resolve => {
+          this.pendingApprovals.set(request.id, resolve);
+          this.post(webview, {
+            type: 'approvalRequest',
+            id: request.id,
+            actionType: request.actionType,
+            description: request.description,
+            detail: request.detail
+          });
+        })
+    );
+
     const configManager = this.getModelConfigManager();
     const model = configManager?.getEffectiveModel() ?? null;
     const models = configManager?.getAvailableModels() ?? [];
@@ -425,33 +628,7 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     this.postTokens(webview);
   }
 
-  /** Défauts codés en dur (agents/workflows/builtins MCP/custom tools) — pour l'éditeur des Settings. */
-  private async getSettingsDefaults(): Promise<Record<string, unknown>> {
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-    let customTools: Array<{ name: string; description: string }> = [];
-    if (workspaceFolder) {
-      try {
-        customTools = (await loadCustomTools(workspaceFolder)).map(t => ({
-          name: t.name,
-          description: t.description
-        }));
-      } catch {
-        /* best-effort */
-      }
-    }
-    return {
-      agents: getAgents(),
-      workflows: getWorkflows(),
-      builtinMcp: getBuiltinMcpServers(workspaceFolder).map(b => ({
-        id: b.id,
-        label: b.label,
-        description: b.description,
-        command: builtinCommandString(b),
-        defaultEnabled: b.config.enabled
-      })),
-      customTools
-    };
-  }
+  // (Supprimé car implémenté plus bas avec la logique MCP complète)
 
   /** Ouvre la config globale (~/.jarvis/config.json) dans l'éditeur. */
   private async onOpenConfigFile(): Promise<void> {
@@ -583,10 +760,71 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     return cleaned;
   }
 
-  private async onChatMessage(webview: vscode.Webview, rawText: string): Promise<void> {
+  private async getSettingsDefaults(): Promise<Record<string, unknown>> {
+    const config = getConfigManager().getConfig();
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    let customTools: Array<{ name: string; description: string }> = [];
+    if (workspaceFolder) {
+      try {
+        customTools = (await loadCustomTools(workspaceFolder)).map(t => ({
+          name: t.name,
+          description: t.description
+        }));
+      } catch {
+        /* best-effort */
+      }
+    }
+    
+    // Activer MCP pour filtrer les builtins
+    const mcp = this.getMcpManager();
+    let activeMcpTools = new Map<string, Set<string>>();
+    if (mcp) {
+      await mcp.initialize().catch(() => undefined);
+      activeMcpTools = mcp.activeToolNames();
+    }
+
+    const availableTools = createBuiltinTools()
+      .filter(t => !isBuiltinShadowed(t.name, activeMcpTools))
+      .map(t => ({ name: t.name, description: t.description }));
+
+    return {
+      optimization: {
+        chatMode: 'agent',
+        ...config.optimization
+      },
+      agentTools: availableTools,
+      docs: config.docs ?? [],
+      mcpServers: config.mcpServers ?? {},
+      builtinMcp: getBuiltinMcpServers(workspaceFolder).map(b => ({
+        id: b.id,
+        label: b.label,
+        description: b.description,
+        command: builtinCommandString(b),
+        defaultEnabled: b.config.enabled
+      })),
+      customTools,
+      agents: getAgents(),
+      workflows: getWorkflows()
+    };
+  }
+
+  private async onChatMessage(webview: vscode.Webview, rawText: string, mode: string = 'Automatique'): Promise<void> {
     // Commandes outils déterministes (@read, @list, @write, @run)
     if (/^@(read|list|write|run)\b/.test(rawText)) {
       await this.handleToolCommand(webview, rawText);
+      return;
+    }
+
+    if (/^\/new\b/.test(rawText)) {
+      this.startNewSession(webview);
+      this.post(webview, { type: 'chatDone' });
+      return;
+    }
+
+    const resumeMatch = rawText.match(/^\/resume(?:\s+(\S+))?\s*$/);
+    if (resumeMatch) {
+      await this.onResumeCommand(webview, resumeMatch[1]);
+      this.post(webview, { type: 'chatDone' });
       return;
     }
 
@@ -643,7 +881,100 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
       return;
     }
 
+    // Mode Plan : Workflow strict (Analyses, Plan, Validation, Implémentation)
+    if (mode === 'Plan') {
+      const planSystemPrompt = "RÈGLE SPECIALE MODE PLAN: Ne fais pas de code direct. Analyse le besoin, et écris un fichier 'implementation_plan.md' détaillé, puis pose la question 'Mon plan te convient-il ?' à l'utilisateur.";
+      const planText = await this.runAgent(webview, active, expanded, planSystemPrompt);
+      if (planText) this.history.push({ role: 'assistant', content: planText });
+      this.getSessions()?.updateCurrent(this.history);
+      return;
+    }
+
+    // Par défaut le chat est agentique : le modèle dispose de ses outils
+    // (création/édition de fichiers, terminal…) au lieu de répondre en texte.
+    const chatMode = this.getOptimization().chatMode ?? 'agent';
+    if (chatMode === 'agent' || mode === 'Rapide' || mode === 'Automatique') {
+      let extraPrompt = undefined;
+      if (mode === 'Rapide') {
+        extraPrompt = "MODE RAPIDE : Agis immédiatement sans plan, sois extrêmement concis et fais le code/les commandes sans réfléchir à voix haute.";
+      }
+      const recentHistory = this.history.slice(-10);
+      const finalText = await this.runAgent(webview, active, expanded, extraPrompt, recentHistory);
+      this.history.push({ role: 'user', content: this.maybeScrub(expanded, active.providerName) });
+      if (finalText) this.history.push({ role: 'assistant', content: finalText });
+      this.getSessions()?.updateCurrent(this.history);
+      return;
+    }
+
     await this.streamChat(webview, active, expanded, rawText);
+  }
+
+  private startNewSession(webview: vscode.Webview): void {
+    const store = this.getSessions();
+    store?.startNew();
+    this.history = [];
+    this.tokenCounter.reset();
+    this.postTokens(webview);
+    this.post(webview, { type: 'sessionStarted' });
+    operationLogger.log('session', 'Nouvelle session de discussion démarrée');
+  }
+
+  private onListSessions(webview: vscode.Webview): void {
+    const store = this.getSessions();
+    this.post(webview, { type: 'sessions', sessions: store?.list() ?? [] });
+  }
+
+  private async onResumeCommand(webview: vscode.Webview, arg?: string): Promise<void> {
+    const store = this.getSessions();
+    if (!store) return;
+    
+    const list = store.list();
+    if (list.length === 0) {
+      vscode.window.showInformationMessage("Jarvis: Aucune discussion précédente trouvée.");
+      return;
+    }
+
+    if (!arg) {
+      const items = list.map((s, i) => ({
+        label: `[${i + 1}] ${s.title || '(untitled)'}`,
+        description: `${s.messageCount} messages`,
+        detail: new Date(s.updatedAt).toLocaleString(),
+        session: s
+      }));
+      const picked = await vscode.window.showQuickPick(items, {
+        placeHolder: 'Sélectionnez une discussion à reprendre'
+      });
+      if (picked) {
+        this.resumeSession(webview, picked.session.id);
+      }
+      return;
+    }
+
+    const index = parseInt(arg, 10);
+    let session = store.getById(arg);
+    if (!session && !isNaN(index) && index >= 1 && index <= list.length) {
+      session = store.getById(list[index - 1].id);
+    }
+    if (session) {
+      this.resumeSession(webview, session.id);
+    } else {
+      this.post(webview, { type: 'chatError', error: `Session introuvable : ${arg}` });
+    }
+  }
+
+  private resumeSession(webview: vscode.Webview, id: string): void {
+    const store = this.getSessions();
+    if (!store) return;
+    const session = store.getById(id);
+    if (!session) return;
+    const ctx = buildResumeContext(session);
+    store.startNew(`Resumed: ${session.title}`);
+    store.updateCurrent([ctx]);
+    this.history = [ctx];
+    this.tokenCounter.reset();
+    this.postTokens(webview);
+    this.post(webview, { type: 'sessionResumed', title: session.title });
+    operationLogger.log('session', `Session reprise: ${session.title}`);
   }
 
   /** Chat direct avec streaming (spec §3.2) + cache des réponses. */
@@ -693,6 +1024,7 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
       },
       () => {
         this.history.push({ role: 'assistant', content: assembled });
+        this.getSessions()?.updateCurrent(this.history);
         this.responseCache.set(cacheKey, assembled);
         const outputTokens = estimateTokens(assembled);
         this.recordRequest(webview, model, inputTokens, outputTokens);
@@ -722,28 +1054,54 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     );
   }
 
+  /** Politique par outil (Settings > Tools) — `{}` si config illisible. */
+  private getToolPolicies(): Record<string, ToolPolicy> {
+    try {
+      return getConfigManager().getConfig().toolPolicies ?? {};
+    } catch {
+      return {};
+    }
+  }
+
+  /** Tools MCP actifs par serveur connecté — connecte les serveurs si besoin. */
+  private async getActiveMcpTools(): Promise<ActiveMcpTools> {
+    const mcp = this.getMcpManager();
+    if (!mcp) return new Map();
+    await mcp.initialize().catch(() => undefined);
+    return mcp.activeToolNames();
+  }
+
   private async getToolRegistry(): Promise<ToolRegistry> {
     if (this.toolRegistry) return this.toolRegistry;
+    const policies = this.getToolPolicies();
     const registry = new ToolRegistry();
+    
+    // MCP d'abord : les builtins doublonnés par un serveur connecté sont masqués.
+    const activeMcpTools = await this.getActiveMcpTools();
     for (const tool of createBuiltinTools()) {
+      if (policies[tool.name] === 'excluded') continue;
+      if (isBuiltinShadowed(tool.name, activeMcpTools)) continue;
       registry.register(tool);
     }
+    
     // Outils personnalisés depuis jarvis-tools/ (spec §5.1)
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     if (workspaceFolder) {
       for (const tool of await loadCustomTools(workspaceFolder)) {
+        if (policies[tool.name] === 'excluded') continue;
         registry.register(tool);
         operationLogger.log('tools', `Outil personnalisé chargé: ${tool.name}`);
       }
     }
+    
     // Tools des serveurs MCP configurés (onglet Settings)
     const mcp = this.getMcpManager();
     if (mcp) {
-      await mcp.initialize().catch(() => undefined);
       for (const tool of mcp.toToolDefinitions()) {
         registry.register(tool);
       }
     }
+    
     this.toolRegistry = registry;
     return registry;
   }
@@ -751,19 +1109,53 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
   private agentEvents(webview: vscode.Webview): AgentEvents {
     return {
       onThinking: text => this.post(webview, { type: 'agentThinking', text }),
+      onThinkingChunk: chunk => this.post(webview, { type: 'agentThinkingChunk', chunk }),
       onToolCall: (tool, args) => {
         operationLogger.log('tool-call', `${tool} ${JSON.stringify(args)}`);
         this.post(webview, { type: 'agentTool', tool, args });
       },
-      onToolResult: (tool, result, success) => {
+      onToolResult: (tool, result, success, args) => {
         operationLogger.log('tool-result', `${tool}: ${success ? 'ok' : 'échec'}`, success ? 'success' : 'error');
+        
+        let summary = result.length > 800 ? result.slice(0, 800) + '…' : result;
+        if (success && args && typeof args === 'object') {
+          const possiblePath = args.path ?? args.file ?? args.TargetFile ?? args.AbsolutePath;
+          if (possiblePath && typeof possiblePath === 'string') {
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+            const absolutePath = path.isAbsolute(possiblePath)
+              ? possiblePath
+              : workspaceFolder
+                ? path.resolve(workspaceFolder, possiblePath)
+                : possiblePath;
+            const relativePath = workspaceFolder
+              ? path.relative(workspaceFolder, absolutePath).replace(/\\/g, '/')
+              : possiblePath;
+            
+            const fileView = this.changeTracker.snapshot().find(
+              f => vscode.Uri.file(f.path).fsPath === vscode.Uri.file(absolutePath).fsPath || f.path === relativePath
+            );
+            if (fileView) {
+              const added = fileView.hunks.reduce((sum, h) => sum + h.afterLines.length, 0);
+              const deleted = fileView.hunks.reduce((sum, h) => sum + h.beforeLines.length, 0);
+              const fileUri = vscode.Uri.file(absolutePath).toString();
+              const actionVerb = fileView.isNew ? 'Created' : 'Edited';
+              summary = `${actionVerb} [${relativePath}](${fileUri}) +${added} -${deleted}`;
+            }
+          }
+        }
+
         this.post(webview, {
           type: 'agentToolResult',
           tool,
           success,
-          summary: result.length > 800 ? result.slice(0, 800) + '…' : result
+          summary
         });
-      }
+        // Notifier le webview des changements en attente après chaque outil
+        if (this.changeTracker.pendingCount > 0) {
+          this.notifyPendingChanges(webview);
+        }
+      },
+      onFinalChunk: chunk => this.post(webview, { type: 'agentFinalChunk', chunk })
     };
   }
 
@@ -772,12 +1164,15 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     registry: ToolRegistry,
     persona?: string
   ): AgentOrchestrator {
-    const maxIterations = this.getOpt(this.getOptimization().agentMaxIterations, 'agent.maxIterations', 10);
+    const maxIterations = this.getOpt(this.getOptimization().agentMaxIterations, 'agent.maxIterations', 25);
     return new AgentOrchestrator(active.provider, registry, {
       maxIterations,
       hitl: this.hitl,
       scrub: text => this.maybeScrub(text, active.providerName),
-      systemPrompt: buildAgentSystemPrompt(registry, persona, this.getPromptExtras() || undefined)
+      systemPrompt: buildAgentSystemPrompt(registry, persona, this.getPromptExtras() || undefined),
+      changeTracker: this.changeTracker,
+      toolPolicies: this.getToolPolicies(),
+      workspaceFolder: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
     });
   }
 
@@ -786,8 +1181,9 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     webview: vscode.Webview,
     active: { provider: IModelProvider; providerName: string; model: string },
     task: string,
-    persona?: string
-  ): Promise<void> {
+    persona?: string,
+    history?: ChatMessage[]
+  ): Promise<string | void> {
     const registry = await this.getToolRegistry();
     const orchestrator = this.buildOrchestrator(active, registry, persona);
     const started = Date.now();
@@ -796,7 +1192,7 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     await this.getCheckpoints().createCheckpoint('action', task.slice(0, 40)).catch(() => null);
 
     const inputTokens = estimateTokens(task);
-    const result = await orchestrator.run(task, [], this.agentEvents(webview));
+    const result = await orchestrator.run(task, history || [], this.agentEvents(webview));
     const outputTokens = estimateTokens(result.finalText);
     this.recordRequest(webview, active.model, inputTokens, outputTokens);
 
@@ -812,9 +1208,11 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     if (result.success) {
       this.post(webview, {
         type: 'agentFinal',
-        text: result.finalText,
+        text: '', // Déjà streamé via onFinal Chunk
         badges: [{ icon: '✅', label: `Terminé en ${result.iterations} itération(s)`, variant: 'success' }]
       });
+      this.notifyPendingChanges(webview);
+      return result.finalText;
     } else {
       this.post(webview, { type: 'chatError', error: result.error ?? 'Échec de l\'agent' });
     }
@@ -925,7 +1323,7 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     if (result.success) {
       this.post(webview, {
         type: 'agentFinal',
-        text: `✅ **Workflow ${workflowId} terminé**\n\n${result.summary}`,
+        text: '', // Déjà streamé via onFinal Chunk
         badges: [{ icon: '✅', label: `${result.steps.length} étapes`, variant: 'success' }]
       });
     } else {
@@ -1076,6 +1474,17 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     return this.checkpoints;
   }
 
+  private getSessions(): SessionStore | null {
+    if (!this.sessions) {
+      const ws = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      if (!ws) return null;
+      // On sauvegarde dans .vscode/jarvis-sessions.json du workspace principal
+      const path = vscode.Uri.joinPath(vscode.Uri.file(ws), '.vscode', 'jarvis-sessions.json').fsPath;
+      this.sessions = new SessionStore(path);
+    }
+    return this.sessions;
+  }
+
   public getAnalytics(): AnalyticsCollector | null {
     if (!this.analytics) {
       try {
@@ -1143,6 +1552,43 @@ export class JarvisExtension {
       { webviewOptions: { retainContextWhenHidden: true } }
     );
     this.context.subscriptions.push(registration);
+
+    // Enregistrement de la revue de diffs intégrée (CodeLenses + décorations + commandes)
+    const codeLensProvider = new JarvisCodeLensProvider(() => this.sidebarProvider.getChangeTracker());
+    const decorationProvider = new DiffDecorationProvider(() => this.sidebarProvider.getChangeTracker());
+    this.context.subscriptions.push(
+      vscode.languages.registerCodeLensProvider({ scheme: 'file' }, codeLensProvider),
+      decorationProvider,
+      // Réapplique les couleurs vert/rouge quand l'éditeur affiché change.
+      vscode.window.onDidChangeActiveTextEditor(() => decorationProvider.refresh()),
+      vscode.window.onDidChangeVisibleTextEditors(() => decorationProvider.refresh())
+    );
+
+    this.sidebarProvider.onChangesChanged = () => {
+      codeLensProvider.refresh();
+      decorationProvider.refresh();
+    };
+
+    this.context.subscriptions.push(
+      vscode.commands.registerCommand('jarvis.acceptHunk', async (filePath: string, hunkId: number, revision: number) => {
+        await this.sidebarProvider.resolveHunk(filePath, hunkId, revision, 'accept');
+      }),
+      vscode.commands.registerCommand('jarvis.rejectHunk', async (filePath: string, hunkId: number, revision: number) => {
+        await this.sidebarProvider.resolveHunk(filePath, hunkId, revision, 'reject');
+      }),
+      vscode.commands.registerCommand('jarvis.acceptFile', async (filePath: string) => {
+        await this.sidebarProvider.resolveFile(filePath, 'accept');
+      }),
+      vscode.commands.registerCommand('jarvis.rejectFile', async (filePath: string) => {
+        await this.sidebarProvider.resolveFile(filePath, 'reject');
+      }),
+      vscode.commands.registerCommand('jarvis.acceptAll', async () => {
+        await this.sidebarProvider.resolveAllChanges('accept');
+      }),
+      vscode.commands.registerCommand('jarvis.rejectAll', async () => {
+        await this.sidebarProvider.resolveAllChanges('reject');
+      })
+    );
 
     // Jauge de tokens dans la status bar (spec §2.1)
     this.sidebarProvider.onTokensChanged = usage => {

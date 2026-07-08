@@ -41,6 +41,9 @@ export type ProviderType =
   | 'openrouter'
   | 'lmstudio'
   | 'mistral'
+  | 'gemini'
+  | 'anthropic'
+  | 'sambanova'
   | 'openai-compatible';
 
 export const PROVIDER_TYPES: ProviderType[] = [
@@ -49,6 +52,9 @@ export const PROVIDER_TYPES: ProviderType[] = [
   'openrouter',
   'lmstudio',
   'mistral',
+  'gemini',
+  'anthropic',
+  'sambanova',
   'openai-compatible'
 ];
 
@@ -58,7 +64,22 @@ export const DEFAULT_BASE_URL: Record<ProviderType, string> = {
   openrouter: 'https://openrouter.ai/api/v1',
   lmstudio: 'http://localhost:1234/v1',
   mistral: 'https://api.mistral.ai/v1',
+  gemini: 'https://generativelanguage.googleapis.com/v1beta/openai',
+  anthropic: 'https://api.anthropic.com/v1',
+  sambanova: 'https://api.sambanova.ai/v1',
   'openai-compatible': 'https://api.openai.com/v1'
+};
+
+/** Page de création de clé API (ou docs) de chaque provider connu. */
+export const PROVIDER_KEY_PAGE: Partial<Record<ProviderType, { url: string; label: string }>> = {
+  mistral: { url: 'https://console.mistral.ai/api-keys', label: 'Get API key' },
+  openrouter: { url: 'https://openrouter.ai/settings/keys', label: 'Get API key' },
+  openai: { url: 'https://platform.openai.com/api-keys', label: 'Get API key' },
+  gemini: { url: 'https://aistudio.google.com/apikey', label: 'Get API key' },
+  anthropic: { url: 'https://console.anthropic.com/settings/keys', label: 'Get API key' },
+  sambanova: { url: 'https://cloud.sambanova.ai/apis', label: 'Get API key' },
+  ollama: { url: 'https://ollama.com/download', label: 'Setup docs' },
+  lmstudio: { url: 'https://lmstudio.ai/docs/app', label: 'Setup docs' }
 };
 
 export type ModelRole = 'chat' | 'edit' | 'apply' | 'autocomplete' | 'embed' | 'rerank' | 'summarize';
@@ -73,11 +94,7 @@ export const MODEL_ROLES: ModelRole[] = [
   'summarize'
 ];
 
-export type ModelCapability = 'tool_use' | 'image_input';
-
-export const MODEL_CAPABILITIES: ModelCapability[] = ['tool_use', 'image_input'];
-
-/** Entrée de modèle centrée « modèle » (façon Continue). */
+/** Entrée de configuration centrée « modèle » (provider + clé portés par le modèle). */
 export interface ModelItem {
   name: string;
   provider: ProviderType;
@@ -85,9 +102,10 @@ export interface ModelItem {
   apiKey?: string;
   apiBase?: string;
   roles?: ModelRole[];
-  capabilities?: ModelCapability[];
   contextLength?: number;
   maxTokens?: number;
+  /** Température d'échantillonnage ; défaut : profil du modèle, sinon défaut de l'API. */
+  temperature?: number;
   enabled?: boolean;
 }
 
@@ -99,14 +117,19 @@ export interface McpServerConfig {
   env?: Record<string, string>;
   url?: string;
   headers?: Record<string, string>;
-  /** Tools de ce serveur désactivés individuellement. */
+  /** @deprecated Legacy — un tool listé ici équivaut à `toolPolicies[tool] = 'excluded'`. */
   disabledTools?: string[];
+  /** Politique par tool du serveur (défaut MCP : `ask`). */
+  toolPolicies?: Record<string, ToolPolicy>;
 }
 
-/** Override d'un serveur MCP intégré (activation + tools désactivés). */
+/** Override d'un serveur MCP intégré (activation + politiques par tool). */
 export interface BuiltinMcpOverride {
   enabled?: boolean;
+  /** @deprecated Legacy — un tool listé ici équivaut à `toolPolicies[tool] = 'excluded'`. */
   disabledTools?: string[];
+  /** Politique par tool du serveur (défaut MCP : `ask`). */
+  toolPolicies?: Record<string, ToolPolicy>;
 }
 
 /** Prompt enregistré, invocable via `/nom` dans le chat. */
@@ -122,6 +145,8 @@ export interface McpToolStatus {
   name: string;
   description: string;
   enabled: boolean;
+  /** Politique effective (défaut MCP : `ask`). */
+  policy: ToolPolicy;
 }
 
 /** Statut d'un serveur MCP (message `mcpStatus`). */
@@ -135,6 +160,12 @@ export interface McpServerStatus {
   description?: string;
 }
 
+/**
+ * Politique d'exécution d'un outil de l'agent (façon Continue) :
+ * auto = sans confirmation, ask = toujours demander, excluded = retiré du registre.
+ */
+export type ToolPolicy = 'auto' | 'ask' | 'excluded';
+
 export interface RuleItem {
   id: string;
   name: string;
@@ -144,11 +175,15 @@ export interface RuleItem {
 
 export interface OptimizationConfig {
   hitlMode?: 'strict' | 'moderate' | 'free';
+  /** Mode du chat par défaut : `agent` (boucle outillée, défaut) ou `chat` (texte seul). */
+  chatMode?: 'agent' | 'chat';
   agentMaxIterations?: number;
   tddMaxAttempts?: number;
   tddTestCommand?: string;
   terminalTimeout?: number;
   showThinking?: boolean;
+  /** Verbosité des réponses (défaut : `normal`). */
+  verbosity?: 'concise' | 'normal' | 'detailed';
 }
 
 export interface WorkflowStep {
@@ -195,6 +230,8 @@ export interface JarvisConfig {
   };
   mcpServers?: Record<string, McpServerConfig>;
   builtinMcp?: Record<string, BuiltinMcpOverride>;
+  /** Politique par outil de l'agent (nom → auto/ask/excluded). */
+  toolPolicies?: Record<string, ToolPolicy>;
   rules?: RuleItem[];
   workflows?: Workflow[];
   agents?: SpecializedAgent[];
@@ -225,8 +262,37 @@ export interface SettingsDefaults {
     command: string;
     defaultEnabled: boolean;
   }>;
+  /** Outils intégrés de l'agent — pour l'éditeur de politiques. */
+  agentTools?: Array<{ name: string; description: string }>;
   /** Outils personnalisés jarvis-tools/*.json (lecture seule dans l'UI). */
   customTools?: Array<{ name: string; description: string }>;
+}
+
+/** Demande d'approbation HITL affichée dans le chat (message `approvalRequest`). */
+export interface ApprovalRequest {
+  id: string;
+  actionType: string;
+  description: string;
+  detail: string;
+}
+
+/** Hunk d'un diff en attente de revue (miroir de services/diff.ts). */
+export interface DiffHunkView {
+  id: number;
+  beforeStart: number;
+  afterStart: number;
+  beforeLines: string[];
+  afterLines: string[];
+  contextBefore: string[];
+  contextAfter: string[];
+}
+
+/** Fichier modifié par l'IA en attente de revue (message `pendingChanges`). */
+export interface PendingFileChange {
+  path: string;
+  isNew: boolean;
+  revision: number;
+  hunks: DiffHunkView[];
 }
 
 export interface AnalyticsStats {

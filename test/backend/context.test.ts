@@ -135,4 +135,12 @@ describe('Mentions @file / @docs (spec Phase 4)', () => {
     expect(result.expanded).toBe('bonjour');
     expect(result.mentions).toHaveLength(0);
   });
+
+  it('supports quoted paths with spaces (@file:"…")', async () => {
+    const result = await expandMentions('Explique @file:"my folder/read me.md"', {
+      readFile: async p => `contenu de ${p}`
+    });
+    expect(result.expanded).toContain('contenu de my folder/read me.md');
+    expect(result.mentions).toEqual([{ kind: 'file', value: 'my folder/read me.md', ok: true }]);
+  });
 });

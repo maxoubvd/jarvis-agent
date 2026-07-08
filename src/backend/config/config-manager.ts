@@ -12,6 +12,9 @@ export type ProviderType =
   | 'openrouter'
   | 'lmstudio'
   | 'mistral'
+  | 'gemini'
+  | 'anthropic'
+  | 'sambanova'
   | 'openai-compatible';
 
 export const PROVIDER_TYPES: ProviderType[] = [
@@ -19,6 +22,9 @@ export const PROVIDER_TYPES: ProviderType[] = [
   'openai',
   'openrouter',
   'lmstudio',
+  'gemini',
+  'anthropic',
+  'sambanova',
   'mistral',
   'openai-compatible'
 ];
@@ -30,6 +36,10 @@ export const DEFAULT_BASE_URL: Record<ProviderType, string> = {
   openrouter: 'https://openrouter.ai/api/v1',
   lmstudio: 'http://localhost:1234/v1',
   mistral: 'https://api.mistral.ai/v1',
+  // Endpoints « OpenAI-compatible » officiels de chaque fournisseur.
+  gemini: 'https://generativelanguage.googleapis.com/v1beta/openai',
+  anthropic: 'https://api.anthropic.com/v1',
+  sambanova: 'https://api.sambanova.ai/v1',
   'openai-compatible': 'https://api.openai.com/v1'
 };
 
@@ -44,10 +54,6 @@ export const MODEL_ROLES: ModelRole[] = [
   'rerank',
   'summarize'
 ];
-
-export type ModelCapability = 'tool_use' | 'image_input';
-
-export const MODEL_CAPABILITIES: ModelCapability[] = ['tool_use', 'image_input'];
 
 /** Rôles attribués à un modèle migré depuis l'ancien schéma centré provider. */
 export const DEFAULT_MODEL_ROLES: ModelRole[] = ['chat', 'edit', 'apply'];
@@ -65,9 +71,10 @@ export interface ModelItem {
   /** Base URL personnalisée ; défaut : `DEFAULT_BASE_URL[provider]`. */
   apiBase?: string;
   roles?: ModelRole[];
-  capabilities?: ModelCapability[];
   contextLength?: number;
   maxTokens?: number;
+  /** Température d'échantillonnage ; défaut : profil du modèle, sinon défaut de l'API. */
+  temperature?: number;
   /** Défaut : true. */
   enabled?: boolean;
 }
@@ -95,14 +102,19 @@ export interface McpServerConfig {
   env?: Record<string, string>;
   url?: string;
   headers?: Record<string, string>;
-  /** Tools de ce serveur désactivés individuellement (nom du tool côté serveur). */
+  /** @deprecated Legacy — un tool listé ici équivaut à `toolPolicies[tool] = 'excluded'`. */
   disabledTools?: string[];
+  /** Politique par tool du serveur (défaut MCP : `ask`). */
+  toolPolicies?: Record<string, ToolPolicy>;
 }
 
-/** Override d'un serveur MCP intégré (activation + tools désactivés). */
+/** Override d'un serveur MCP intégré (activation + politiques par tool). */
 export interface BuiltinMcpOverride {
   enabled?: boolean;
+  /** @deprecated Legacy — un tool listé ici équivaut à `toolPolicies[tool] = 'excluded'`. */
   disabledTools?: string[];
+  /** Politique par tool du serveur (défaut MCP : `ask`). */
+  toolPolicies?: Record<string, ToolPolicy>;
 }
 
 /** Prompt enregistré, invocable via `/nom` dans le chat (section Prompts). */
@@ -122,12 +134,16 @@ export interface RuleItem {
 
 export interface OptimizationConfig {
   hitlMode?: 'strict' | 'moderate' | 'free';
+  /** Mode du chat par défaut : `agent` (boucle outillée, défaut) ou `chat` (texte seul). */
+  chatMode?: 'agent' | 'chat';
   agentMaxIterations?: number;
   tddMaxAttempts?: number;
   tddTestCommand?: string;
   terminalTimeout?: number;
   /** Affichage des blocs <thinking> dans le chat (défaut : true). */
   showThinking?: boolean;
+  /** Verbosité des réponses (défaut : `normal` = aucune consigne ajoutée). */
+  verbosity?: 'concise' | 'normal' | 'detailed';
 }
 
 /** Site de documentation externe mis en cache et indexé (section Docs). */
@@ -137,6 +153,15 @@ export interface DocSite {
   startUrl: string;
   enabled: boolean;
 }
+
+/**
+ * Politique d'exécution d'un outil de l'agent (façon Continue) :
+ * - `auto` : exécuté sans confirmation, quel que soit le mode HITL ;
+ * - `ask` : confirmation demandée à chaque fois, même en mode free ;
+ * - `excluded` : retiré du registre (invisible pour le modèle).
+ * Absent = comportement du mode HITL courant.
+ */
+export type ToolPolicy = 'auto' | 'ask' | 'excluded';
 
 /** Profil de workspace : instructions type CLAUDE.md injectées dans le prompt. */
 export interface WorkspaceProfile {
@@ -157,6 +182,8 @@ export interface JarvisConfig {
   mcpServers?: Record<string, McpServerConfig>;
   /** Overrides des serveurs MCP de base (définis dans le code). */
   builtinMcp?: Record<string, BuiltinMcpOverride>;
+  /** Politique par outil de l'agent (nom → auto/ask/excluded). */
+  toolPolicies?: Record<string, ToolPolicy>;
   rules?: RuleItem[];
   workflows?: Workflow[];
   agents?: SpecializedAgent[];
@@ -222,17 +249,14 @@ function normalizeModelItem(raw: unknown): ModelItem | null {
     const roles = raw.roles.filter((r): r is ModelRole => MODEL_ROLES.includes(r as ModelRole));
     if (roles.length > 0) item.roles = roles;
   }
-  if (Array.isArray(raw.capabilities)) {
-    const caps = raw.capabilities.filter((c): c is ModelCapability =>
-      MODEL_CAPABILITIES.includes(c as ModelCapability)
-    );
-    if (caps.length > 0) item.capabilities = caps;
-  }
   if (typeof raw.contextLength === 'number' && raw.contextLength > 0) {
     item.contextLength = Math.floor(raw.contextLength);
   }
   if (typeof raw.maxTokens === 'number' && raw.maxTokens > 0) {
     item.maxTokens = Math.floor(raw.maxTokens);
+  }
+  if (typeof raw.temperature === 'number' && raw.temperature >= 0 && raw.temperature <= 2) {
+    item.temperature = raw.temperature;
   }
   if (raw.enabled === false) item.enabled = false;
   return item;
@@ -303,6 +327,11 @@ export function normalizeConfig(input: unknown): JarvisConfig {
     mcpServers: isPlainObject(cfg.mcpServers) ? cfg.mcpServers : undefined,
     builtinMcp: isPlainObject(cfg.builtinMcp)
       ? (cfg.builtinMcp as Record<string, BuiltinMcpOverride>)
+      : undefined,
+    toolPolicies: isPlainObject(cfg.toolPolicies)
+      ? (Object.fromEntries(
+          Object.entries(cfg.toolPolicies).filter(([, v]) => v === 'auto' || v === 'ask' || v === 'excluded')
+        ) as Record<string, ToolPolicy>)
       : undefined,
     rules: Array.isArray(cfg.rules) ? cfg.rules : undefined,
     workflows: Array.isArray(cfg.workflows) ? cfg.workflows : undefined,

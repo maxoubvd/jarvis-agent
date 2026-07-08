@@ -25,7 +25,6 @@ const chatModel: ModelItem = {
   model: 'openai/gpt-oss-120b:free',
   apiKey: 'sk-or-x',
   roles: ['chat', 'edit', 'apply'],
-  capabilities: ['tool_use'],
   contextLength: 32768,
   maxTokens: 2048
 };
@@ -67,15 +66,26 @@ describe('ModelConfigManager (model-centric schema)', () => {
     expect(mgr.getModelForRole('embed')).toBeNull();
   });
 
-  it('returns the model contextLength or null (no hardcoded fallback)', () => {
+  it('returns the contextLength: config > family default > null', () => {
     const mgr = new ModelConfigManager(fakeConfigManager([chatModel]));
     expect(mgr.getContextLength('GPT-OSS 120B')).toBe(32768);
     expect(mgr.getContextLength('unknown')).toBeNull();
     expect(mgr.getContextLength(null)).toBeNull();
+    // Famille inconnue sans contextLength en config → null.
     const noCtx = new ModelConfigManager(
       fakeConfigManager([{ name: 'x', provider: 'ollama', model: 'x' }])
     );
     expect(noCtx.getContextLength('x')).toBeNull();
+    // Famille connue sans contextLength en config → défaut du profil.
+    const family = new ModelConfigManager(
+      fakeConfigManager([
+        { name: 'Codestral', provider: 'mistral', model: 'codestral-latest' },
+        { name: 'Codestral 256k', provider: 'mistral', model: 'codestral-2501', contextLength: 256_000 }
+      ])
+    );
+    expect(family.getContextLength('Codestral')).toBe(32_768);
+    // La config gagne toujours sur le défaut de famille.
+    expect(family.getContextLength('Codestral 256k')).toBe(256_000);
   });
 
   it('classifies cloud vs local by model name or provider type', () => {

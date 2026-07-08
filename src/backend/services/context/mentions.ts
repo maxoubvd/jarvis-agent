@@ -13,7 +13,8 @@ export interface ExpandedPrompt {
   mentions: Array<{ kind: 'file' | 'docs'; value: string; ok: boolean }>;
 }
 
-const FILE_MENTION = /@file:(\S+)/g;
+// Chemin avec espaces autorisé via la forme citée : @file:"my folder/file.md"
+const FILE_MENTION = /@file:(?:"([^"]+)"|(\S+))/g;
 const DOCS_MENTION = /@docs:(\S+)/g;
 
 /**
@@ -25,7 +26,7 @@ export async function expandMentions(text: string, deps: MentionDeps): Promise<E
   const contextParts: string[] = [];
 
   for (const match of [...text.matchAll(FILE_MENTION)]) {
-    const filePath = match[1];
+    const filePath = match[1] ?? match[2];
     try {
       const content = await deps.readFile(filePath);
       contextParts.push(`Contenu de ${filePath}:\n\`\`\`\n${content}\n\`\`\``);
@@ -56,7 +57,7 @@ export async function expandMentions(text: string, deps: MentionDeps): Promise<E
     return { expanded: text, mentions };
   }
 
-  const cleaned = text.replace(FILE_MENTION, '$1').replace(DOCS_MENTION, '$1');
+  const cleaned = text.replace(FILE_MENTION, '$1$2').replace(DOCS_MENTION, '$1');
   return {
     expanded: `${cleaned}\n\n--- CONTEXTE ---\n${contextParts.join('\n\n')}`,
     mentions

@@ -14,11 +14,16 @@
     onChange(next);
   }
 
+  /** Cartes dépliées (nouvel agent = ouvert en édition). */
+  let expanded = $state<Record<string, boolean>>({});
+
   function addAgent() {
+    const id = crypto.randomUUID();
+    expanded[id] = true;
     update([
       ...items,
       {
-        id: crypto.randomUUID(),
+        id,
         mention: '@My-Agent',
         label: 'My Agent',
         description: '',
@@ -37,7 +42,8 @@
   }
 
   function resetToDefaults() {
-    update(structuredClone(defaults));
+    // snapshot d'abord : structuredClone ne sait pas cloner un proxy $state.
+    update(structuredClone($state.snapshot(defaults)) as SpecializedAgent[]);
   }
 
   function keywordsText(agent: SpecializedAgent): string {
@@ -70,19 +76,15 @@
   {#each items as agent, index (agent.id)}
     <div class="j-card">
       <div class="j-row">
-        <input
-          class="j-input"
-          style="width: 10rem"
-          placeholder="@Mention"
-          value={agent.mention}
-          oninput={e => patch(index, { mention: (e.target as HTMLInputElement).value })}
-        />
-        <input
-          class="j-input j-grow"
-          placeholder="Label"
-          value={agent.label}
-          oninput={e => patch(index, { label: (e.target as HTMLInputElement).value })}
-        />
+        <button
+          class="j-expand"
+          title={expanded[agent.id] ? 'Collapse' : 'Edit agent'}
+          onclick={() => (expanded[agent.id] = !expanded[agent.id])}
+        >
+          <Icon name={expanded[agent.id] ? 'chevron-up' : 'chevron-down'} size={13} />
+        </button>
+        <span class="j-title">{agent.mention.trim() || '(unnamed agent)'}</span>
+        <span class="j-sub j-grow">{agent.label}</span>
         <button class="j-btn j-btn-danger j-btn-icon" title="Remove" onclick={() => removeAgent(index)}>
           <Icon name="trash" size={13} />
         </button>
@@ -90,31 +92,53 @@
       {#if agent.mention && !agent.mention.startsWith('@')}
         <div class="warn">The mention should start with “@”.</div>
       {/if}
-      <label class="j-field">
-        <span>Description</span>
-        <input
-          class="j-input"
-          value={agent.description}
-          oninput={e => patch(index, { description: (e.target as HTMLInputElement).value })}
-        />
-      </label>
-      <label class="j-field">
-        <span>System prompt</span>
-        <textarea
-          class="j-textarea"
-          rows="4"
-          value={agent.systemPrompt}
-          oninput={e => patch(index, { systemPrompt: (e.target as HTMLTextAreaElement).value })}
-        ></textarea>
-      </label>
-      <label class="j-field">
-        <span>Keywords (comma-separated, used for auto-suggestion)</span>
-        <input
-          class="j-input"
-          value={keywordsText(agent)}
-          oninput={e => patch(index, { keywords: parseKeywords((e.target as HTMLInputElement).value) })}
-        />
-      </label>
+      {#if expanded[agent.id]}
+        <div class="j-row">
+          <input
+            class="j-input"
+            style="width: 10rem"
+            placeholder="@Mention"
+            value={agent.mention}
+            oninput={e => patch(index, { mention: (e.target as HTMLInputElement).value })}
+          />
+          <input
+            class="j-input j-grow"
+            placeholder="Label"
+            value={agent.label}
+            oninput={e => patch(index, { label: (e.target as HTMLInputElement).value })}
+          />
+        </div>
+        <label class="j-field">
+          <span>Description</span>
+          <input
+            class="j-input"
+            value={agent.description}
+            oninput={e => patch(index, { description: (e.target as HTMLInputElement).value })}
+          />
+        </label>
+        <label class="j-field">
+          <span>System prompt</span>
+          <textarea
+            class="j-textarea"
+            rows="4"
+            value={agent.systemPrompt}
+            oninput={e => patch(index, { systemPrompt: (e.target as HTMLTextAreaElement).value })}
+          ></textarea>
+        </label>
+        <label class="j-field">
+          <span>Keywords (comma-separated, used for auto-suggestion)</span>
+          <input
+            class="j-input"
+            value={keywordsText(agent)}
+            oninput={e => patch(index, { keywords: parseKeywords((e.target as HTMLInputElement).value) })}
+          />
+        </label>
+        <div class="j-row j-end">
+          <button class="j-btn j-btn-primary" onclick={() => (expanded[agent.id] = false)}>
+            <Icon name="check" size={13} /> Validate
+          </button>
+        </div>
+      {/if}
     </div>
   {/each}
 </div>

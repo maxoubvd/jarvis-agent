@@ -6,6 +6,7 @@ export interface LMStudioOptions {
   model?: string;
   apiKey?: string;
   maxTokens?: number;
+  temperature?: number;
 }
 
 export class LMStudioProvider implements IModelProvider {
@@ -16,7 +17,8 @@ export class LMStudioProvider implements IModelProvider {
     this.config = {
       baseUrl: (options.baseUrl ?? 'http://localhost:1234/v1').replace(/\/$/, ''),
       model: options.model ?? 'local-model',
-      maxTokens: options.maxTokens
+      maxTokens: options.maxTokens,
+      temperature: options.temperature
     };
   }
 

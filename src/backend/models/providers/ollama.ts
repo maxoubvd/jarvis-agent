@@ -6,6 +6,8 @@ export interface OllamaOptions {
   apiKey?: string;
   /** Limite de tokens de complétion (`options.num_predict`), omise si non configurée. */
   maxTokens?: number;
+  /** Température d'échantillonnage (`options.temperature`), omise si non configurée. */
+  temperature?: number;
 }
 
 export class OllamaProvider implements IModelProvider {
@@ -13,15 +15,20 @@ export class OllamaProvider implements IModelProvider {
   private baseUrl: string;
   private model: string;
   private maxTokens?: number;
+  private temperature?: number;
 
   constructor(options: OllamaOptions = {}) {
     this.baseUrl = (options.baseUrl ?? 'http://localhost:11434').replace(/\/$/, '');
     this.model = options.model ?? 'qwen2.5-coder:7b';
     this.maxTokens = options.maxTokens;
+    this.temperature = options.temperature;
   }
 
   private completionOptions(): Record<string, unknown> {
-    return this.maxTokens ? { options: { num_predict: this.maxTokens } } : {};
+    const options: Record<string, unknown> = {};
+    if (this.maxTokens) options.num_predict = this.maxTokens;
+    if (this.temperature !== undefined) options.temperature = this.temperature;
+    return Object.keys(options).length > 0 ? { options } : {};
   }
 
   public async sendPrompt(messages: ChatMessage[]): Promise<string> {

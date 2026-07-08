@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { JarvisExtension } from './backend/core/extension.js';
+import { backgroundProcesses } from './backend/services/background-processes.js';
 
 export function activate(context: vscode.ExtensionContext) {
   console.log('Jarvis: activation de l\'extension');
@@ -22,4 +23,6 @@ export function activate(context: vscode.ExtensionContext) {
 
 export function deactivate() {
   console.log('Jarvis: désactivation de l\'extension');
+  // Ne laisse aucun processus lancé via run_in_background survivre à l'extension.
+  backgroundProcesses.dispose();
 }

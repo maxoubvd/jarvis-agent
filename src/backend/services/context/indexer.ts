@@ -61,6 +61,11 @@ export class WorkspaceIndexer {
     return this.index.search(query, topK);
   }
 
+  /** Recherche par nom de fichier pour l'autocomplétion @ */
+  public searchFiles(query: string, maxResults = 50): string[] {
+    return this.index.getFiles(query, maxResults);
+  }
+
   /** Recherche restreinte à la documentation Markdown (mentions @docs). */
   public searchDocs(query: string, topK = 5): RagSearchResult[] {
     return this.index.search(query, topK * 3).filter(r => r.path.endsWith('.md')).slice(0, topK);

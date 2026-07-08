@@ -19,11 +19,16 @@
     onReindex = () => {}
   }: Props = $props();
 
+  /** Cartes dépliées (nouveau workspace = ouvert en édition). */
+  let expanded = $state<Record<string, boolean>>({});
+
   function addWorkspace() {
+    const id = crypto.randomUUID();
+    expanded[id] = true;
     onChange([
       ...items,
       {
-        id: crypto.randomUUID(),
+        id,
         name: 'My workspace',
         folder: currentFolder,
         instructions: '',
@@ -59,13 +64,15 @@
   {#each items as workspace, index (workspace.id)}
     <div class="j-card" class:disabled={!workspace.enabled}>
       <div class="j-row">
-        <input
-          class="j-input j-grow
-          "
-          placeholder="Name"
-          value={workspace.name}
-          oninput={e => patch(index, { name: (e.target as HTMLInputElement).value })}
-        />
+        <button
+          class="j-expand"
+          title={expanded[workspace.id] ? 'Collapse' : 'Edit workspace'}
+          onclick={() => (expanded[workspace.id] = !expanded[workspace.id])}
+        >
+          <Icon name={expanded[workspace.id] ? 'chevron-up' : 'chevron-down'} size={13} />
+        </button>
+        <span class="j-title">{workspace.name.trim() || '(unnamed workspace)'}</span>
+        <span class="j-sub j-grow">{workspace.folder}</span>
         <Toggle
           checked={workspace.enabled}
           label="Enabled"
@@ -75,6 +82,17 @@
           <Icon name="trash" size={13} />
         </button>
       </div>
+
+      {#if expanded[workspace.id]}
+      <label class="j-field">
+        <span>Name</span>
+        <input
+          class="j-input"
+          placeholder="Name"
+          value={workspace.name}
+          oninput={e => patch(index, { name: (e.target as HTMLInputElement).value })}
+        />
+      </label>
 
       <label class="j-field">
         <span>Folder</span>
@@ -91,11 +109,18 @@
         <textarea
           class="j-textarea"
           rows="6"
-          placeholder="Markdown instructions injected into the system prompt — like a CLAUDE.md (stack, conventions, commands, constraints…)"
+          placeholder="Markdown instructions injected into the system prompt — a project instructions file (stack, conventions, commands, constraints…)"
           value={workspace.instructions}
           oninput={e => patch(index, { instructions: (e.target as HTMLTextAreaElement).value })}
         ></textarea>
       </label>
+
+      <div class="j-row j-end">
+        <button class="j-btn j-btn-primary" onclick={() => (expanded[workspace.id] = false)}>
+          <Icon name="check" size={13} /> Validate
+        </button>
+      </div>
+      {/if}
 
       <div class="indexation">
         <span class="indexation-title">Indexation</span>

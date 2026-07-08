@@ -17,6 +17,27 @@ export function setSandbox(manager: SandboxManager | null): void {
   sandbox = manager;
 }
 
+/** Notifié après chaque écriture (revue de diffs). `before` = null si le fichier n'existait pas. */
+export type FileChangeListener = (change: { path: string; before: string | null; after: string }) => void;
+
+let changeListener: FileChangeListener | null = null;
+
+export function setFileChangeListener(listener: FileChangeListener | null): void {
+  changeListener = listener;
+}
+
+function notifyChange(workspaceFolder: string, resolvedPath: string, before: string | null, after: string): void {
+  try {
+    changeListener?.({
+      path: path.relative(workspaceFolder, resolvedPath).replace(/\\/g, '/'),
+      before,
+      after
+    });
+  } catch {
+    // le suivi des changements ne doit jamais faire échouer une écriture
+  }
+}
+
 function getWorkspaceFolder(): string {
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!workspaceFolder) {
@@ -69,9 +90,17 @@ export async function writeFileTool(filePath: string, content: string): Promise<
   const resolvedPath = resolveWorkspacePath(workspaceFolder, filePath);
   assertCanAccess(resolvedPath);
 
+  let before: string | null = null;
+  try {
+    before = await fs.readFile(resolvedPath, 'utf-8');
+  } catch {
+    // fichier inexistant — création
+  }
+
   const dirPath = path.dirname(resolvedPath);
   await fs.mkdir(dirPath, { recursive: true });
   await fs.writeFile(resolvedPath, content, 'utf-8');
+  notifyChange(workspaceFolder, resolvedPath, before, content);
 }
 
 /**
@@ -101,7 +130,9 @@ export async function editFileTool(
   const newLines = newText.split('\n');
   lines.splice(start - 1, end - start + 1, ...newLines);
 
-  await fs.writeFile(resolvedPath, lines.join('\n'), 'utf-8');
+  const updated = lines.join('\n');
+  await fs.writeFile(resolvedPath, updated, 'utf-8');
+  notifyChange(workspaceFolder, resolvedPath, original, updated);
 }
 
 export async function listDirectoryTool(dirPath: string, recursive = false): Promise<FileItem[]> {

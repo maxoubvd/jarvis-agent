@@ -6,6 +6,8 @@ export interface OpenAICompatibleConfig {
   apiKey?: string;
   /** Limite de tokens de complétion (`max_tokens`), omise si non configurée. */
   maxTokens?: number;
+  /** Température d'échantillonnage, omise si non configurée (défaut de l'API). */
+  temperature?: number;
   extraHeaders?: Record<string, string>;
 }
 
@@ -24,6 +26,7 @@ export async function openaiCompatibleSend(
       model: config.model,
       messages: messages.map(m => ({ role: m.role, content: m.content })),
       ...(config.maxTokens ? { max_tokens: config.maxTokens } : {}),
+      ...(config.temperature !== undefined ? { temperature: config.temperature } : {}),
       stream: false
     })
   });
@@ -53,6 +56,7 @@ export async function openaiCompatibleStream(
         model: config.model,
         messages: messages.map(m => ({ role: m.role, content: m.content })),
         ...(config.maxTokens ? { max_tokens: config.maxTokens } : {}),
+        ...(config.temperature !== undefined ? { temperature: config.temperature } : {}),
         stream: true
       })
     });

@@ -14,7 +14,11 @@
     onChange(next);
   }
 
+  /** Cartes dépliées, indexées par position (l'id est éditable). */
+  let expanded = $state<Record<number, boolean>>({});
+
   function addWorkflow() {
+    expanded[items.length] = true;
     update([
       ...items,
       {
@@ -27,6 +31,8 @@
   }
 
   function removeWorkflow(index: number) {
+    // Les index changent après suppression — on replie tout pour rester cohérent.
+    expanded = {};
     update(items.filter((_, i) => i !== index));
   }
 
@@ -61,7 +67,8 @@
   }
 
   function resetToDefaults() {
-    update(structuredClone(defaults));
+    // snapshot d'abord : structuredClone ne sait pas cloner un proxy $state.
+    update(structuredClone($state.snapshot(defaults)) as Workflow[]);
   }
 
   function isDuplicateId(id: string, index: number): boolean {
@@ -91,6 +98,24 @@
   {#each items as workflow, wIndex (wIndex)}
     <div class="j-card">
       <div class="j-row">
+        <button
+          class="j-expand"
+          title={expanded[wIndex] ? 'Collapse' : 'Edit workflow'}
+          onclick={() => (expanded[wIndex] = !expanded[wIndex])}
+        >
+          <Icon name={expanded[wIndex] ? 'chevron-up' : 'chevron-down'} size={13} />
+        </button>
+        <span class="j-title">{workflow.id.trim() || '(unnamed workflow)'}</span>
+        <span class="j-sub j-grow">{workflow.label} · {workflow.steps.length} step{workflow.steps.length === 1 ? '' : 's'}</span>
+        <button class="j-btn j-btn-danger j-btn-icon" title="Remove" onclick={() => removeWorkflow(wIndex)}>
+          <Icon name="trash" size={13} />
+        </button>
+      </div>
+      {#if isDuplicateId(workflow.id, wIndex)}
+        <div class="warn">Duplicate workflow id.</div>
+      {/if}
+      {#if expanded[wIndex]}
+      <div class="j-row">
         <input
           class="j-input"
           style="width: 9rem"
@@ -104,13 +129,7 @@
           value={workflow.label}
           oninput={e => patch(wIndex, { label: (e.target as HTMLInputElement).value })}
         />
-        <button class="j-btn j-btn-danger j-btn-icon" title="Remove" onclick={() => removeWorkflow(wIndex)}>
-          <Icon name="trash" size={13} />
-        </button>
       </div>
-      {#if isDuplicateId(workflow.id, wIndex)}
-        <div class="warn">Duplicate workflow id.</div>
-      {/if}
       <label class="j-field">
         <span>Description</span>
         <input
@@ -170,6 +189,13 @@
           </div>
         {/each}
       </div>
+
+      <div class="j-row j-end">
+        <button class="j-btn j-btn-primary" onclick={() => (expanded[wIndex] = false)}>
+          <Icon name="check" size={13} /> Validate
+        </button>
+      </div>
+      {/if}
     </div>
   {/each}
 </div>

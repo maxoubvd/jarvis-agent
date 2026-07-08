@@ -5,7 +5,9 @@
   import CheckpointPanel from './components/CheckpointPanel.svelte';
   import AnalyticsPanel from './components/AnalyticsPanel.svelte';
   import SettingsPanel from './components/SettingsPanel.svelte';
+  import DiffReviewPanel from './components/DiffReviewPanel.svelte';
   import Icon from './components/Icon.svelte';
+
   import { fly, fade } from 'svelte/transition';
   import { APP_NAME } from './shared/constants';
   import type {
@@ -16,7 +18,9 @@
     JarvisConfig,
     SettingsDefaults,
     DocsSiteStatus,
-    McpServerStatus
+    McpServerStatus,
+    ApprovalRequest,
+    PendingFileChange
   } from './shared/types';
   import type { CommandItem } from './shared/commands';
   import vscode from './lib/vscode-api';
@@ -57,9 +61,13 @@
   let activeWorkspaceId = $state<string | null>(null);
   let indexStatus = $state<{ indexing: boolean; fileCount: number } | null>(null);
   let needsSetup = $state(false);
-  let saveStatus = $state<{ ok: boolean; error?: string } | null>(null);
+  let saveStatus = $state<{ ok: boolean; error?: string; pending?: boolean } | null>(null);
+  let saveStatusTimer: ReturnType<typeof setTimeout> | undefined;
   let extraCommands = $state<CommandItem[]>([]);
   let mcpServers = $state<McpServerStatus[]>([]);
+  let fileSuggestions = $state<string[]>([]);
+  let approvalRequest = $state<ApprovalRequest | null>(null);
+  let pendingChanges = $state<PendingFileChange[]>([]);
 
   function pushMessage(role: Message['role'], content: string, kind?: Message['kind'], badges?: Badge[]) {
     messages = [
@@ -80,6 +88,18 @@
     }
   }
 
+  function appendToLastThinking(text: string) {
+    const last = messages[messages.length - 1];
+    if (last && last.role === 'assistant' && last.kind === 'thinking') {
+      messages = [
+        ...messages.slice(0, -1),
+        { ...last, content: last.content + text }
+      ];
+    } else {
+      pushMessage('assistant', text, 'thinking', [{ icon: '', label: 'Thinking', variant: 'info' }]);
+    }
+  }
+
   function onWindowMessage(event: MessageEvent) {
     const msg = event.data as {
       type: string;
@@ -91,6 +111,7 @@
       indexing?: boolean;
       fileCount?: number;
       text?: string;
+      chunk?: string;
       error?: string;
       data?: string;
       tokensUsed?: number;
@@ -115,6 +136,12 @@
       workflows?: Array<{ id: string; label: string }>;
       prompts?: Array<{ name: string; description: string }>;
       servers?: McpServerStatus[];
+      files?: string[];
+      id?: string;
+      actionType?: string;
+      description?: string;
+      detail?: string;
+      changes?: PendingFileChange[];
     };
 
     switch (msg.type) {
@@ -135,6 +162,11 @@
         break;
       case 'settingsSaved':
         saveStatus = { ok: msg.ok ?? false, error: msg.error };
+        // La confirmation s'efface seule ; une erreur reste affichée.
+        clearTimeout(saveStatusTimer);
+        if (msg.ok) {
+          saveStatusTimer = setTimeout(() => (saveStatus = null), 4000);
+        }
         break;
       case 'capabilities': {
         const agentItems: CommandItem[] = (msg.agents ?? []).map(a => ({
@@ -166,6 +198,20 @@
       case 'mcpStatus':
         mcpServers = msg.servers ?? [];
         break;
+      case 'fileSuggestions':
+        fileSuggestions = msg.files ?? [];
+        break;
+      case 'approvalRequest':
+        approvalRequest = {
+          id: msg.id ?? '',
+          actionType: msg.actionType ?? '',
+          description: msg.description ?? '',
+          detail: msg.detail ?? ''
+        };
+        break;
+      case 'pendingChanges':
+        pendingChanges = msg.changes ?? [];
+        break;
       case 'docsStatus':
         // Fusion par id : une mise à jour partielle ne doit pas effacer les autres sites.
         for (const site of msg.sites ?? []) {
@@ -182,6 +228,17 @@
         } else {
           if (msg.tokensUsed !== undefined) tokensUsed = msg.tokensUsed;
           if (msg.tokensLimit !== undefined) tokensLimit = msg.tokensLimit;
+        }
+        break;
+      case 'sessionStarted':
+        messages = [];
+        isSending = false;
+        break;
+      case 'sessionResumed':
+        messages = [];
+        isSending = false;
+        if (msg.title) {
+          pushMessage('assistant', `*(Contexte restauré : ${msg.title})*`);
         }
         break;
       case 'chatStart':
@@ -210,10 +267,16 @@
           ]);
         }
         break;
+      case 'agentThinkingChunk':
+        if (msg.chunk) appendToLastThinking(msg.chunk);
+        break;
+      case 'agentFinalChunk':
+        if (msg.chunk) appendToLastAssistant(msg.chunk);
+        break;
       case 'agentTool':
         pushMessage(
           'assistant',
-          `${msg.tool}(${JSON.stringify(msg.args ?? {})})`,
+          '',
           'tool',
           [{ icon: '', label: `Tool: ${msg.tool}`, variant: 'info' }]
         );
@@ -241,6 +304,15 @@
       case 'agentFinal':
         if (msg.text) {
           pushMessage('assistant', msg.text, 'text', msg.badges);
+        } else if (msg.badges) {
+          const lastIdx = messages.length - 1;
+          if (lastIdx >= 0 && messages[lastIdx].role === 'assistant') {
+            const m = messages[lastIdx];
+            messages = [
+              ...messages.slice(0, -1),
+              { ...m, badges: [...(m.badges || []), ...msg.badges] }
+            ];
+          }
         }
         isSending = false;
         break;
@@ -260,11 +332,20 @@
     }
   }
 
-  function handleSend(text: string) {
-    if (!text.trim() || isSending) return;
+  function handleSend(rawText: string) {
+    if (!rawText.trim() || isSending) return;
+    
+    let mode = 'Automatique';
+    let text = rawText;
+    const separatorIndex = rawText.indexOf('|');
+    if (separatorIndex !== -1) {
+      mode = rawText.slice(0, separatorIndex);
+      text = rawText.slice(separatorIndex + 1);
+    }
+    
     pushMessage('user', text.trim());
     isSending = true;
-    vscode?.postMessage({ type: 'chatMessage', text: text.trim() });
+    vscode?.postMessage({ type: 'chatMessage', text: text.trim(), mode });
   }
 
   function handleTabChange(tab: string) {
@@ -284,8 +365,15 @@
   }
 
   function handleSaveSettings(config: JarvisConfig) {
-    saveStatus = null;
-    vscode?.postMessage({ type: 'updateSettings', scope: 'global', config });
+    clearTimeout(saveStatusTimer);
+    saveStatus = { ok: true, pending: true };
+    try {
+      vscode?.postMessage({ type: 'updateSettings', scope: 'global', config });
+    } catch (err) {
+      // postMessage clone la config (structured clone) : une valeur non
+      // sérialisable ne doit jamais faire échouer la sauvegarde en silence.
+      saveStatus = { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
   }
 
   function handleIndexDocs(id: string) {
@@ -303,6 +391,28 @@
 
   function handleReindex() {
     vscode?.postMessage({ type: 'indexWorkspace' });
+  }
+
+  function handleQueryFiles(query: string) {
+    vscode?.postMessage({ type: 'queryFiles', query });
+  }
+
+  function handleApprovalRespond(decision: 'allow' | 'allow-session' | 'deny', feedback?: string) {
+    const id = approvalRequest?.id;
+    approvalRequest = null;
+    if (id) vscode?.postMessage({ type: 'approvalResponse', id, decision, feedback });
+  }
+
+  function handleResolveHunk(path: string, hunkId: number, revision: number, action: 'accept' | 'reject') {
+    vscode?.postMessage({ type: 'resolveHunk', path, hunkId, revision, action });
+  }
+
+  function handleResolveFile(path: string, action: 'accept' | 'reject') {
+    vscode?.postMessage({ type: 'resolveFile', path, action });
+  }
+
+  function handleResolveAll(action: 'accept' | 'reject') {
+    vscode?.postMessage({ type: 'resolveAll', action });
   }
 
   function openSettings() {
@@ -331,6 +441,8 @@
     vscode?.postMessage({ type: 'exportAnalytics' });
   }
 
+
+
   function handleWindowKeydown(event: KeyboardEvent) {
     if (event.key === 'Escape' && drawerOpen) {
       drawerOpen = false;
@@ -354,15 +466,26 @@
         </button>
       {/if}
       <h1>{APP_NAME}</h1>
+      <div class="header-actions" style="display: flex; gap: 4px; margin-left: 8px;">
+        <button
+          class="menu-btn"
+          title="New Conversation (/new)"
+          onclick={() => handleSend('/new')}
+          disabled={isSending}
+        >
+          <Icon name="add" />
+        </button>
+        <button
+          class="menu-btn"
+          title="Past Conversations (/resume)"
+          onclick={() => handleSend('/resume')}
+          disabled={isSending}
+        >
+          <Icon name="history" />
+        </button>
+      </div>
     </div>
     <div class="header-right">
-      {#if availableModels.length > 0}
-        <select class="model-select" value={currentModel} onchange={handleModelChange}>
-          {#each availableModels as model (model)}
-            <option value={model}>{model}</option>
-          {/each}
-        </select>
-      {/if}
       <span
         class="status-dot"
         class:success={!needsSetup && connectionStatus.startsWith('Connected')}
@@ -377,21 +500,37 @@
     {/if}
     <main class="main-content">
       {#if activeTab === 'chat'}
+
         {#if needsSetup}
           <div class="setup-banner">
             <span>No model configured yet.</span>
             <button onclick={openSettings}>Open Settings</button>
           </div>
         {/if}
+        <DiffReviewPanel
+          files={pendingChanges}
+          onResolveHunk={handleResolveHunk}
+          onResolveFile={handleResolveFile}
+          onResolveAll={handleResolveAll}
+        />
         <ChatPanel
           {messages}
           {isSending}
           {showThinking}
           {extraCommands}
+          {fileSuggestions}
           {workspaces}
           {activeWorkspaceId}
+          {approvalRequest}
+          {availableModels}
+          {currentModel}
           onSend={handleSend}
+          onQueryFiles={handleQueryFiles}
           onWorkspaceChange={handleWorkspaceChange}
+          onApprovalRespond={handleApprovalRespond}
+          onModelChange={handleModelChange}
+          onNewChat={() => handleSend('/new')}
+          onResumeChat={() => vscode?.postMessage({ type: 'chatMessage', text: '/resume', mode: 'Automatique' })}
         />
         <TokenGauge
           used={tokensUsed}
@@ -506,17 +645,6 @@
     display: flex;
     align-items: center;
     gap: var(--jarvis-space-2);
-    min-width: 0;
-  }
-
-  .model-select {
-    padding: 4px 8px;
-    background: var(--vscode-dropdown-background, var(--vscode-input-background));
-    color: var(--vscode-dropdown-foreground, var(--vscode-input-foreground));
-    border: 1px solid var(--vscode-dropdown-border, var(--vscode-input-border));
-    border-radius: var(--jarvis-radius-sm);
-    font-size: var(--jarvis-text-sm);
-    max-width: 12rem;
     min-width: 0;
   }
 

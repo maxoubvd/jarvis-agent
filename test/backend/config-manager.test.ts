@@ -105,7 +105,6 @@ describe('normalizeModelsSection (migration)', () => {
           model: 'openai/gpt-oss-120b:free',
           apiKey: 'k',
           roles: ['chat', 'autocomplete'],
-          capabilities: ['tool_use'],
           contextLength: 32768,
           maxTokens: 2048
         }
@@ -115,22 +114,20 @@ describe('normalizeModelsSection (migration)', () => {
     const second = normalizeModelsSection(first);
     expect(second).toEqual(first);
     expect(second.items[0].roles).toEqual(['chat', 'autocomplete']);
-    expect(second.items[0].capabilities).toEqual(['tool_use']);
     expect(second.items[0].maxTokens).toBe(2048);
   });
 
-  it('drops malformed items and unknown roles/capabilities/providers', () => {
+  it('drops malformed items and unknown roles/providers', () => {
     const models = normalizeModelsSection({
       items: [
         { name: '', provider: 'ollama', model: 'x' },
-        { name: 'ok', provider: 'not-a-provider', roles: ['chat', 'pilot'], capabilities: ['fly'] },
+        { name: 'ok', provider: 'not-a-provider', roles: ['chat', 'pilot'] },
         'garbage'
       ]
     });
     expect(models.items).toHaveLength(1);
     expect(models.items[0]).toMatchObject({ name: 'ok', provider: 'openai-compatible', model: 'ok' });
     expect(models.items[0].roles).toEqual(['chat']);
-    expect(models.items[0].capabilities).toBeUndefined();
   });
 
   it('disambiguates duplicate model names across legacy providers', () => {

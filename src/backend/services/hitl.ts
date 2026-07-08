@@ -6,7 +6,30 @@ export interface ApprovalResult {
   granted: boolean;
   reason: string;
   sessionAllowed?: boolean;
+  /** Instructions de l'utilisateur données lors d'un refus (renvoyées à l'agent). */
+  feedback?: string;
 }
+
+/** Demande d'approbation affichée dans le chat (façon Claude Code / Antigravity). */
+export interface ApprovalPromptRequest {
+  id: string;
+  actionType: string;
+  description: string;
+  detail: string;
+  params: Record<string, unknown>;
+}
+
+export interface ApprovalPromptDecision {
+  decision: 'allow' | 'allow-session' | 'deny';
+  /** Optionnel avec `deny` : ce que l'agent doit faire à la place. */
+  feedback?: string;
+}
+
+/**
+ * Prompt d'approbation délégué (carte dans le webview). Retourner `null`
+ * pour retomber sur la boîte de dialogue native VS Code.
+ */
+export type ApprovalPromptHandler = (request: ApprovalPromptRequest) => Promise<ApprovalPromptDecision | null>;
 
 const DANGEROUS_PATTERNS = [
   'rm -rf', 'rm -r', 'del /f', 'rmdir /s',
@@ -26,9 +49,16 @@ const SAFE_PATTERNS = [
 export class HITLManager {
   private mode: HITLMode;
   private sessionAllowances = new Set<string>();
+  private promptHandler: ApprovalPromptHandler | null = null;
+  private promptCounter = 0;
 
   constructor(mode: HITLMode = 'moderate') {
     this.mode = mode;
+  }
+
+  /** Délègue les confirmations au chat du webview (null = dialogue natif). */
+  public setPromptHandler(handler: ApprovalPromptHandler | null): void {
+    this.promptHandler = handler;
   }
 
   public setMode(mode: HITLMode): void {
@@ -37,6 +67,19 @@ export class HITLManager {
 
   public getMode(): HITLMode {
     return this.mode;
+  }
+
+  /**
+   * Confirmation inconditionnelle (politique d'outil « ask first ») : demande
+   * toujours à l'utilisateur, même en mode free — seule une autorisation de
+   * session déjà accordée court-circuite le prompt.
+   */
+  public async askApproval(actionType: string, params: Record<string, unknown>): Promise<ApprovalResult> {
+    const actionKey = this.getActionKey(actionType, params);
+    if (this.sessionAllowances.has(actionKey)) {
+      return { granted: true, reason: 'Autorisé pour cette session', sessionAllowed: true };
+    }
+    return await this.promptUser(actionType, params, actionKey);
   }
 
   public async checkApproval(actionType: string, params: Record<string, unknown>): Promise<ApprovalResult> {
@@ -82,7 +125,7 @@ export class HITLManager {
       const command = String(params.command ?? '').toLowerCase();
       return DANGEROUS_PATTERNS.some(p => command.includes(p.toLowerCase()));
     }
-    if (actionType === 'write_file' || actionType === 'edit_file') {
+    if (actionType === 'write_file' || actionType === 'edit_file' || actionType === 'edit_existing_file' || actionType === 'create_new_file') {
       const filePath = String(params.path ?? '');
       return filePath.includes('.env') || filePath.includes('package.json') || filePath.includes('tsconfig');
     }
@@ -91,7 +134,7 @@ export class HITLManager {
 
   private getActionKey(actionType: string, params: Record<string, unknown>): string {
     if (actionType === 'terminal') return `terminal:${params.command}`;
-    if (actionType === 'write_file' || actionType === 'edit_file' || actionType === 'delete_file') {
+    if (actionType === 'write_file' || actionType === 'edit_file' || actionType === 'delete_file' || actionType === 'edit_existing_file' || actionType === 'create_new_file') {
       return `${actionType}:${params.path}`;
     }
     return actionType;
@@ -106,6 +149,32 @@ export class HITLManager {
     const detail = Object.entries(params)
       .map(([k, v]) => `${k}: ${v}`)
       .join('\n');
+
+    // Carte d'approbation dans le chat si un handler est branché.
+    if (this.promptHandler) {
+      const decision = await this.promptHandler({
+        id: `approval-${++this.promptCounter}`,
+        actionType,
+        description,
+        detail,
+        params
+      });
+      if (decision) {
+        if (decision.decision === 'allow') {
+          return { granted: true, reason: 'Approuvé par l\'utilisateur' };
+        }
+        if (decision.decision === 'allow-session') {
+          this.sessionAllowances.add(actionKey);
+          return { granted: true, reason: 'Approuvé pour la session', sessionAllowed: true };
+        }
+        return {
+          granted: false,
+          reason: 'Refusé par l\'utilisateur',
+          feedback: decision.feedback?.trim() || undefined
+        };
+      }
+      // null → webview indisponible, on retombe sur le dialogue natif.
+    }
 
     const result = await vscode.window.showInformationMessage(
       `Jarvis souhaite effectuer : ${description}`,
@@ -135,7 +204,7 @@ export class HITLManager {
       case 'delete_file': return `Supprimer: ${params.path}`;
       case 'read_file': return `Lire: ${params.path}`;
       case 'web_search': return `Rechercher: ${params.query}`;
-      case 'mcp': return `Appeler l'outil MCP: ${params.tool ?? '?'} (serveur: ${params.server ?? '?'})`;
+      case 'mcp': return `Appeler l'outil MCP: ${params._toolName ?? params.tool ?? '?'} (serveur: ${params._serverName ?? params.server ?? '?'})`;
       default: return actionType;
     }
   }

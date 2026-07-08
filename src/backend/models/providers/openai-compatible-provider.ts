@@ -7,6 +7,7 @@ export interface OpenAICompatibleProviderOptions {
   model: string;
   apiKey?: string;
   maxTokens?: number;
+  temperature?: number;
   extraHeaders?: Record<string, string>;
 }
 
@@ -25,6 +26,7 @@ export class OpenAICompatibleProvider implements IModelProvider {
       model: options.model,
       apiKey: options.apiKey,
       maxTokens: options.maxTokens,
+      temperature: options.temperature,
       extraHeaders: options.extraHeaders
     };
   }

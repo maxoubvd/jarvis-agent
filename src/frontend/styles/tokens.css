@@ -188,6 +188,46 @@ body {
   accent-color: var(--jarvis-accent);
 }
 
+/* Bouton chevron repli/dépli d'une carte (rules, models, MCP…). */
+.j-expand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  background: transparent;
+  border: none;
+  border-radius: var(--jarvis-radius-sm);
+  color: inherit;
+  cursor: pointer;
+  transition: background var(--jarvis-transition);
+}
+
+.j-expand:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+/* Titre d'une carte repliée (nom de l'item). */
+.j-title {
+  font-weight: 600;
+  font-size: var(--jarvis-text-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Détail secondaire à côté du titre (provider, url…). */
+.j-sub {
+  font-size: var(--jarvis-text-xs);
+  color: var(--vscode-descriptionForeground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.j-end {
+  justify-content: flex-end;
+}
+
 .j-empty {
   color: var(--vscode-descriptionForeground);
   font-style: italic;
