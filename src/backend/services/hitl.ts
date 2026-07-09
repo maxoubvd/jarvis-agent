@@ -77,20 +77,20 @@ export class HITLManager {
   public async askApproval(actionType: string, params: Record<string, unknown>): Promise<ApprovalResult> {
     const actionKey = this.getActionKey(actionType, params);
     if (this.sessionAllowances.has(actionKey)) {
-      return { granted: true, reason: 'Autorisé pour cette session', sessionAllowed: true };
+      return { granted: true, reason: 'Allowed for this session', sessionAllowed: true };
     }
     return await this.promptUser(actionType, params, actionKey);
   }
 
   public async checkApproval(actionType: string, params: Record<string, unknown>): Promise<ApprovalResult> {
     if (this.mode === 'free') {
-      return { granted: true, reason: 'Mode libre activé' };
+      return { granted: true, reason: 'Free mode enabled' };
     }
 
     const actionKey = this.getActionKey(actionType, params);
 
     if (this.sessionAllowances.has(actionKey)) {
-      return { granted: true, reason: 'Autorisé pour cette session', sessionAllowed: true };
+      return { granted: true, reason: 'Allowed for this session', sessionAllowed: true };
     }
 
     const isSafe = this.isSafeAction(actionType, params);
@@ -98,10 +98,10 @@ export class HITLManager {
 
     if (this.mode === 'moderate') {
       if (isSafe) {
-        return { granted: true, reason: 'Action sûre — approuvée automatiquement' };
+        return { granted: true, reason: 'Safe action — automatically approved' };
       }
       if (!isDangerous) {
-        return { granted: true, reason: 'Mode modéré — action approuvée' };
+        return { granted: true, reason: 'Moderate mode — action approved' };
       }
     }
 
@@ -161,50 +161,48 @@ export class HITLManager {
       });
       if (decision) {
         if (decision.decision === 'allow') {
-          return { granted: true, reason: 'Approuvé par l\'utilisateur' };
+          return { granted: true, reason: 'Approved by user' };
         }
         if (decision.decision === 'allow-session') {
           this.sessionAllowances.add(actionKey);
-          return { granted: true, reason: 'Approuvé pour la session', sessionAllowed: true };
+          return { granted: true, reason: 'Allowed for the session', sessionAllowed: true };
         }
         return {
           granted: false,
-          reason: 'Refusé par l\'utilisateur',
+          reason: 'Denied by user',
           feedback: decision.feedback?.trim() || undefined
         };
       }
-      // null → webview indisponible, on retombe sur le dialogue natif.
+      // null → webview unavailable, falling back to native dialog.
     }
 
     const result = await vscode.window.showInformationMessage(
-      `Jarvis souhaite effectuer : ${description}`,
+      `Jarvis needs to run an action: ${description}`,
       { modal: true, detail },
-      'Autoriser',
-      'Autoriser pour la session',
-      'Refuser'
+      'Approve',
+      'Approve for session',
+      'Deny'
     );
 
-    if (result === 'Autoriser') {
-      return { granted: true, reason: 'Approuvé par l\'utilisateur' };
+    if (result === 'Approve') {
+      return { granted: true, reason: 'Approved by user' };
     }
 
-    if (result === 'Autoriser pour la session') {
+    if (result === 'Approve for session') {
       this.sessionAllowances.add(actionKey);
-      return { granted: true, reason: 'Approuvé pour la session', sessionAllowed: true };
+      return { granted: true, reason: 'Approved for the session', sessionAllowed: true };
     }
 
-    return { granted: false, reason: 'Refusé par l\'utilisateur' };
+    return { granted: false, reason: 'User denied or dismissed prompt' };
   }
 
   private describeAction(actionType: string, params: Record<string, unknown>): string {
     switch (actionType) {
-      case 'terminal': return `Exécuter: ${params.command}`;
-      case 'write_file': return `Écrire dans: ${params.path}`;
-      case 'edit_file': return `Modifier: ${params.path}`;
-      case 'delete_file': return `Supprimer: ${params.path}`;
-      case 'read_file': return `Lire: ${params.path}`;
-      case 'web_search': return `Rechercher: ${params.query}`;
-      case 'mcp': return `Appeler l'outil MCP: ${params._toolName ?? params.tool ?? '?'} (serveur: ${params._serverName ?? params.server ?? '?'})`;
+      case 'edit_file': return `Edit: ${params.path}`;
+      case 'delete_file': return `Delete: ${params.path}`;
+      case 'read_file': return `Read: ${params.path}`;
+      case 'web_search': return `Search: ${params.query}`;
+      case 'mcp': return `Call MCP tool: ${params._toolName ?? params.tool ?? '?'} (server: ${params._serverName ?? params.server ?? '?'})`;
       default: return actionType;
     }
   }

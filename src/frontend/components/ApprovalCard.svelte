@@ -100,6 +100,9 @@
     border-left: 3px solid var(--jarvis-gold);
     border-radius: var(--jarvis-radius-md);
     background: var(--vscode-inputValidation-warningBackground, var(--jarvis-gold-dim));
+    flex-shrink: 1;
+    min-height: 0;
+    overflow-y: auto;
   }
 
   .head {

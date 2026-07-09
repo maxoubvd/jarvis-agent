@@ -71,6 +71,7 @@
   let docs = $state<DocSite[]>([]);
   let workspaces = $state<WorkspaceProfile[]>([]);
   let dirty = $state(false);
+  let confirmingReset = $state(false);
 
   // Re-synchronise l'état local quand une nouvelle config arrive du backend.
   $effect(() => {
@@ -254,6 +255,22 @@
     onSave(serialize());
     dirty = false;
   }
+
+  function handleResetProfile() {
+    if (!confirmingReset) {
+      confirmingReset = true;
+      setTimeout(() => { confirmingReset = false; }, 3000);
+      return;
+    }
+    confirmingReset = false;
+    const resetConfig: JarvisConfig = {
+      version: 1,
+      models: { default: null, items: [] },
+      optimization: {},
+      firstName: settings?.firstName
+    };
+    onSave(resetConfig);
+  }
 </script>
 
 <section class="settings">
@@ -280,6 +297,9 @@
       </button>
       <button title="Open ~/.jarvis/config.json in the editor" onclick={onOpenConfig}>
         Edit config file
+      </button>
+      <button class="danger" onclick={handleResetProfile} title="Reset profile (keeps first name)">
+        {confirmingReset ? 'Confirm Reset' : 'Reset Profile'}
       </button>
       <button class="primary" onclick={save} disabled={!dirty}>Save</button>
     </div>

@@ -1,4 +1,4 @@
-export type MessageKind = 'text' | 'tool' | 'thinking' | 'step';
+export type MessageKind = 'text' | 'tool' | 'thinking' | 'step' | 'plan';
 
 export interface Badge {
   icon: string;
@@ -252,6 +252,7 @@ export interface JarvisConfig {
   workspaces?: WorkspaceProfile[];
   activeWorkspaceId?: string | null;
   optimization?: OptimizationConfig;
+  firstName?: string;
 }
 
 /** Statut d'indexation d'un site de docs (message `docsStatus`). */

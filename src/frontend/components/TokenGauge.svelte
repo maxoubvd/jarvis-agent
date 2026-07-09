@@ -32,7 +32,7 @@
 <div class="gauge-wrapper">
   <button class="gauge-header" onclick={() => (showDetails = !showDetails)}>
     <span class="gauge-title">
-      Tokens used <Icon name={showDetails ? 'chevron-up' : 'chevron-down'} size={11} />
+      Context Size <Icon name={showDetails ? 'chevron-up' : 'chevron-down'} size={11} />
     </span>
     <span>{used.toLocaleString()} / {limit ? limit.toLocaleString() : '—'} ({percentage}%)</span>
   </button>

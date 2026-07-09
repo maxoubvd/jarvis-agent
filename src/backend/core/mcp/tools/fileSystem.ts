@@ -5,7 +5,7 @@ import { SandboxManager } from '../../utils/sandbox.js';
 
 let sandbox: SandboxManager | null = null;
 
-function getSandbox(): SandboxManager {
+export function getSandbox(): SandboxManager {
   if (!sandbox) {
     sandbox = new SandboxManager();
   }

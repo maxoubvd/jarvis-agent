@@ -35,8 +35,10 @@
     onApprovalRespond?: (decision: 'allow' | 'allow-session' | 'deny', feedback?: string) => void;
     availableModels?: string[];
     onModelChange?: (model: string) => void;
+    onPlanProceed?: () => void;
     onNewChat?: () => void;
     onResumeChat?: () => void;
+    firstName?: string;
   }
 
   let {
@@ -56,11 +58,24 @@
     availableModels = [],
     currentModel = '',
     onModelChange = () => {},
+    onPlanProceed = () => {},
     onNewChat = () => {},
-    onResumeChat = () => {}
+    onResumeChat = () => {},
+    firstName = ''
   }: Props = $props();
 
-  let mode = $state('Automatique');
+  let mode = $state('Automatic');
+
+  let isSmallModel = $derived(
+    currentModel.toLowerCase().includes('7b') || 
+    currentModel.toLowerCase().includes('8b')
+  );
+
+  $effect(() => {
+    if (isSmallModel && mode === 'Plan') {
+      mode = 'Fast';
+    }
+  });
 
   let inputText = $state('');
   let listEl: HTMLUListElement | undefined = $state();
@@ -280,6 +295,9 @@
 
   {#if messages.length === 0}
     <div class="empty">
+      {#if firstName}
+        <h3 style="margin-top: 0; color: var(--vscode-editor-foreground);">Hello {firstName}</h3>
+      {/if}
       No messages yet. Send a message to get started.
       <div class="empty-hints">
         <code>/agent &lt;task&gt;</code> agentic mode ·
@@ -360,6 +378,17 @@
               {#if isSending && message.id === messages[messages.length - 1].id}
                 <p class="pending"><span class="badge info wavelight"><Icon name="cpu" size={11} /> Working...</span></p>
               {/if}
+
+              {#if message.kind === 'plan' && message.id === messages[messages.length - 1].id}
+                <div class="plan-actions">
+                  <button class="btn-primary" onclick={onPlanProceed} disabled={isSending}>
+                    <Icon name="check" size={14} /> Proceed
+                  </button>
+                  <button class="btn-secondary" onclick={() => textareaEl?.focus()} disabled={isSending}>
+                    <Icon name="edit" size={14} /> Review
+                  </button>
+                </div>
+              {/if}
             {:else if message.kind !== 'tool' && message.kind !== 'step' && message.kind !== 'thinking'}
               <p>{message.content}</p>
             {/if}
@@ -375,9 +404,9 @@
 
   <div class="controls-row">
     <select class="mode-select" bind:value={mode}>
-      <option value="Automatique">Automatique</option>
-      <option value="Rapide">Rapide</option>
-      <option value="Plan">Plan</option>
+      <option value="Automatic">Automatic</option>
+      <option value="Fast">Fast</option>
+      <option value="Plan" disabled={isSmallModel}>Plan</option>
     </select>
     {#if availableModels.length > 0}
       <select class="model-select" value={currentModel} onchange={e => onModelChange((e.target as HTMLSelectElement).value)}>
@@ -389,56 +418,64 @@
   </div>
 
   <div class="input-row">
-    <div class="input-wrap">
-      {#if showMenu && menuItems.length > 0}
-        <ul class="autocomplete" role="listbox">
-          {#each menuItems as item, i (item.insert)}
-            <li
-              role="option"
-              aria-selected={i === selectedIndex}
-              class="ac-item"
-              class:selected={i === selectedIndex}
-              onmousedown={e => { e.preventDefault(); accept(item); }}
-              onmouseenter={() => (selectedIndex = i)}
-            >
-              <code class="ac-label">{item.label}</code>
-              <span class="ac-detail">{item.detail}</span>
-            </li>
-          {/each}
-        </ul>
-      {/if}
-      <textarea
-        class="input"
-        placeholder="Ask anything… (@ to mention, / for action)"
-        rows={2}
-        disabled={isSending}
-        bind:this={textareaEl}
-        bind:value={inputText}
-        oninput={handleInput}
-        onkeydown={handleKeydown}
-        onblur={() => (showMenu = false)}
-      ></textarea>
-    </div>
-    {#if isSending}
-      <button
-        class="send-btn stop-btn"
-        title="Stop generation"
-        aria-label="Stop"
-        onclick={() => vscode.postMessage({ type: 'cancelRequest' })}
-      >
-        <Icon name="square" size={12} />
-      </button>
-    {:else}
-      <button
-        class="send-btn"
-        title="Send"
-        aria-label="Send"
-        onclick={submit}
-        disabled={!inputText.trim()}
-      >
-        <Icon name="send" size={15} />
-      </button>
+    {#if mode === 'Plan' && messages.length > 0 && messages[messages.length - 1].kind === 'plan' && !isSending}
+      <div class="review-indicator">
+        <Icon name="edit" size={12} />
+        <span>Mode Review : vos instructions modifieront le plan actuel.</span>
+      </div>
     {/if}
+    <div class="input-actions">
+      <div class="input-wrap">
+        {#if showMenu && menuItems.length > 0}
+          <ul class="autocomplete" role="listbox">
+            {#each menuItems as item, i (item.insert)}
+              <li
+                role="option"
+                aria-selected={i === selectedIndex}
+                class="ac-item"
+                class:selected={i === selectedIndex}
+                onmousedown={e => { e.preventDefault(); accept(item); }}
+                onmouseenter={() => (selectedIndex = i)}
+              >
+                <code class="ac-label">{item.label}</code>
+                <span class="ac-detail">{item.detail}</span>
+              </li>
+            {/each}
+          </ul>
+        {/if}
+        <textarea
+          class="input"
+          placeholder="Ask anything… (@ to mention, / for action)"
+          rows={2}
+          disabled={isSending}
+          bind:this={textareaEl}
+          bind:value={inputText}
+          oninput={handleInput}
+          onkeydown={handleKeydown}
+          onblur={() => (showMenu = false)}
+        ></textarea>
+      </div>
+      {#if isSending}
+        <button
+          class="send-btn stop-btn"
+          title="Stop generation"
+          aria-label="Stop"
+          onclick={() => vscode.postMessage({ type: 'cancelRequest' })}
+        >
+          <Icon name="square" size={12} />
+        </button>
+      {:else}
+        <button
+          class="send-btn"
+          title="Send"
+          aria-label="Send"
+          onclick={submit}
+          disabled={!inputText.trim()}
+        >
+          <Icon name="send" size={15} />
+        </button>
+      {/if}
+    </div>
   </div>
 </section>
 
@@ -510,7 +547,7 @@
     flex-direction: column;
     gap: var(--jarvis-space-4);
     overflow-y: auto;
-    max-height: 55vh;
+    min-height: 0;
   }
 
   .message {
@@ -760,14 +797,70 @@
 
   .input-row {
     display: flex;
+    flex-direction: column;
+    gap: var(--jarvis-space-2);
+  }
+
+  .input-actions {
+    display: flex;
     gap: 0.5rem;
     align-items: flex-end;
+  }
+
+  .review-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    background: var(--vscode-editorWidget-background);
+    padding: 4px 8px;
+    border-radius: 4px;
+    border-left: 2px solid var(--vscode-terminal-ansiCyan, #00bfff);
+    align-self: flex-start;
   }
 
   .input-wrap {
     position: relative;
     flex: 1;
     display: flex;
+  }
+  .btn-primary, .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s ease;
+  }
+  .btn-primary {
+    background: var(--vscode-button-background, #007acc);
+    color: var(--vscode-button-foreground, #ffffff);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: var(--vscode-button-hoverBackground, #0062a3);
+  }
+  .btn-secondary {
+    background: var(--vscode-button-secondaryBackground, #5f6a79);
+    color: var(--vscode-button-secondaryForeground, #ffffff);
+  }
+  .btn-secondary:hover:not(:disabled) {
+    background: var(--vscode-button-secondaryHoverBackground, #4c5561);
+  }
+  .btn-primary:disabled, .btn-secondary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .plan-actions {
+    display: flex;
+    gap: var(--jarvis-space-2);
+    margin-top: var(--jarvis-space-3);
+    margin-bottom: var(--jarvis-space-2);
   }
 
   .autocomplete {

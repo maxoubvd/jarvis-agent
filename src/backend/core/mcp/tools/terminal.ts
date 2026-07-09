@@ -13,6 +13,7 @@ export interface ExecuteOptions {
   cwd?: string;
   timeout?: number;
   onData?: (chunk: string, stream: 'stdout' | 'stderr') => void;
+  signal?: AbortSignal;
 }
 
 function getWorkspaceFolder(): string | undefined {
@@ -31,6 +32,10 @@ export async function executeTerminalCommand(
   const timeout = options.timeout ?? 30000;
   const isWindows = process.platform === 'win32';
 
+  if (options.signal?.aborted) {
+    return { success: false, stdout: '', stderr: 'Command aborted', exitCode: null, timedOut: false };
+  }
+
   return new Promise<ExecutionResult>(resolve => {
     const child = isWindows
       ? spawn('cmd.exe', ['/c', command], { cwd })
@@ -43,7 +48,27 @@ export async function executeTerminalCommand(
     const timer = setTimeout(() => {
       timedOut = true;
       child.kill();
+      resolve({
+        success: false,
+        stdout,
+        stderr: stderr + '\n[Process killed due to timeout]',
+        exitCode: null,
+        timedOut: true
+      });
     }, timeout);
+
+    const onAbort = () => {
+      child.kill();
+      clearTimeout(timer);
+      resolve({
+        success: false,
+        stdout,
+        stderr: stderr + '\n[Process aborted by user]',
+        exitCode: null,
+        timedOut: false
+      });
+    };
+    options.signal?.addEventListener('abort', onAbort);
 
     child.stdout?.on('data', (data: Buffer) => {
       const text = data.toString();
@@ -58,24 +83,28 @@ export async function executeTerminalCommand(
     });
 
     child.on('error', (err: Error) => {
+      if (timedOut) return;
       clearTimeout(timer);
+      options.signal?.removeEventListener('abort', onAbort);
       resolve({
         success: false,
         stdout,
         stderr: stderr + `\n${err.message}`,
         exitCode: null,
-        timedOut
+        timedOut: false
       });
     });
 
     child.on('close', (code: number | null) => {
+      if (timedOut) return; // Already resolved by timeout
       clearTimeout(timer);
+      options.signal?.removeEventListener('abort', onAbort);
       resolve({
-        success: !timedOut && code === 0,
+        success: code === 0,
         stdout,
         stderr,
         exitCode: code,
-        timedOut
+        timedOut: false
       });
     });
   });

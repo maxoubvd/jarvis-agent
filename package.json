@@ -172,8 +172,8 @@
         },
         "jarvis.agent.maxIterations": {
           "type": "number",
-          "default": 25,
-          "description": "Nombre maximum d'itérations de la boucle agentique"
+          "default": 100,
+          "description": "Nombre maximum d'itérations pour la boucle de l'agent (ex: appels d'outils, corrections d'erreurs) avant de demander l'autorisation de continuer."
         },
         "jarvis.tdd.maxAttempts": {
           "type": "number",

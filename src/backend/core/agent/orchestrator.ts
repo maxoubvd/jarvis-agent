@@ -189,6 +189,8 @@ export class AgentOrchestrator {
 
     const steps: AgentStep[] = [];
     let retryCount = 0;
+    let loopCount = 0;
+    let lastToolSignature = '';
     // Structured Outputs : on force un JSON parsable via l'API tant que le provider l'accepte.
     let useJsonMode = !AgentOrchestrator.jsonModeUnsupported.has(this.provider.name);
     const totalUsage: ProviderUsage = { promptTokens: 0, completionTokens: 0, cachedTokens: 0 };
@@ -278,6 +280,9 @@ export class AgentOrchestrator {
           iteration--; // le for(...) réincrémente : on rejoue la même itération
           continue;
         }
+        if (msg.includes('aborted')) {
+          return { success: false, finalText: '', steps, iterations: iteration, error: "Génération annulée par l'utilisateur.", usage: totalUsage };
+        }
         return { success: false, finalText: '', steps, iterations: iteration, error: `Erreur du modèle: ${msg}`, usage: totalUsage };
       }
 
@@ -301,6 +306,28 @@ export class AgentOrchestrator {
           parsed.ok = true;
         } catch {
           // Args parse error -> will trigger retry or error
+        }
+      }
+
+      // Fallback for models outputting native tool format directly in text JSON
+      if (!isNativeTool && parsed.ok) {
+        const asAny = action as any;
+        if (!action.action?.tool && !action.final) {
+          if (asAny.name && asAny.arguments !== undefined) {
+             let parsedArgs = asAny.arguments;
+             if (typeof parsedArgs === 'string') {
+               try { parsedArgs = JSON.parse(parsedArgs); } catch {}
+             }
+             action = {
+               thought: parsed.surroundingText || raw,
+               action: { tool: asAny.name, args: parsedArgs }
+             };
+          } else if (asAny.tool && asAny.args !== undefined) {
+             action = {
+               thought: parsed.surroundingText || raw,
+               action: { tool: asAny.tool, args: asAny.args }
+             };
+          }
         }
       }
 
@@ -357,6 +384,26 @@ export class AgentOrchestrator {
         const toolName = t.toolName;
         const args = t.args;
         const tool = this.tools.get(toolName);
+
+        const currentSignature = JSON.stringify({ toolName, args });
+        if (currentSignature === lastToolSignature) {
+          loopCount++;
+        } else {
+          loopCount = 0;
+          lastToolSignature = currentSignature;
+        }
+
+        if (loopCount >= 3) {
+          const errMsg = `BOUCLE DÉTECTÉE : Tu as appelé l'outil "${toolName}" avec les mêmes arguments 4 fois de suite. C'est interdit. Modifie ta stratégie, utilise un autre outil, ou termine avec "final".`;
+          steps.push({ thought: thoughtText, tool: toolName, args, result: errMsg, success: false });
+          events.onToolResult?.(toolName, errMsg, false, args);
+          messages.push({
+            role: isNativeTool ? 'tool' : 'user',
+            content: errMsg,
+            tool_call_id: t.id
+          });
+          continue;
+        }
 
         if (!tool) {
           const errText = `Outil inconnu: "${toolName}". Outils disponibles: ${this.tools.list().map(td => td.name).join(', ')}`;
@@ -469,7 +516,7 @@ export class AgentOrchestrator {
       }
     }
 
-    const result = await tool.execute(args);
+    const result = await tool.execute(args, this.options.abortSignal);
 
     if (isFileEdit && this.options.changeTracker && filePath) {
       try {

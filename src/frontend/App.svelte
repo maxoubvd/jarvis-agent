@@ -73,6 +73,7 @@
   let currentFolder = $state('');
   let workspaces = $state<Array<{ id: string; name: string }>>([]);
   let activeWorkspaceId = $state<string | null>(null);
+  let activeWorkspaceName = $derived(workspaces.find(w => w.id === activeWorkspaceId)?.name || currentFolder.split(/[/\\]/).pop() || 'Workspace');
   let indexStatus = $state<{ indexing: boolean; fileCount: number } | null>(null);
   let needsSetup = $state(false);
   // Onboarding : `true` par défaut pour ne pas flasher l'écran d'accueil chez les
@@ -306,6 +307,7 @@
         }
         break;
       case 'chatStart':
+        isSending = true;
         pushMessage('assistant', '');
         break;
       case 'chatChunk':
@@ -350,20 +352,26 @@
         break;
       case 'agentFinal':
         if (msg.text) {
-          pushMessage('assistant', msg.text, 'text', msg.badges);
-        } else if (msg.badges) {
+          pushMessage('assistant', msg.text, msg.kind || 'text', msg.badges);
+        } else if (msg.badges || msg.kind) {
           const lastIdx = messages.length - 1;
           if (lastIdx >= 0 && messages[lastIdx].role === 'assistant') {
             const m = messages[lastIdx];
             messages = [
               ...messages.slice(0, -1),
-              { ...m, badges: [...(m.badges || []), ...msg.badges] }
+              { ...m, kind: msg.kind || m.kind, badges: [...(m.badges || []), ...(msg.badges || [])] }
             ];
           }
         }
         isSending = false;
         break;
       // Legacy single-shot message (kept for backward compatibility)
+      case 'injectUserMessage':
+        if (msg.text) {
+          pushMessage('user', msg.text);
+          isSending = true;
+        }
+        break;
       case 'chatMessage':
         if (msg.text) {
           pushMessage('assistant', msg.text);
@@ -382,7 +390,7 @@
   function handleSend(rawText: string) {
     if (!rawText.trim() || isSending) return;
     
-    let mode = 'Automatique';
+    let mode = 'Automatic';
     let text = rawText;
     const separatorIndex = rawText.indexOf('|');
     if (separatorIndex !== -1) {
@@ -393,6 +401,12 @@
     pushMessage('user', text.trim());
     isSending = true;
     vscode?.postMessage({ type: 'chatMessage', text: text.trim(), mode });
+  }
+
+  function handlePlanProceed() {
+    pushMessage('user', "Le plan est validé. Procède à son implémentation étape par étape.");
+    isSending = true;
+    vscode?.postMessage({ type: 'planProceed' });
   }
 
   function persistUiState() {
@@ -432,7 +446,8 @@
     clearTimeout(saveStatusTimer);
     saveStatus = { ok: true, pending: true };
     try {
-      vscode?.postMessage({ type: 'updateSettings', scope: 'global', config });
+      const cleanConfig = $state.snapshot(config);
+      vscode?.postMessage({ type: 'updateSettings', scope: 'global', config: cleanConfig });
     } catch (err) {
       // postMessage clone la config (structured clone) : une valeur non
       // sérialisable ne doit jamais faire échouer la sauvegarde en silence.
@@ -495,8 +510,10 @@
     vscode?.postMessage({ type: 'listCheckpoints' });
   }
 
-  function handleModelChange(event: Event) {
-    const model = (event.target as HTMLSelectElement).value;
+  function handleModelChange(modelOrEvent: Event | string) {
+    const model = typeof modelOrEvent === 'string'
+      ? modelOrEvent
+      : (modelOrEvent.target as HTMLSelectElement).value;
     currentModel = model;
     vscode?.postMessage({ type: 'setModel', model });
   }
@@ -547,7 +564,7 @@
         <button
           class="menu-btn"
           title="New Conversation (/new)"
-          onclick={() => handleSend('/new')}
+          onclick={() => { handleTabChange('chat'); handleSend('/new'); }}
           disabled={isSending}
         >
           <Icon name="add" />
@@ -555,14 +572,20 @@
         <button
           class="menu-btn"
           title="Past Conversations (/resume)"
-          onclick={() => handleSend('/resume')}
+          onclick={() => { handleTabChange('chat'); handleSend('/resume'); }}
           disabled={isSending}
         >
           <Icon name="history" />
         </button>
       </div>
     </div>
-    <div class="header-right">
+    <div class="header-middle" style="flex: 1; text-align: center; font-size: 0.85em; opacity: 0.7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 16px;" title={currentFolder}>
+      {currentFolder || 'No Workspace'}
+    </div>
+    <div class="header-right" style="display: flex; align-items: center;">
+      <span class="status-text" style="font-size: 0.8em; opacity: 0.8; margin-right: 8px;">
+        {connectionStatus}
+      </span>
       <span
         class="status-dot"
         class:success={!needsSetup && connectionStatus.startsWith('Connected')}
@@ -577,7 +600,6 @@
     {/if}
     <main class="main-content">
       {#if activeTab === 'chat'}
-
         {#if needsSetup}
           <div class="setup-banner">
             <span>No model configured yet.</span>
@@ -601,13 +623,15 @@
           {approvalRequest}
           {availableModels}
           {currentModel}
+          firstName={settings?.firstName}
           onSend={handleSend}
           onQueryFiles={handleQueryFiles}
           onWorkspaceChange={handleWorkspaceChange}
           onApprovalRespond={handleApprovalRespond}
           onModelChange={handleModelChange}
+          onPlanProceed={handlePlanProceed}
           onNewChat={() => handleSend('/new')}
-          onResumeChat={() => vscode?.postMessage({ type: 'chatMessage', text: '/resume', mode: 'Automatique' })}
+          onResumeChat={() => vscode?.postMessage({ type: 'chatMessage', text: '/resume', mode: 'Automatic' })}
         />
         <TokenGauge
           used={tokensUsed}
@@ -724,9 +748,11 @@
   .header-right {
     display: flex;
     align-items: center;
-    gap: var(--jarvis-space-2);
+    gap: var(--jarvis-space-3);
     min-width: 0;
   }
+
+
 
   .status-dot {
     flex-shrink: 0;

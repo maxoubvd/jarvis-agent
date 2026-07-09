@@ -195,6 +195,7 @@ export interface JarvisConfig {
   workspaces?: WorkspaceProfile[];
   activeWorkspaceId?: string | null;
   optimization?: OptimizationConfig;
+  firstName?: string;
 }
 
 export const EMPTY_CONFIG: JarvisConfig = {
@@ -343,7 +344,8 @@ export function normalizeConfig(input: unknown): JarvisConfig {
     docs: Array.isArray(cfg.docs) ? cfg.docs : undefined,
     workspaces: Array.isArray(cfg.workspaces) ? cfg.workspaces : undefined,
     activeWorkspaceId: typeof cfg.activeWorkspaceId === 'string' ? cfg.activeWorkspaceId : undefined,
-    optimization: isPlainObject(cfg.optimization) ? cfg.optimization : {}
+    optimization: isPlainObject(cfg.optimization) ? cfg.optimization : {},
+    firstName: typeof cfg.firstName === 'string' ? cfg.firstName : undefined
   };
 }
 

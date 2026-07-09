@@ -7,55 +7,50 @@ Ce document liste l'intégralité des scénarios de test pour s'assurer du parfa
 ## 1. Paramétrage et Modèles (Providers)
 
 ### 1.1 Modèle distant (ex: OpenAI / OpenRouter)
-- [ ] **Action** : Dans l'onglet "Settings" de la webview, configurez un fournisseur (ex: OpenAI), ajoutez une clé API valide et sélectionnez un modèle (ex: `gpt-4o`).
-- [ ] **Test** : Posez une question simple comme "Bonjour, qui es-tu ?".
-- [ ] **Résultat attendu** : Jarvis répond rapidement en s'identifiant comme un assistant de code.
+- [X] **Action** : Dans l'onglet "Settings" de la webview, configurez un fournisseur (ex: OpenAI), ajoutez une clé API valide et sélectionnez un modèle (ex: `gpt-4o`).
+- [X] **Test** : Posez une question simple comme "Bonjour, qui es-tu ?".
+- [X] **Résultat attendu** : Jarvis répond rapidement en s'identifiant comme un assistant de code.
 
 ### 1.2 Modèle local (Ollama / LMStudio)
-- [ ] **Action** : Démarrez Ollama avec un modèle (ex: `ollama run llama3:8b`). Dans les Settings Jarvis, ajoutez un fournisseur Ollama (URL par défaut `http://localhost:11434`), et sélectionnez le modèle `llama3:8b`.
-- [ ] **Test** : Posez une question dans le chat en mode "Rapide".
-- [ ] **Résultat attendu** : Le modèle local répond. Aucune erreur réseau n'apparaît.
-
-### 1.3 Provider HuggingFace
-- [ ] **Action** : Dans les Settings Jarvis, sélectionnez le fournisseur "huggingface", entrez un token d'API valide et un modèle (ex: `meta-llama/Meta-Llama-3-8B-Instruct`).
-- [ ] **Test** : Posez une question de code basique.
-- [ ] **Résultat attendu** : Jarvis répond en utilisant l'API d'inférence de HuggingFace.
+- [X] **Action** : Démarrez Ollama avec un modèle (ex: `ollama run llama3:8b`). Dans les Settings Jarvis, ajoutez un fournisseur Ollama (URL par défaut `http://localhost:11434`), et sélectionnez le modèle `llama3:8b`.
+- [X] **Test** : Posez une question dans le chat en mode "Rapide".
+- [X] **Résultat attendu** : Le modèle local répond. Aucune erreur réseau n'apparaît.
 
 ---
 
 ## 2. Modes de Chat et Routage Intelligent
 
 ### 2.1 Mode Rapide
-- [ ] **Action** : Sélectionnez le mode "Rapide". Demandez "Donne-moi une fonction pour faire une addition en JS".
-- [ ] **Résultat attendu** : Jarvis donne le code en texte. Il n'essaie pas d'exécuter des outils ni de créer de fichiers.
+- [X] **Action** : Sélectionnez le mode "Rapide". Demandez "Donne-moi une fonction pour faire une addition en JS".
+- [X] **Résultat attendu** : Jarvis donne le code en texte. Il n'essaie pas d'exécuter des outils ni de créer de fichiers.
 
 ### 2.2 Mode Plan (Workflow strict)
-- [ ] **Action** : Sélectionnez le mode "Plan". Demandez "Je veux créer une API avec Express".
-- [ ] **Résultat attendu** : Jarvis n'écrit aucun code direct. Il utilise l'outil d'écriture pour générer un fichier `implementation_plan.md` décrivant les étapes, puis vous demande "Mon plan te convient-il ?" dans le chat.
+- [X] **Action** : Sélectionnez le mode "Plan". Demandez "Je veux créer une API avec Express".
+- [X] **Résultat attendu** : Jarvis n'écrit aucun code direct. Il utilise l'outil d'écriture pour générer un fichier `implementation_plan.md` décrivant les étapes, puis vous demande "Mon plan te convient-il ?" dans le chat.
 
 ### 2.3 Mode Automatique (Petit Modèle + Routage Dynamique)
-- [ ] **Action** : Activez un petit modèle local (ex: Ollama `llama3:8b`) ou un modèle contenant "7b"/"8b". Assurez-vous d'être en mode "Automatique". Demandez "Crée-moi un composant React Button complet".
-- [ ] **Résultat attendu** : L'extension détecte la présence d'un petit modèle et déclenche le workflow `dynamic`. Dans le chat ou via des logs d'étape, on doit voir le *Task Decomposer* créer des sous-étapes (Analyse, Exécution, Test) et les valider séquentiellement. 
+- [X] **Action** : Activez un petit modèle local (ex: Ollama `llama3:8b`) ou un modèle contenant "7b"/"8b". Assurez-vous d'être en mode "Automatique". Demandez "Crée-moi un composant React Button complet".
+- [X] **Résultat attendu** : L'extension détecte la présence d'un petit modèle et déclenche le workflow `dynamic`. Dans le chat ou via des logs d'étape, on doit voir le *Task Decomposer* créer des sous-étapes (Analyse, Exécution, Test) et les valider séquentiellement. 
 
 ### 2.4 Mode Automatique (Gros Modèle)
-- [ ] **Action** : Activez un modèle puissant (GPT-4, Claude-3.5-Sonnet) en mode "Automatique". Donnez une instruction de code simple.
-- [ ] **Résultat attendu** : Le modèle utilise directement ses outils (boucle agentique classique) sans passer par le workflow de décomposition `dynamic`.
+- [X] **Action** : Activez un modèle puissant (GPT-4, Claude-3.5-Sonnet) en mode "Automatique". Donnez une instruction de code simple.
+- [X] **Résultat attendu** : Le modèle utilise directement ses outils (boucle agentique classique) sans passer par le workflow de décomposition `dynamic`.
 
 ---
 
 ## 3. Revue de Diff et CodeLens (Modifications de Fichiers)
 
 ### 3.1 Édition et Apparition des CodeLens
-- [ ] **Action** : Demandez à Jarvis de modifier un fichier existant (ex: "Ajoute un commentaire au début de index.ts").
-- [ ] **Résultat attendu** : Le fichier s'édite. VS Code affiche instantanément un fond vert sur la nouvelle ligne ajoutée. Au-dessus de la modification, les CodeLens cliquables `✓ Accept Hunk` et `✗ Reject Hunk` apparaissent. (En haut du fichier, `✓ Accept All Changes` doit apparaître).
+- [X] **Action** : Demandez à Jarvis de modifier un fichier existant (ex: "Ajoute un commentaire au début de index.ts").
+- [X] **Résultat attendu** : Le fichier s'édite. VS Code affiche instantanément un fond vert sur la nouvelle ligne ajoutée. Au-dessus de la modification, les CodeLens cliquables `✓ Accept Hunk` et `✗ Reject Hunk` apparaissent. (En haut du fichier, `✓ Accept All Changes` doit apparaître).
 
 ### 3.2 Acceptation via CodeLens
-- [ ] **Action** : Cliquez sur `✓ Accept Hunk` dans l'éditeur.
-- [ ] **Résultat attendu** : Le fond vert disparaît. Le texte cliquable CodeLens disparaît. Le fichier est considéré comme validé et sauvé.
+- [X] **Action** : Cliquez sur `✓ Accept Hunk` dans l'éditeur.
+- [X] **Résultat attendu** : Le fond vert disparaît. Le texte cliquable CodeLens disparaît. Le fichier est considéré comme validé et sauvé.
 
 ### 3.3 Rejet via CodeLens
-- [ ] **Action** : Demandez une autre modification. Cliquez sur `✗ Reject Hunk`.
-- [ ] **Résultat attendu** : Le texte ajouté par l'IA disparaît immédiatement de l'éditeur. Le fichier retourne à son état d'origine.
+- [X] **Action** : Demandez une autre modification. Cliquez sur `✗ Reject Hunk`.
+- [X] **Résultat attendu** : Le texte ajouté par l'IA disparaît immédiatement de l'éditeur. Le fichier retourne à son état d'origine.
 
 ### 3.4 Édition en ligne (Cmd+K)
 - [ ] **Action** : Dans un fichier ouvert, sélectionnez une fonction, puis appuyez sur `Ctrl+K Ctrl+K` (ou `Cmd+K Cmd+K` sur Mac). Entrez un prompt (ex: "Ajoute un try/catch").

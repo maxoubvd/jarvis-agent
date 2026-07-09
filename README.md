@@ -16,7 +16,7 @@
 ## ✨ Fonctionnalités Clés
 
 ### 1. Édition en Ligne (Cmd+K)
-Fini les copier-coller fastidieux depuis un panneau web ! Sélectionnez n'importe quel bloc de code, appuyez sur `Cmd+K Cmd+K` (ou `Ctrl+K Ctrl+K` sur Windows/Linux), et donnez une instruction à Jarvis (ex: *"Ajoute une gestion d'erreur robuste à cette fonction"*).
+Sélectionnez n'importe quel bloc de code, appuyez sur `Cmd+K Cmd+K` (ou `Ctrl+K Ctrl+K` sur Windows/Linux), et donnez une instruction à Jarvis (ex: *"Ajoute une gestion d'erreur robuste à cette fonction"*).
 
 <video src="docs/media/demo_cmd_k.mp4" controls width="100%"></video>
 
@@ -93,6 +93,5 @@ Jarvis est un projet communautaire pensé par des développeurs, pour des dével
 - Vous voulez contribuer ? Les Pull Requests sont les bienvenues !
 
 <div align="center">
-  <p>Créé avec ❤️ pour la communauté VS Code.</p>
+  <p>Créé pour la communauté VS Code.</p>
 </div>
- 

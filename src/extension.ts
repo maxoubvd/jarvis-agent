@@ -1,10 +1,14 @@
 import * as vscode from 'vscode';
 import { JarvisExtension } from './backend/core/extension.js';
 import { backgroundProcesses } from './backend/services/background-processes.js';
+import { getSandbox } from './backend/core/mcp/tools/fileSystem.js';
 
 export function activate(context: vscode.ExtensionContext) {
   console.log('Jarvis: activation de l\'extension');
   const jarvis = new JarvisExtension(context);
+  
+  // Génère le fichier .jarvisignore automatiquement s'il n'existe pas
+  getSandbox();
 
   const commands = [
     vscode.commands.registerCommand('jarvis.startChat', () => jarvis.startChat()),

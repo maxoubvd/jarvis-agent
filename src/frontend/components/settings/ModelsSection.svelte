@@ -61,7 +61,7 @@
       ...items,
       {
         name: '',
-        provider: 'openrouter',
+        provider: 'mistral',
         model: '',
         roles: ['chat', 'edit', 'apply'],
         contextLength: 32768

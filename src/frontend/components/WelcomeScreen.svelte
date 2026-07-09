@@ -36,24 +36,27 @@
   let step = $state(untrack(() => hasModel) ? 3 : 1);
 
   const PROVIDERS: Array<{ value: ProviderType; label: string; blurb: string; local?: boolean; modelPlaceholder: string }> = [
-    { value: 'ollama', label: 'Ollama', blurb: 'Local · gratuit · privé', local: true, modelPlaceholder: 'qwen2.5-coder:7b' },
-    { value: 'openrouter', label: 'OpenRouter', blurb: 'Des centaines de modèles, une clé', modelPlaceholder: 'deepseek/deepseek-chat' },
+    { value: 'ollama', label: 'Ollama', blurb: 'Local · free · private', local: true, modelPlaceholder: 'qwen2.5-coder:7b' },
+    { value: 'openrouter', label: 'OpenRouter', blurb: 'Hundreds of models, one key', modelPlaceholder: 'deepseek/deepseek-chat' },
     { value: 'openai', label: 'OpenAI', blurb: 'GPT-4o · GPT-4o-mini', modelPlaceholder: 'gpt-4o-mini' },
     { value: 'anthropic', label: 'Anthropic', blurb: 'Claude Sonnet / Haiku', modelPlaceholder: 'claude-sonnet-4-5' },
     { value: 'mistral', label: 'Mistral', blurb: 'Codestral · Mistral Large', modelPlaceholder: 'codestral-latest' },
-    { value: 'lmstudio', label: 'LM Studio', blurb: 'Local · serveur OpenAI', local: true, modelPlaceholder: 'local-model' }
+    { value: 'lmstudio', label: 'LM Studio', blurb: 'Local · OpenAI server', local: true, modelPlaceholder: 'local-model' }
   ];
 
   let provider = $state<ProviderType>('ollama');
   let modelId = $state('');
   let apiKey = $state('');
   let apiBase = $state('');
+  let firstName = $state(untrack(() => baseConfig?.firstName ?? ''));
+  let customName = $state('');
 
   const selectedMeta = $derived(PROVIDERS.find(p => p.value === provider));
   const isLocal = $derived(selectedMeta?.local ?? false);
   const keyPage = $derived(PROVIDER_KEY_PAGE[provider]);
   const effectiveModel = $derived(modelId.trim() || (selectedMeta?.modelPlaceholder ?? ''));
-  const canProceed = $derived(!!effectiveModel && (isLocal || apiKey.trim().length > 0));
+  const defaultDisplayName = $derived(`${effectiveModel} (${selectedMeta?.label ?? provider})`);
+  const canProceed = $derived(!!firstName.trim() && !!effectiveModel && (isLocal || apiKey.trim().length > 0));
 
   function selectProvider(p: ProviderType) {
     provider = p;
@@ -63,7 +66,7 @@
 
   function buildItem(): ModelItem {
     return {
-      name: `${selectedMeta?.label ?? provider} · ${effectiveModel}`,
+      name: customName.trim() || defaultDisplayName,
       provider,
       model: effectiveModel,
       apiKey: apiKey.trim() || undefined,
@@ -82,6 +85,7 @@
     const base: JarvisConfig = baseConfig ?? { version: 1, models: { default: null, items: [] } };
     const config: JarvisConfig = {
       ...base,
+      firstName: firstName.trim() || undefined,
       models: {
         default: item.name,
         items: [...base.models.items.filter(m => m.name !== item.name), item]
@@ -95,18 +99,18 @@
   const SLIDES = [
     {
       icon: 'chat',
-      title: 'Le Chat agentique',
-      body: 'Décrivez ce que vous voulez en langage naturel. Jarvis lit vos fichiers, écrit du code, lance des commandes et valide ses résultats — étape par étape, avec votre accord (HITL).'
+      title: 'Agentic Chat',
+      body: 'Describe what you want in natural language. Jarvis reads your files, writes code, runs commands, and validates its results — step by step, with your approval (HITL).'
     },
     {
       icon: 'tools',
-      title: 'Édition inline · Cmd+K',
-      body: 'Sélectionnez du code dans l’éditeur puis Ctrl+K Ctrl+K. Donnez une instruction (« ajoute un try/catch ») : la modification s’applique sur place avec des boutons Accept / Reject.'
+      title: 'Inline editing · Cmd+K',
+      body: 'Select code in the editor then press Ctrl+K Ctrl+K. Give an instruction ("add a try/catch"): the modification is applied in place with Accept / Reject buttons.'
     },
     {
       icon: 'book',
-      title: 'Le contexte avec @mentions',
-      body: 'Tapez @file:src/index.ts pour injecter un fichier, ou @docs:… pour une recherche sémantique (RAG local). Jarvis répond avec le bon contexte, sans copier-coller.'
+      title: 'Context with @mentions',
+      body: 'Type @file:src/index.ts to inject a file, or @docs:… for semantic search (local RAG). Jarvis replies with the right context, without copy-pasting.'
     }
   ];
   let slide = $state(0);
@@ -117,20 +121,20 @@
     <header class="wh">
       <div class="logo"><Icon name="chat" size={22} /></div>
       <div>
-        <h1>Bienvenue dans Jarvis</h1>
-        <p class="sub">Votre pair-programmeur IA, directement dans VS Code.</p>
+        <h1>Welcome to Jarvis</h1>
+        <p class="sub">Your AI pair-programmer, directly in VS Code.</p>
       </div>
     </header>
 
     <ol class="steps" aria-hidden="true">
       <li class:active={step >= 1} class:done={step > 1}>1 · Provider</li>
-      <li class:active={step >= 2} class:done={step > 2}>2 · Connexion</li>
+      <li class:active={step >= 2} class:done={step > 2}>2 · Connection</li>
       <li class:active={step >= 3}>3 · Tour</li>
     </ol>
 
     {#if step === 1}
       <div class="body">
-        <h2>Choisissez un fournisseur de modèle</h2>
+        <h2>Choose a model provider</h2>
         <div class="provider-grid">
           {#each PROVIDERS as p (p.value)}
             <button class="provider-card" class:selected={provider === p.value} onclick={() => selectProvider(p.value)}>
@@ -141,13 +145,23 @@
         </div>
 
         <label class="field">
-          <span>Modèle</span>
+          <span>First name</span>
+          <input class="j-input" placeholder="Your first name" bind:value={firstName} />
+        </label>
+
+        <label class="field">
+          <span>Model name</span>
+          <input class="j-input" placeholder={defaultDisplayName} bind:value={customName} />
+        </label>
+
+        <label class="field">
+          <span>API Model (ID)</span>
           <input class="j-input" placeholder={selectedMeta?.modelPlaceholder} bind:value={modelId} />
         </label>
 
         {#if !isLocal}
           <label class="field">
-            <span>Clé API</span>
+            <span>API Key</span>
             <input class="j-input" type="password" autocomplete="off" placeholder="sk-…" bind:value={apiKey} />
           </label>
           {#if keyPage}
@@ -155,44 +169,44 @@
           {/if}
         {:else}
           <p class="hint">
-            Démarrez le serveur local (ex. <code>ollama run {selectedMeta?.modelPlaceholder}</code>). Aucune clé nécessaire.
+            Start the local server (e.g. <code>ollama run {selectedMeta?.modelPlaceholder}</code>). No key required.
           </p>
         {/if}
 
         <label class="field">
-          <span>URL de base <em>(optionnel)</em></span>
+          <span>Base URL <em>(optional)</em></span>
           <input class="j-input" placeholder={DEFAULT_BASE_URL[provider]} bind:value={apiBase} />
         </label>
 
         <div class="actions">
-          <button class="link-btn" onclick={onComplete}>Passer</button>
-          <button class="primary" disabled={!canProceed} onclick={() => (step = 2)}>Continuer</button>
+          <button class="link-btn" onclick={onComplete}>Skip</button>
+          <button class="primary" disabled={!canProceed} onclick={() => (step = 2)}>Continue</button>
         </div>
       </div>
 
     {:else if step === 2}
       <div class="body">
-        <h2>Vérifions la connexion</h2>
+        <h2>Let's check the connection</h2>
         <div class="recap">
           <span><strong>{selectedMeta?.label}</strong> · {effectiveModel}</span>
-          <button class="link-btn" onclick={() => (step = 1)}>Modifier</button>
+          <button class="link-btn" onclick={() => (step = 1)}>Edit</button>
         </div>
 
         <button class="primary wide" disabled={testing} onclick={handleTest}>
-          {#if testing}Test en cours…{:else}Tester la connexion{/if}
+          {#if testing}Testing...{:else}Test connection{/if}
         </button>
 
         {#if connectionResult}
           {#if connectionResult.ok}
-            <div class="result ok"><Icon name="check" size={14} /> Connexion réussie. Le modèle répond.</div>
+            <div class="result ok"><Icon name="check" size={14} /> Connection successful. The model responds.</div>
           {:else}
-            <div class="result err"><Icon name="warning" size={14} /> Échec : {connectionResult.error}</div>
+            <div class="result err"><Icon name="warning" size={14} /> Failure: {connectionResult.error}</div>
           {/if}
         {/if}
 
         <div class="actions">
-          <button class="link-btn" onclick={onComplete}>Passer</button>
-          <button class="primary" onclick={handleSaveAndContinue}>Enregistrer et continuer</button>
+          <button class="link-btn" onclick={onComplete}>Skip</button>
+          <button class="primary" onclick={handleSaveAndContinue}>Save and continue</button>
         </div>
       </div>
 
@@ -212,14 +226,14 @@
 
         <div class="actions">
           {#if slide > 0}
-            <button class="link-btn" onclick={() => (slide -= 1)}>Précédent</button>
+            <button class="link-btn" onclick={() => (slide -= 1)}>Previous</button>
           {:else}
             <span></span>
           {/if}
           {#if slide < SLIDES.length - 1}
-            <button class="primary" onclick={() => (slide += 1)}>Suivant</button>
+            <button class="primary" onclick={() => (slide += 1)}>Next</button>
           {:else}
-            <button class="primary" onclick={onComplete}>Commencer à coder</button>
+            <button class="primary" onclick={onComplete}>Start coding</button>
           {/if}
         </div>
       </div>

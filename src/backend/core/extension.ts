@@ -42,7 +42,8 @@ import { getBuiltinMcpServers, builtinCommandString } from './mcp/builtin.js';
 
 const BASE_SYSTEM_PROMPT =
   'Tu es Jarvis, un assistant de code agentique intégré à VS Code. ' +
-  'Réponds de manière concise et technique. Utilise le Markdown pour formater ton code.';
+  'Réponds de manière concise et technique. Utilise le Markdown pour formater ton code.\n' +
+  'RÈGLE CRITIQUE : Ne t\'enferme jamais dans une boucle. Si tu te surprends à répéter la même action, la même commande ou écrire le même fichier plusieurs fois, ARRÊTE-TOI IMMÉDIATEMENT, considère la tâche comme terminée (ou bloquée) et donne ta réponse finale.';
 
 /** Clé workspaceState : instantané de la jauge de tokens (persistance de session). */
 const TOKEN_STATE_KEY = 'jarvis.tokenState';
@@ -248,6 +249,10 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
           await this.onChatMessage(webview, message.text, mode);
         }
         break;
+      case 'planProceed':
+        // Lancer l'exécution du plan validé en mode automatique
+        await this.onChatMessage(webview, "Le plan est validé. Procède à son implémentation étape par étape.", 'Automatic');
+        break;
       case 'listCheckpoints':
         await this.onListCheckpoints(webview);
         break;
@@ -344,6 +349,7 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
         if (this.currentAbortController) {
           this.currentAbortController.abort();
           this.currentAbortController = null;
+          this.post(webview, { type: 'chatError', error: "Génération annulée par l'utilisateur." });
         }
         break;
       case 'testConnection':
@@ -406,9 +412,29 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
   public onChangesChanged: (() => void) | null = null;
 
   public async resolveHunk(pathStr: string, hunkId: number, revision: number, action: 'accept' | 'reject'): Promise<void> {
+    let rejectedDiff = '';
+    if (action === 'reject') {
+      const snap = this.changeTracker.snapshot().find(s => s.path === pathStr && s.revision === revision);
+      const hunk = snap?.hunks.find(h => h.id === hunkId);
+      if (hunk) {
+        rejectedDiff = `\`\`\`diff\n`;
+        for (const l of hunk.contextBefore) rejectedDiff += ` ${l}\n`;
+        for (const l of hunk.beforeLines) rejectedDiff += `- ${l}\n`;
+        for (const l of hunk.afterLines) rejectedDiff += `+ ${l}\n`;
+        for (const l of hunk.contextAfter) rejectedDiff += ` ${l}\n`;
+        rejectedDiff += `\`\`\``;
+      }
+    }
+
     const diskAction = this.changeTracker.resolveHunk(pathStr, hunkId, revision, action);
     if (diskAction) {
       await this.applyDiskAction(diskAction);
+    }
+
+    if (action === 'reject' && rejectedDiff && this._view?.webview) {
+      const msg = `J'ai rejeté la modification suivante dans le fichier \`${pathStr}\` :\n${rejectedDiff}\n\nVeuillez proposer une alternative directement dans le chat (n'utilisez pas vos outils d'édition de fichiers).`;
+      this.post(this._view.webview, { type: 'injectUserMessage', text: msg });
+      await this.onChatMessage(this._view.webview, msg, 'Automatic');
     }
   }
 
@@ -416,6 +442,12 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     const diskAction = this.changeTracker.resolveFile(pathStr, action);
     if (diskAction) {
       await this.applyDiskAction(diskAction);
+    }
+
+    if (action === 'reject' && this._view?.webview) {
+      const msg = `J'ai rejeté TOUTES les modifications dans le fichier \`${pathStr}\`. Veuillez proposer une alternative directement dans le chat (n'utilisez pas vos outils d'édition de fichiers).`;
+      this.post(this._view.webview, { type: 'injectUserMessage', text: msg });
+      await this.onChatMessage(this._view.webview, msg, 'Automatic');
     }
   }
 
@@ -437,7 +469,7 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
       await vscode.window.showTextDocument(doc, { preview: false });
     } catch (err) {
       operationLogger.log('extension', `onOpenFile échoué: ${err instanceof Error ? err.message : err}`, 'error');
-      vscode.window.showErrorMessage(`Jarvis: impossible d'ouvrir le fichier — ${err instanceof Error ? err.message : err}`);
+      vscode.window.showErrorMessage(`Jarvis: unable to open file — ${err instanceof Error ? err.message : err}`);
     }
   }
 
@@ -451,6 +483,13 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     const diskActions = this.changeTracker.resolveAll(action);
     for (const d of diskActions) {
       await this.applyDiskAction(d);
+    }
+
+    if (action === 'reject' && diskActions.length > 0 && this._view?.webview) {
+      const paths = diskActions.map(d => `\`${d.path}\``).join(', ');
+      const msg = `J'ai rejeté TOUTES les modifications en attente dans les fichiers suivants : ${paths}. Veuillez proposer une alternative directement dans le chat (n'utilisez pas vos outils d'édition de fichiers).`;
+      this.post(this._view.webview, { type: 'injectUserMessage', text: msg });
+      await this.onChatMessage(this._view.webview, msg, 'Automatic');
     }
   }
 
@@ -655,10 +694,16 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
 
   private postTokens(webview: vscode.Webview): void {
     const usage = this.tokenCounter.getUsage();
+    
+    const extras = this.getPromptExtras();
+    const systemPrompt = extras ? `${BASE_SYSTEM_PROMPT}\n\n${extras}` : BASE_SYSTEM_PROMPT;
+    const contextStr = systemPrompt + '\n' + this.history.map(m => `${m.role}: ${m.content}`).join('\n');
+    const contextSize = estimateTokens(contextStr);
+
     this.post(webview, {
       type: 'tokens',
       usage,
-      tokensUsed: usage.used,
+      tokensUsed: contextSize,
       tokensLimit: usage.limit
     });
     this.onTokensChanged?.(usage);
@@ -723,21 +768,19 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       operationLogger.log('config', `openConfigFile échoué: ${msg}`, 'error');
-      vscode.window.showErrorMessage(`Jarvis: impossible d'ouvrir la config — ${msg}`);
+      vscode.window.showErrorMessage(`Jarvis: unable to open config — ${msg}`);
     }
   }
 
   /** Ouvre le README.md en aperçu (User Guide). */
   private async onOpenUserGuide(): Promise<void> {
     try {
-      const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-      if (!workspaceFolder) throw new Error("No active workspace");
-      const uri = vscode.Uri.file(path.join(workspaceFolder, 'README.md'));
+      const uri = vscode.Uri.file(path.join(this.context.extensionPath, 'README.md'));
       await vscode.commands.executeCommand('markdown.showPreview', uri);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       operationLogger.log('extension', `openUserGuide échoué: ${msg}`, 'error');
-      vscode.window.showErrorMessage(`Jarvis: impossible d'ouvrir le guide — ${msg}`);
+      vscode.window.showErrorMessage(`Jarvis: unable to open guide — ${msg}`);
     }
   }
 
@@ -905,8 +948,49 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     };
   }
 
-  private async onChatMessage(webview: vscode.Webview, rawText: string, mode: string = 'Automatique'): Promise<void> {
+  private async runPlanMode(webview: vscode.Webview, active: { provider: IModelProvider; providerName: string; model: string }, expanded: string): Promise<void> {
+    operationLogger.log('chat', 'Mode Plan : Génération du implementation_plan.md');
+    const planSystemPrompt = "RÈGLE SPECIALE MODE PLAN: Tu es en mode Plan. Rédige et mets à jour le plan d'implémentation détaillé directement dans ta réponse en Markdown. Ne crée AUCUN fichier physique sur le disque. Ton unique but est de répondre avec le plan complet formaté en Markdown.";
+    
+    let finalPrompt = expanded;
+    const lastAssistantMsg = [...this.history].reverse().find(m => m.role === 'assistant');
+    if (lastAssistantMsg) {
+      finalPrompt = `Voici le plan d'implémentation actuel :\n\n${lastAssistantMsg.content}\n\nConsigne de modification :\n${expanded}\n\nRefais le plan complètement en appliquant ces consignes.`;
+    }
+
+    const planText = await this.runAgent(webview, active, finalPrompt, planSystemPrompt, undefined, { kind: 'plan' });
+    if (planText) this.history.push({ role: 'assistant', content: planText });
+    this.getSessions()?.updateCurrent(this.history);
+  }
+
+  private async onChatMessage(webview: vscode.Webview, rawText: string, mode: string = 'Automatic'): Promise<void> {
     operationLogger.log('chat', `Message reçu [mode: ${mode}] : ${rawText.slice(0, 80)}`);
+
+    if (this.currentAbortController) {
+      this.currentAbortController.abort();
+      this.currentAbortController = null;
+    }
+
+    const active = this.getActiveProvider();
+    if (!active) {
+      this.post(webview, {
+        type: 'chatError',
+        error: 'No model configured. Open Settings to add a provider and API key.',
+        needsSetup: true
+      });
+      return;
+    }
+    const isSmallModel = active.providerName === 'ollama' || 
+      active.providerName === 'lmstudio' || 
+      active.model.toLowerCase().includes('7b') || 
+      active.model.toLowerCase().includes('8b');
+
+    if (isSmallModel && mode !== 'Fast') {
+      mode = 'Fast';
+      this.post(webview, { type: 'chatChunk', text: "\n\n*(Petit modèle détecté : Bascule automatique en mode Rapide)*\n\n" });
+      operationLogger.log('chat', `Petit modèle détecté (${active.model}), routage forcé vers mode Fast`);
+    }
+
     // Commandes outils déterministes (@read, @list, @write, @run)
     if (/^@(read|list|write|run)\b/.test(rawText)) {
       await this.handleToolCommand(webview, rawText);
@@ -939,15 +1023,7 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
       searchDocs: q => this.searchAllDocs(q)
     });
 
-    const active = this.getActiveProvider();
-    if (!active) {
-      this.post(webview, {
-        type: 'chatError',
-        error: 'No model configured. Open Settings to add a provider and API key.',
-        needsSetup: true
-      });
-      return;
-    }
+
 
     // Boucle Auto-TDD (spec §3.3)
     if (rawText.startsWith('/tdd ')) {
@@ -981,39 +1057,81 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
 
     // Mode Plan : Workflow strict (Analyses, Plan, Validation, Implémentation)
     if (mode === 'Plan') {
-      const planSystemPrompt = "RÈGLE SPECIALE MODE PLAN: Ne fais pas de code direct. Analyse le besoin, et écris un fichier 'implementation_plan.md' détaillé, puis pose la question 'Mon plan te convient-il ?' à l'utilisateur.";
-      const planText = await this.runAgent(webview, active, expanded, planSystemPrompt);
-      if (planText) this.history.push({ role: 'assistant', content: planText });
-      this.getSessions()?.updateCurrent(this.history);
+      await this.runPlanMode(webview, active, expanded);
       return;
     }
 
-    // Détection de petit modèle pour forcer le workflow dynamique si en mode Automatique
-    const configManager = getConfigManager();
-    const currentModelConfig = configManager.getConfig().models.items.find(m => m.model === configManager.getConfig().models.default);
-    const isSmallModel = currentModelConfig && (
-      currentModelConfig.provider === 'ollama' || 
-      currentModelConfig.provider === 'lmstudio' || 
-      currentModelConfig.model.toLowerCase().includes('7b') || 
-      currentModelConfig.model.toLowerCase().includes('8b')
-    );
-
-    if (mode === 'Automatique' && isSmallModel) {
-      operationLogger.log('chat', `Petit modèle détecté (${currentModelConfig.model}), bascule vers workflow 'dynamic'`);
-      await this.runWorkflow(webview, active, 'dynamic', expanded);
+    // Mode Rapide : Chat direct sans outils, réponse immédiate en texte
+    if (mode === 'Fast') {
+      operationLogger.log('chat', 'Mode Rapide : bascule vers streamChat sans outils');
+      await this.streamChat(webview, active, expanded, rawText);
       return;
+    }
+
+    // === ROUTEUR AUTOMATIQUE ===
+    // Vérification en amont si la question nécessite des outils (seulement en mode Automatic)
+    if (mode === 'Automatic') {
+      try {
+        const routerPrompt = [
+          { role: 'system' as const, content: 'Tu es un classifieur d\'intention. Réfléchis à voix haute en une phrase courte, puis termine obligatoirement ta réponse par le mot exact "[TOOLS]", "[CHAT]" ou "[PLAN]".\n"[CHAT]" si c\'est une salutation simple, une question théorique sans action requise (ex: "qui es-tu ?", "comment fonctionne React ?").\n"[TOOLS]" si l\'utilisateur demande une action technique modérée, ponctuelle, ou l\'édition de 1 à 3 fichiers (ex: "crée un composant bouton", "corrige ce bug").\n"[PLAN]" si la tâche est vaste, architecturale, ou implique la création/modification de nombreux fichiers ou d\'un projet entier (ex: "crée une API Express complète", "migre ce projet en TypeScript").' },
+          { role: 'user' as const, content: expanded }
+        ];
+        
+        this.post(webview, { type: 'chatStart' });
+        this.post(webview, { type: 'agentThinking', text: '' });
+        
+        let decisionRaw = '';
+        const abortController = new AbortController();
+        const timeout = setTimeout(() => abortController.abort(new Error("Timeout du routeur (30s)")), 30000);
+
+        try {
+          if (active.provider.sendPromptStream) {
+            await active.provider.sendPromptStream(
+              routerPrompt,
+              chunk => {
+                decisionRaw += chunk;
+                this.post(webview, { type: 'agentThinkingChunk', chunk });
+              },
+              () => {},
+              err => { throw err; },
+              undefined,
+              abortController.signal
+            );
+          } else {
+            const res = await active.provider.sendPrompt(routerPrompt, undefined, abortController.signal);
+            decisionRaw = typeof res === 'string' ? res : res.text;
+            this.post(webview, { type: 'agentThinkingChunk', chunk: decisionRaw });
+          }
+        } finally {
+          clearTimeout(timeout);
+        }
+        
+        this.post(webview, { type: 'chatDone' });
+        
+        const decisionUpper = decisionRaw.toUpperCase();
+        if (decisionUpper.includes('[CHAT]') && !decisionUpper.includes('[TOOLS]') && !decisionUpper.includes('[PLAN]')) {
+          operationLogger.log('chat', 'Routage: Intention conversationnelle détectée -> bascule en mode sans outils');
+          await this.streamChat(webview, active, expanded, rawText);
+          return;
+        }
+        if (decisionUpper.includes('[PLAN]')) {
+          operationLogger.log('chat', 'Routage: Tâche vaste détectée -> bascule dynamique en mode Plan');
+          await this.runPlanMode(webview, active, expanded);
+          return;
+        }
+      } catch (e) {
+        this.post(webview, { type: 'chatChunk', text: `\n*(Erreur du routeur: ${e instanceof Error ? e.message : e} - Fallback sur les outils)*` });
+        this.post(webview, { type: 'chatDone' });
+        operationLogger.log('chat', `Erreur du routeur, fallback sur les outils: ${e}`);
+      }
     }
 
     // Par défaut le chat est agentique : le modèle dispose de ses outils
     // (création/édition de fichiers, terminal…) au lieu de répondre en texte.
     const chatMode = this.getOptimization().chatMode ?? 'agent';
-    if (chatMode === 'agent' || mode === 'Rapide' || mode === 'Automatique') {
-      let extraPrompt = undefined;
-      if (mode === 'Rapide') {
-        extraPrompt = "MODE RAPIDE : Agis immédiatement sans plan, sois extrêmement concis et fais le code/les commandes sans réfléchir à voix haute.";
-      }
+    if (chatMode === 'agent' || mode === 'Automatic') {
       const recentHistory = this.history.slice(-10);
-      const finalText = await this.runAgent(webview, active, expanded, extraPrompt, recentHistory);
+      const finalText = await this.runAgent(webview, active, expanded, undefined, recentHistory);
       this.history.push({ role: 'user', content: this.maybeScrub(expanded, active.providerName) });
       if (finalText) this.history.push({ role: 'assistant', content: finalText });
       this.getSessions()?.updateCurrent(this.history);
@@ -1045,7 +1163,7 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     
     const list = store.list();
     if (list.length === 0) {
-      vscode.window.showInformationMessage("Jarvis: Aucune discussion précédente trouvée.");
+      vscode.window.showInformationMessage("Jarvis: No previous discussion found.");
       return;
     }
 
@@ -1158,7 +1276,10 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
         });
       },
       err => {
-        this.post(webview, { type: 'chatError', error: err.message });
+        const isAbort = err.name === 'AbortError' || err.message.includes('aborted');
+        if (!isAbort) {
+          this.post(webview, { type: 'chatError', error: err.message });
+        }
         operationLogger.log('chat', `Erreur du modèle: ${err.message}`, 'error');
         this.getAnalytics()?.trackAction({
           type: 'chat',
@@ -1307,16 +1428,34 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     active: { provider: IModelProvider; providerName: string; model: string },
     task: string,
     persona?: string,
-    history?: ChatMessage[]
+    history?: ChatMessage[],
+    options: { kind?: import('../../frontend/shared/types.js').MessageKind, isSmallModel?: boolean } = {}
   ): Promise<string | void> {
+    this.post(webview, { type: 'chatStart' });
     this.currentAbortController = new AbortController();
     
+    // Assure que le fichier .jarvisignore est généré au plus tôt dans l'espace de travail via l'API asynchrone VS Code
+    try { await new SandboxManager().ensureIgnoreFile(); } catch { /* ignore */ }
+
     let result;
     const started = Date.now();
     let inputTokens = estimateTokens(task);
 
     try {
-      const registry = await this.getToolRegistry();
+      const baseRegistry = await this.getToolRegistry();
+      const registry = baseRegistry.clone();
+      
+      if (options.isSmallModel) {
+        operationLogger.log('agent', 'Petit modèle détecté : restriction des outils aux fichiers essentiels.');
+        registry.restrictTo([
+          'create_new_file', 
+          'edit_existing_file', 
+          'single_find_and_replace', 
+          'read_file',
+          'run_terminal_command'
+        ]);
+      }
+
       const orchestrator = this.buildOrchestrator(active, registry, persona);
 
       // Checkpoint avant action agentique (spec §6.2)
@@ -1336,29 +1475,37 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
       this.currentAbortController = null;
     }
 
-    const outputTokens = estimateTokens(result.finalText);
-    this.recordRequest(webview, active.model, inputTokens, outputTokens, result.usage?.cachedTokens ?? 0);
+    const finalInputTokens = result.usage?.promptTokens || inputTokens;
+    const finalOutputTokens = result.usage?.completionTokens || estimateTokens(result.finalText);
+    this.recordRequest(webview, active.model, finalInputTokens, finalOutputTokens, result.usage?.cachedTokens ?? 0);
 
     this.getAnalytics()?.trackAction({
       type: 'agent',
       model: active.model,
-      inputTokens,
-      outputTokens,
+      inputTokens: finalInputTokens,
+      outputTokens: finalOutputTokens,
       duration: (Date.now() - started) / 1000,
       status: result.success ? 'success' : 'error'
     });
 
-    if (result.success) {
-      this.post(webview, {
-        type: 'agentFinal',
-        text: '', // Déjà streamé via onFinal Chunk
-        badges: [{ icon: '✅', label: `Terminé en ${result.iterations} itération(s)`, variant: 'success' }]
-      });
-      this.notifyPendingChanges(webview);
-      return result.finalText;
-    } else {
-      this.post(webview, { type: 'chatError', error: result.error ?? 'Échec de l\'agent' });
+    if (!result.success) {
+      const isAbort = result.error?.includes("annulée par l'utilisateur");
+      if (!isAbort) {
+        this.post(webview, { type: 'chatError', error: result.error ?? 'Échec de l\'agent' });
+      }
+      return;
     }
+
+    this.post(webview, {
+      type: 'agentFinal',
+      text: '', // Déjà streamé via onFinal Chunk
+      kind: options?.kind,
+      badges: [{ icon: '✅', label: `Terminé en ${result.iterations} itération(s)`, variant: 'success' }]
+    });
+    this.notifyPendingChanges(webview);
+    this.post(webview, { type: 'chatDone' });
+
+    return result.finalText;
   }
 
   /** Boucle Auto-TDD (spec §3.3). */
@@ -1439,9 +1586,24 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     webview: vscode.Webview,
     active: { provider: IModelProvider; providerName: string; model: string },
     workflowId: string,
-    task: string
+    task: string,
+    options: { isSmallModel?: boolean } = {}
   ): Promise<void> {
-    const registry = await this.getToolRegistry();
+    this.post(webview, { type: 'chatStart' });
+    const baseRegistry = await this.getToolRegistry();
+    const registry = baseRegistry.clone();
+    
+    if (options.isSmallModel) {
+      registry.restrictTo([
+        'create_new_file', 
+        'edit_existing_file', 
+        'single_find_and_replace', 
+        'read_file',
+        'run_terminal_command'
+      ]);
+    }
+
+    this.currentAbortController = new AbortController();
     const orchestrator = this.buildOrchestrator(active, registry);
     const runner = new WorkflowRunner(orchestrator, async () => {
       await this.getCheckpoints().createCheckpoint('workflow', `${workflowId}-${task.slice(0, 30)}`).catch(() => null);
@@ -1477,6 +1639,7 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
       });
     }
     this.postTokens(webview);
+    this.post(webview, { type: 'chatDone' });
   }
 
   /** Handles `@read <path>`, `@list <path>`, `@write <path> <content>`, `@run <cmd>`. */
@@ -1571,10 +1734,10 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
   private async onRollback(webview: vscode.Webview, ref: string): Promise<void> {
     const result = await this.getCheckpoints().rollback(ref);
     if (result.success) {
-      vscode.window.showInformationMessage(`Jarvis: rollback effectué (${ref})`);
+      vscode.window.showInformationMessage(`Jarvis: rollback completed (${ref})`);
       operationLogger.log('rollback', ref, 'success');
     } else {
-      vscode.window.showErrorMessage(`Jarvis: rollback échoué — ${result.error}`);
+      vscode.window.showErrorMessage(`Jarvis: rollback failed — ${result.error}`);
       operationLogger.log('rollback', `${ref}: ${result.error}`, 'error');
     }
     await this.onListCheckpoints(webview);
@@ -1600,12 +1763,12 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
   public async inlineEdit(): Promise<void> {
     const editor = vscode.window.activeTextEditor;
     if (!editor) {
-      vscode.window.showInformationMessage("Jarvis: aucun éditeur actif pour l'édition en ligne.");
+      vscode.window.showInformationMessage("Jarvis: no active editor for inline editing.");
       return;
     }
     const selection = editor.selection;
     if (selection.isEmpty) {
-      vscode.window.showInformationMessage("Jarvis: veuillez sélectionner du code pour l'édition en ligne (Cmd+K).");
+      vscode.window.showInformationMessage("Jarvis: please select code for inline editing (Cmd+K).");
       return;
     }
 
@@ -1619,7 +1782,7 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
 
     const active = this.getActiveProvider();
     if (!active) {
-      vscode.window.showErrorMessage("Jarvis: Veuillez configurer un modèle pour utiliser Cmd+K.");
+      vscode.window.showErrorMessage("Jarvis: Please configure a model to use Cmd+K.");
       return;
     }
 
@@ -1640,10 +1803,10 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
             this.getSessions()?.updateCurrent(this.history);
             await this.runAgent(this._view.webview, active, task, "MODE INLINE EDIT: Edite uniquement la section demandée dans le fichier via tes outils. Sois direct, pas d'explications superflues.");
           } else {
-            vscode.window.showWarningMessage("Veuillez ouvrir la barre latérale Jarvis au moins une fois pour démarrer.");
+            vscode.window.showWarningMessage("Please open the Jarvis sidebar at least once to start.");
           }
         } catch (err) {
-          vscode.window.showErrorMessage(`Erreur Cmd+K: ${err instanceof Error ? err.message : err}`);
+          vscode.window.showErrorMessage(`Cmd+K error: ${err instanceof Error ? err.message : err}`);
         }
       }
     );
@@ -1826,7 +1989,7 @@ export class JarvisExtension {
 
   public showRollbackPanel(): void {
     this.sidebarProvider.focus();
-    vscode.window.showInformationMessage('Jarvis: ouvrez l\'onglet Checkpoints dans la barre latérale.');
+    vscode.window.showInformationMessage('Jarvis: open the Checkpoints tab in the sidebar.');
   }
 
   public async listCheckpoints(): Promise<void> {
@@ -1834,7 +1997,7 @@ export class JarvisExtension {
       const manager = new CheckpointManager();
       const list = await manager.listCheckpoints();
       if (list.length === 0) {
-        vscode.window.showInformationMessage('Jarvis: aucun checkpoint disponible.');
+        vscode.window.showInformationMessage('Jarvis: no checkpoint available.');
         return;
       }
       const pick = await vscode.window.showQuickPick(
@@ -1844,9 +2007,9 @@ export class JarvisExtension {
       if (pick) {
         const result = await manager.rollback(pick.description ?? '');
         if (result.success) {
-          vscode.window.showInformationMessage(`Rollback effectué: ${pick.label}`);
+          vscode.window.showInformationMessage(`Rollback completed: ${pick.label}`);
         } else {
-          vscode.window.showErrorMessage(`Rollback échoué: ${result.error}`);
+          vscode.window.showErrorMessage(`Rollback failed: ${result.error}`);
         }
       }
     } catch (err) {
@@ -1859,7 +2022,7 @@ export class JarvisExtension {
     try {
       const analytics = this.sidebarProvider.getAnalytics();
       if (!analytics) {
-        vscode.window.showWarningMessage('Jarvis: analytics indisponible (workspace requis).');
+        vscode.window.showWarningMessage('Jarvis: analytics unavailable (workspace required).');
         return;
       }
       await analytics.export();
@@ -1875,7 +2038,7 @@ export class JarvisExtension {
       const sandbox = new SandboxManager();
       await sandbox.regenerateIgnoreFile();
       setSandbox(sandbox);
-      vscode.window.showInformationMessage('Jarvis: .jarvisignore régénéré avec les patterns recommandés.');
+      vscode.window.showInformationMessage('Jarvis: .jarvisignore regenerated with recommended patterns.');
       operationLogger.log('jarvisignore', 'régénéré', 'success');
     } catch (err) {
       vscode.window.showErrorMessage(`Jarvis: ${err instanceof Error ? err.message : err}`);
@@ -1902,7 +2065,7 @@ export class JarvisExtension {
       const sandbox = new SandboxManager();
       await sandbox.addIgnorePattern(pattern);
       setSandbox(sandbox);
-      vscode.window.showInformationMessage(`Jarvis: "${pattern}" ajouté à .jarvisignore.`);
+      vscode.window.showInformationMessage(`Jarvis: "${pattern}" added to .jarvisignore.`);
       operationLogger.log('jarvisignore', `+ ${pattern}`, 'success');
     } catch (err) {
       vscode.window.showErrorMessage(`Jarvis: ${err instanceof Error ? err.message : err}`);
@@ -1915,7 +2078,7 @@ export class JarvisExtension {
       const sandbox = new SandboxManager();
       const patterns = sandbox.getIgnorePatterns();
       if (patterns.length === 0) {
-        vscode.window.showInformationMessage('Jarvis: .jarvisignore est vide.');
+        vscode.window.showInformationMessage('Jarvis: .jarvisignore is empty.');
         return;
       }
       const pick = await vscode.window.showQuickPick(patterns, {
@@ -1924,7 +2087,7 @@ export class JarvisExtension {
       if (!pick) return;
       await sandbox.removeIgnorePattern(pick);
       setSandbox(sandbox);
-      vscode.window.showInformationMessage(`Jarvis: "${pick}" retiré de .jarvisignore.`);
+      vscode.window.showInformationMessage(`Jarvis: "${pick}" removed from .jarvisignore.`);
       operationLogger.log('jarvisignore', `- ${pick}`, 'success');
     } catch (err) {
       vscode.window.showErrorMessage(`Jarvis: ${err instanceof Error ? err.message : err}`);
@@ -1940,7 +2103,7 @@ export class JarvisExtension {
         const count = await indexer.indexWorkspace((done, total) => {
           progress.report({ message: `${done}/${total} fichiers` });
         });
-        vscode.window.showInformationMessage(`Jarvis: ${count} fichiers indexés pour la recherche RAG.`);
+        vscode.window.showInformationMessage(`Jarvis: ${count} files indexed for RAG search.`);
       }
     );
   }

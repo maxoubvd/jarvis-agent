@@ -26,7 +26,7 @@ export class SandboxManager {
   private loadIgnorePatterns(): void {
     try {
       if (!fsSync.existsSync(this.ignorePath)) {
-        this.generateDefaultIgnore();
+        this.generateDefaultIgnoreSync();
         return;
       }
       const content: string = fsSync.readFileSync(this.ignorePath, 'utf-8');
@@ -58,7 +58,7 @@ export class SandboxManager {
     ];
   }
 
-  private async generateDefaultIgnore(): Promise<void> {
+  private async generateDefaultIgnoreAsync(): Promise<void> {
     const content = [
       '# Jarvis Ignore File — fichiers invisibles pour l\'IA',
       '# Généré automatiquement — modifiable manuellement',
@@ -109,16 +109,47 @@ export class SandboxManager {
     ].join('\n');
 
     try {
-      await fs.writeFile(this.ignorePath, content, 'utf-8');
+      const uri = vscode.Uri.file(this.ignorePath);
+      await vscode.workspace.fs.writeFile(uri, new TextEncoder().encode(content));
+    } catch (e) {
+      console.error('Failed to create .jarvisignore', e);
+    }
+    this.ignorePatterns = this.getDefaultPatterns();
+  }
+
+  private generateDefaultIgnoreSync(): void {
+    // Keep this for sync constructor, but it might fail
+    const content = [
+      '# Jarvis Ignore File — fichiers invisibles pour l\'IA',
+      '# Généré automatiquement — modifiable manuellement',
+      '',
+      '# Environnement et secrets',
+      '.env',
+      'node_modules/',
+      '.jarvisignore'
+    ].join('\n');
+
+    try {
+      fsSync.writeFileSync(this.ignorePath, content, 'utf-8');
     } catch {
       // Ignore write errors
     }
     this.ignorePatterns = this.getDefaultPatterns();
   }
 
+  /** Ensure the ignore file exists asynchronously */
+  public async ensureIgnoreFile(): Promise<void> {
+    try {
+      await vscode.workspace.fs.stat(vscode.Uri.file(this.ignorePath));
+    } catch {
+      // File does not exist
+      await this.generateDefaultIgnoreAsync();
+    }
+  }
+
   /** Régénère le fichier .jarvisignore avec les patterns recommandés. */
   public async regenerateIgnoreFile(): Promise<void> {
-    await this.generateDefaultIgnore();
+    await this.generateDefaultIgnoreAsync();
   }
 
   public getIgnorePatterns(): string[] {

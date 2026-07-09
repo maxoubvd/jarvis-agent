@@ -93,8 +93,9 @@
     border-left: 3px solid var(--jarvis-accent);
     border-radius: var(--jarvis-radius-md);
     background: var(--vscode-editorWidget-background);
-    max-height: 45vh;
+    max-height: 30vh;
     overflow-y: auto;
+    flex-shrink: 0;
   }
 
   .review-head {

@@ -25,7 +25,7 @@ export interface ToolDefinition {
   parameters: ToolParameter[];
   /** Type d'action HITL correspondant (terminal, write_file, read_file...). */
   hitlAction: string;
-  execute(args: Record<string, unknown>): Promise<string>;
+  execute(args: Record<string, unknown>, signal?: AbortSignal): Promise<string>;
 }
 
 export class ToolRegistry {
@@ -41,6 +41,26 @@ export class ToolRegistry {
 
   public list(): ToolDefinition[] {
     return [...this.tools.values()];
+  }
+
+  /** Crée une copie du registre d'outils. */
+  public clone(): ToolRegistry {
+    const cloned = new ToolRegistry();
+    for (const tool of this.tools.values()) {
+      cloned.register(tool);
+    }
+    return cloned;
+  }
+
+  /** Conserve uniquement les outils correspondants aux préfixes autorisés. */
+  public restrictTo(allowedPrefixes: string[]): void {
+    const all = Array.from(this.tools.keys());
+    for (const name of all) {
+      const allowed = allowedPrefixes.some(prefix => name === prefix || name.startsWith(prefix));
+      if (!allowed) {
+        this.tools.delete(name);
+      }
+    }
   }
 
   /** Description compacte des outils, injectée dans le prompt système. */
@@ -248,8 +268,8 @@ export function createBuiltinTools(): ToolDefinition[] {
         { name: 'command', type: 'string', description: 'commande à exécuter', required: true }
       ],
       hitlAction: 'terminal',
-      execute: async args => {
-        const result = await executeTerminalCommand(str(args, 'command'));
+      execute: async (args, signal) => {
+        const result = await executeTerminalCommand(str(args, 'command'), { signal });
         const output = `${result.stdout}${result.stderr}`.trim();
         return [
           output || '(aucune sortie)',
