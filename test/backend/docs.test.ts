@@ -65,13 +65,13 @@ describe('mergeSearchResults', () => {
 });
 
 describe('RagIndex.removeByPrefix', () => {
-  it('removes only documents whose path starts with the prefix', () => {
+  it('removes only documents whose path starts with the prefix', async () => {
     const index = new RagIndex();
-    index.addDocument('docs:site1:https://a', 'svelte runes documentation');
-    index.addDocument('docs:site2:https://b', 'svelte runes documentation');
-    index.addDocument('src/local.md', 'svelte runes documentation');
+    await index.addDocument('docs:site1:https://a', 'svelte runes documentation');
+    await index.addDocument('docs:site2:https://b', 'svelte runes documentation');
+    await index.addDocument('src/local.md', 'svelte runes documentation');
     index.removeByPrefix('docs:site1:');
-    const paths = index.search('svelte runes').map(r => r.path);
+    const paths = (await index.search('svelte runes', 10)).map(r => r.path);
     expect(paths).not.toContain('docs:site1:https://a');
     expect(paths).toContain('docs:site2:https://b');
     expect(paths).toContain('src/local.md');
@@ -134,7 +134,7 @@ describe('DocsService', () => {
     const { pages: count } = await service.indexSite(site);
     expect(count).toBe(3); // /guide/, /guide/install, /guide/usage — pas /other/ ni cross-origin
 
-    const results = service.search('wombat install');
+    const results = await service.search('wombat install');
     expect(results.length).toBeGreaterThan(0);
     expect(results[0].path.startsWith('docs:site-1:')).toBe(true);
   });
@@ -159,9 +159,9 @@ describe('DocsService', () => {
   it('rehydrates the index from cache on a fresh instance', async () => {
     await makeService().indexSite(site);
     const fresh = makeService();
-    expect(fresh.search('wombat').length).toBe(0);
+    expect((await fresh.search('wombat')).length).toBe(0);
     await fresh.loadFromCache([site]);
-    expect(fresh.search('wombat').length).toBeGreaterThan(0);
+    expect((await fresh.search('wombat')).length).toBeGreaterThan(0);
   });
 
   it('reports site statuses from meta.json', async () => {
@@ -176,7 +176,7 @@ describe('DocsService', () => {
     const service = makeService();
     await service.indexSite(site);
     await service.removeSite(site.id);
-    expect(service.search('wombat')).toHaveLength(0);
+    expect(await service.search('wombat')).toHaveLength(0);
     expect(fs.existsSync(path.join(tmpDir, 'site-1'))).toBe(false);
   });
 

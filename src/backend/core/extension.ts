@@ -1788,7 +1788,7 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
 
     const doc = editor.document;
     const selectedText = doc.getText(selection);
-    const filePath = doc.uri.fsPath;
+    const filePath = vscode.workspace.asRelativePath(doc.uri, false);
     const startLine = selection.start.line + 1;
     const endLine = selection.end.line + 1;
 
@@ -1801,6 +1801,14 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
           if (this._view?.webview) {
             this.history.push({ role: 'user', content: task });
             this.getSessions()?.updateCurrent(this.history);
+            // Affiche le prompt inline dans le chat (le task backend n'est jamais posté au webview autrement)
+            this.post(this._view.webview, {
+              type: 'inlinePrompt',
+              prompt,
+              file: filePath,
+              startLine,
+              endLine
+            });
             await this.runAgent(this._view.webview, active, task, "MODE INLINE EDIT: Edite uniquement la section demandée dans le fichier via tes outils. Sois direct, pas d'explications superflues.");
           } else {
             vscode.window.showWarningMessage("Please open the Jarvis sidebar at least once to start.");

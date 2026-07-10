@@ -117,9 +117,9 @@ describe('Agents spécialisés (spec §5.1)', () => {
 });
 
 describe('Workflows (spec §5.2)', () => {
-  it('defines the 5 predefined workflows', () => {
+  it('defines the predefined workflows (5 fixes + le découpage dynamique par IA)', () => {
     expect(WORKFLOWS.map(w => w.id)).toEqual([
-      'dev-feature', 'bug-fix', 'code-review', 'refactor', 'setup-project'
+      'dynamic', 'dev-feature', 'bug-fix', 'code-review', 'refactor', 'setup-project'
     ]);
     expect(getWorkflow('bug-fix')?.steps).toHaveLength(4);
   });

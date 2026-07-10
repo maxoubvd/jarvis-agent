@@ -189,6 +189,10 @@
       done?: boolean;
       sample?: string;
       messages?: Array<{ role: string; content: string }>;
+      prompt?: string;
+      file?: string;
+      startLine?: number;
+      endLine?: number;
     };
 
     switch (msg.type) {
@@ -369,6 +373,14 @@
       case 'injectUserMessage':
         if (msg.text) {
           pushMessage('user', msg.text);
+          isSending = true;
+        }
+        break;
+      case 'inlinePrompt':
+        if (msg.prompt) {
+          pushMessage('user', msg.prompt, 'inline', [
+            { icon: '✎', label: `${msg.file} L${msg.startLine}-${msg.endLine}`, variant: 'info' }
+          ]);
           isSending = true;
         }
         break;
@@ -579,12 +591,9 @@
         </button>
       </div>
     </div>
-    <div class="header-middle" style="flex: 1; text-align: center; font-size: 0.85em; opacity: 0.7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 16px;" title={currentFolder}>
-      {currentFolder || 'No Workspace'}
-    </div>
-    <div class="header-right" style="display: flex; align-items: center;">
-      <span class="status-text" style="font-size: 0.8em; opacity: 0.8; margin-right: 8px;">
-        {connectionStatus}
+    <div class="header-right">
+      <span class="workspace-badge" title="Active Workspace">
+        <Icon name="folder" /> {activeWorkspaceName}
       </span>
       <span
         class="status-dot"
@@ -752,7 +761,21 @@
     min-width: 0;
   }
 
-
+  .workspace-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    background: var(--vscode-badge-background, var(--vscode-button-secondaryBackground));
+    color: var(--vscode-badge-foreground, var(--vscode-button-secondaryForeground));
+    border-radius: var(--jarvis-radius-sm);
+    font-size: var(--jarvis-text-xs);
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+  }
 
   .status-dot {
     flex-shrink: 0;

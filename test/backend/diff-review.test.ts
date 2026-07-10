@@ -1,4 +1,13 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+// ChangeTracker importe `vscode` uniquement pour son EventEmitter (notification de revue).
+vi.mock('vscode', () => ({
+  EventEmitter: class {
+    fire() { /* no-op en test */ }
+    event() { /* no-op en test */ }
+  }
+}));
+
 import { computeHunks, resolveHunk } from '../../src/backend/services/diff.js';
 import { ChangeTracker } from '../../src/backend/services/change-tracker.js';
 

@@ -6,9 +6,6 @@ import { getSandbox } from './backend/core/mcp/tools/fileSystem.js';
 export function activate(context: vscode.ExtensionContext) {
   console.log('Jarvis: activation de l\'extension');
   const jarvis = new JarvisExtension(context);
-  
-  // Génère le fichier .jarvisignore automatiquement s'il n'existe pas
-  getSandbox();
 
   const commands = [
     vscode.commands.registerCommand('jarvis.startChat', () => jarvis.startChat()),
@@ -24,6 +21,18 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(...commands);
   jarvis.initialize();
+
+  // Génère le fichier .jarvisignore automatiquement après que le workspace soit prêt.
+  // Différé + protégé par try/catch : SandboxManager lève si aucun dossier n'est ouvert,
+  // ce qui ferait échouer activate() (et donc toute l'extension) si appelé plus haut sans garde.
+  setTimeout(async () => {
+    try {
+      const sandbox = getSandbox();
+      await sandbox.ensureIgnoreFile();
+    } catch (err) {
+      console.warn('Jarvis: impossible de créer .jarvisignore:', err);
+    }
+  }, 1000);
 }
 
 export function deactivate() {

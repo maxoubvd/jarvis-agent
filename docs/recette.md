@@ -53,16 +53,16 @@ Ce document liste l'intégralité des scénarios de test pour s'assurer du parfa
 - [X] **Résultat attendu** : Le texte ajouté par l'IA disparaît immédiatement de l'éditeur. Le fichier retourne à son état d'origine.
 
 ### 3.4 Édition en ligne (Cmd+K)
-- [ ] **Action** : Dans un fichier ouvert, sélectionnez une fonction, puis appuyez sur `Ctrl+K Ctrl+K` (ou `Cmd+K Cmd+K` sur Mac). Entrez un prompt (ex: "Ajoute un try/catch").
-- [ ] **Résultat attendu** : Jarvis s'active, comprend le contexte de la sélection et applique la modification directement dans l'éditeur via les outils d'édition. Les boutons d'acceptation de diff apparaissent.
+- [X] **Action** : Dans un fichier ouvert, sélectionnez une fonction, puis appuyez sur `Ctrl+K Ctrl+K` (ou `Cmd+K Cmd+K` sur Mac). Entrez un prompt (ex: "Ajoute un try/catch").
+- [X] **Résultat attendu** : Jarvis s'active, comprend le contexte de la sélection et applique la modification directement dans l'éditeur via les outils d'édition. Les boutons d'acceptation de diff apparaissent.
 
 ---
 
 ## 4. Contexte, RAG Sémantique et Tree-Sitter (Pruning)
 
 ### 4.1 Mention `@file:`
-- [ ] **Action** : Dans le chat, tapez "Que fait la fonction main dans @file:src/index.ts".
-- [ ] **Résultat attendu** : Le contenu de `src/index.ts` est lu et injecté. Jarvis explique correctement le code.
+- [X] **Action** : Dans le chat, tapez "Que fait la fonction main dans @file:src/index.ts".
+- [X] **Résultat attendu** : Le contenu de `src/index.ts` est lu et injecté. Jarvis explique correctement le code.
 
 ### 4.2 Recherche RAG (Semantic Search) avec `@docs:`
 - [ ] **Prérequis** : Utilisez la commande `Jarvis: Index Workspace (RAG)` depuis la palette VS Code (Ctrl+Shift+P) pour vectoriser le projet. Attendez la notification de succès.

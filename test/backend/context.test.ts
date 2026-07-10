@@ -4,40 +4,46 @@ import { pruneContext, choosePruneLevel, extractBlocks } from '../../src/backend
 import { expandMentions } from '../../src/backend/services/context/mentions.js';
 
 describe('RagIndex (spec §5.2 — RAG local)', () => {
-  it('finds the relevant chunk by lexical similarity', () => {
+  it('finds the relevant chunk by lexical similarity', async () => {
     const index = new RagIndex();
-    index.addDocument('auth.ts', 'export function validatePassword(password: string) { return password.length > 8; }');
-    index.addDocument('math.ts', 'export function computeSum(a: number, b: number) { return a + b; }');
+    await index.addDocument('auth.ts', 'export function validatePassword(password: string) { return password.length > 8; }');
+    await index.addDocument('math.ts', 'export function computeSum(a: number, b: number) { return a + b; }');
 
-    const results = index.search('validation du password');
+    const results = await index.search('validation du password');
     expect(results.length).toBeGreaterThan(0);
     expect(results[0].path).toBe('auth.ts');
   });
 
-  it('splits camelCase identifiers for matching', () => {
+  it('splits camelCase identifiers for matching', async () => {
     const index = new RagIndex();
-    index.addDocument('a.ts', 'function fetchUserProfile() {}');
-    const results = index.search('user profile');
+    await index.addDocument('a.ts', 'function fetchUserProfile() {}');
+    const results = await index.search('user profile');
     expect(results[0]?.path).toBe('a.ts');
   });
 
-  it('supports re-indexing and removal of documents', () => {
+  it('supports re-indexing and removal of documents', async () => {
     const index = new RagIndex();
-    index.addDocument('a.ts', 'const alpha = 1;');
-    index.addDocument('a.ts', 'const beta = 2;');
-    expect(index.search('alpha')).toHaveLength(0);
-    expect(index.search('beta').length).toBeGreaterThan(0);
+    await index.addDocument('a.ts', 'const alpha = 1;');
+    await index.addDocument('a.ts', 'const beta = 2;');
+    // Ré-indexer le même chemin remplace le chunk existant (pas de doublon).
+    expect(index.size).toBe(1);
+    // La similarité par embedding est continue (pas de "0 match" garanti comme en TF-IDF) :
+    // on vérifie plutôt que le contenu a bien été remplacé — le terme du nouveau contenu
+    // doit scorer nettement plus haut que celui de l'ancien.
+    const alphaScore = (await index.search('alpha'))[0]?.score ?? 0;
+    const betaScore = (await index.search('beta'))[0]?.score ?? 0;
+    expect(betaScore).toBeGreaterThan(alphaScore);
 
     index.removeDocument('a.ts');
     expect(index.size).toBe(0);
   });
 
-  it('chunks long files with line ranges', () => {
+  it('chunks long files with line ranges', async () => {
     const content = Array.from({ length: 100 }, (_, i) => `const line${i} = ${i};`).join('\n');
     const index = new RagIndex();
-    index.addDocument('big.ts', content);
+    await index.addDocument('big.ts', content);
     expect(index.size).toBeGreaterThan(1);
-    const results = index.search('line99');
+    const results = await index.search('line99');
     expect(results[0].endLine).toBe(100);
   });
 
@@ -67,21 +73,21 @@ describe('ContextPruner (spec §8.3)', () => {
     expect(blocks.map(b => b.name)).toEqual(['keepMe', 'dropMe']);
   });
 
-  it('keeps imports + target function, reduces the rest to signatures', () => {
-    const pruned = pruneContext(sample, { level: 'function', symbol: 'keepMe' });
+  it('keeps imports + target function, reduces the rest to signatures', async () => {
+    const pruned = await pruneContext(sample, { level: 'function', symbol: 'keepMe' });
     expect(pruned).toContain("import { x } from './x';");
     expect(pruned).toContain('return a * 2;');
     expect(pruned).not.toContain('return 42;');
     expect(pruned).toContain('dropMe');
   });
 
-  it('level none returns full content', () => {
-    expect(pruneContext(sample, { level: 'none' })).toBe(sample);
+  it('level none returns full content', async () => {
+    expect(await pruneContext(sample, { level: 'none' })).toBe(sample);
   });
 
-  it('level module strips comments and blank lines', () => {
+  it('level module strips comments and blank lines', async () => {
     const withComments = '// commentaire\nconst a = 1;\n\n// autre\nconst b = 2;';
-    const pruned = pruneContext(withComments, { level: 'module' });
+    const pruned = await pruneContext(withComments, { level: 'module' });
     expect(pruned).toBe('const a = 1;\nconst b = 2;');
   });
 
@@ -122,7 +128,7 @@ describe('Mentions @file / @docs (spec Phase 4)', () => {
   it('injects docs search results', async () => {
     const result = await expandMentions('Comment configurer? @docs:configuration', {
       readFile: async () => '',
-      searchDocs: () => [
+      searchDocs: async () => [
         { path: 'README.md', startLine: 1, endLine: 10, snippet: 'La configuration se fait via jarvis-config.json', score: 0.9 }
       ]
     });

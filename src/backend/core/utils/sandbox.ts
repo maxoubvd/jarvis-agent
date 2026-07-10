@@ -118,21 +118,61 @@ export class SandboxManager {
   }
 
   private generateDefaultIgnoreSync(): void {
-    // Keep this for sync constructor, but it might fail
+    // Version synchrone utilisée dans le constructeur ; ensureIgnoreFile() (async, appelée
+    // depuis activate()) régénère ensuite le contenu complet via generateDefaultIgnoreAsync().
     const content = [
       '# Jarvis Ignore File — fichiers invisibles pour l\'IA',
       '# Généré automatiquement — modifiable manuellement',
       '',
       '# Environnement et secrets',
       '.env',
+      '.env.*',
+      '*.env',
+      '!.env.example',
+      '',
+      '# Dépendances',
       'node_modules/',
-      '.jarvisignore'
+      'vendor/',
+      'bower_components/',
+      '',
+      '# Build artifacts',
+      'dist/',
+      'build/',
+      'out/',
+      '',
+      '# Cache et temporaires',
+      '.cache/',
+      '.tmp/',
+      '*.tmp',
+      '.DS_Store',
+      '',
+      '# IDE',
+      '.idea/',
+      '.vscode/',
+      '',
+      '# Sécurité',
+      '*.pem',
+      '*.key',
+      '*.crt',
+      '*.pfx',
+      'secrets/',
+      'credentials/',
+      '',
+      '# Bases de données',
+      '*.db',
+      '*.sqlite',
+      '*.sqlite3',
+      '',
+      '# Jarvis interne',
+      '.jarvis/',
+      '.jarvisignore',
+      'jarvis-*.json'
     ].join('\n');
 
     try {
       fsSync.writeFileSync(this.ignorePath, content, 'utf-8');
-    } catch {
-      // Ignore write errors
+    } catch (err) {
+      console.error('Jarvis: échec de l\'écriture synchrone de .jarvisignore:', err);
     }
     this.ignorePatterns = this.getDefaultPatterns();
   }

@@ -1,4 +1,4 @@
-export type MessageKind = 'text' | 'tool' | 'thinking' | 'step' | 'plan';
+export type MessageKind = 'text' | 'tool' | 'thinking' | 'step' | 'plan' | 'inline';
 
 export interface Badge {
   icon: string;

@@ -319,6 +319,7 @@
             class:tool={message.kind === 'tool'}
             class:step={message.kind === 'step'}
             class:thinking-msg={message.kind === 'thinking'}
+            class:inline-edit={message.kind === 'inline'}
           >
             {#if message.badges?.length}
               <div class="badges">
@@ -587,6 +588,12 @@
   .message.thinking-msg {
     align-self: stretch;
     padding: 0;
+  }
+
+  /* Prompt Ctrl+K (édition inline) : même bulle utilisateur, fond distinctif + accent doré. */
+  .message.user.inline-edit {
+    background: color-mix(in srgb, var(--jarvis-gold) 8%, var(--vscode-input-background));
+    border-left: 2px solid var(--jarvis-gold);
   }
 
   .badges {

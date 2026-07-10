@@ -14,7 +14,9 @@ const posted = vi.hoisted(() => {
   (globalThis as unknown as { acquireVsCodeApi: unknown }).acquireVsCodeApi = () => ({
     postMessage(message: unknown) {
       messages.push(structuredClone(message) as Record<string, unknown>);
-    }
+    },
+    getState() { return undefined; },
+    setState() { /* no-op en test */ }
   });
   return messages;
 });
@@ -160,8 +162,8 @@ describe('settings panel interactions', () => {
     await tick();
 
     // La nouvelle carte est ouverte en édition (placeholder du nom visible),
-    // avec le lien vers la page de clé API du provider sélectionné.
-    expect(screen.getByText(/Get API key — openrouter/)).toBeTruthy();
+    // avec le lien vers la page de clé API du provider par défaut (mistral).
+    expect(screen.getByText(/Get API key — mistral/)).toBeTruthy();
     const nameInput = screen.getByPlaceholderText('e.g. GPT-OSS 120B') as HTMLInputElement;
     nameInput.value = 'Mistral';
     nameInput.dispatchEvent(new Event('input', { bubbles: true }));

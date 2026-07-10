@@ -9,7 +9,9 @@ const posted = vi.hoisted(() => {
   (globalThis as unknown as { acquireVsCodeApi: unknown }).acquireVsCodeApi = () => ({
     postMessage(message: unknown) {
       messages.push(structuredClone(message) as Record<string, unknown>);
-    }
+    },
+    getState() { return undefined; },
+    setState() { /* no-op en test */ }
   });
   return messages;
 });

@@ -127,10 +127,22 @@ function findBlockEnd(lines: string[], startLine: number): number {
     }
     return lines.length - 1;
   }
-  return startLine; // Fallback simple pour python
+
+  // Bloc à indentation (Python…) : la fin est la dernière ligne dont l'indentation
+  // dépasse celle de la déclaration ; les lignes vides intermédiaires n'y mettent pas fin.
+  const baseIndent = startText.match(/^\s*/)?.[0].length ?? 0;
+  let end = startLine;
+  for (let i = startLine + 1; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line.trim()) continue;
+    const indent = line.match(/^\s*/)?.[0].length ?? 0;
+    if (indent <= baseIndent) break;
+    end = i;
+  }
+  return end;
 }
 
-function extractBlocksRegex(content: string): Omit<CodeBlock, 'node'>[] {
+export function extractBlocks(content: string): Omit<CodeBlock, 'node'>[] {
   const lines = content.split('\n');
   const blocks: Omit<CodeBlock, 'node'>[] = [];
   for (let i = 0; i < lines.length; i++) {
@@ -168,7 +180,7 @@ export async function pruneContext(content: string, options: PruneOptions): Prom
     const tree = parser.parse(content);
     blocks = extractBlocksAST(tree.rootNode);
   } else {
-    blocks = extractBlocksRegex(content);
+    blocks = extractBlocks(content);
   }
 
   const wantedKind = options.level === 'class' ? 'class' : 'function';
