@@ -11,6 +11,8 @@ export class WorkspaceIndexer {
   public readonly index = new RagIndex();
   private indexing = false;
   private indexedFiles = 0;
+  /** Indexation en cours, partagée entre appelants concurrents (palette de commandes + Settings). */
+  private inFlight: Promise<number> | null = null;
 
   public get isIndexing(): boolean {
     return this.indexing;
@@ -21,29 +23,36 @@ export class WorkspaceIndexer {
   }
 
   public async indexWorkspace(onProgress?: (indexed: number, total: number) => void): Promise<number> {
-    if (this.indexing) return this.indexedFiles;
+    // Une indexation était déjà en cours (ex: lancée automatiquement à l'ouverture de la
+    // sidebar) : on attend SON résultat au lieu de renvoyer aussitôt le compteur encore à 0.
+    if (this.inFlight) return this.inFlight;
+
     this.indexing = true;
-    try {
-      this.index.clear();
-      this.indexedFiles = 0;
-
-      const items = await listDirectoryTool('.', true);
-      const files = items.filter(i => !i.isDirectory && isIndexableFile(i.path) && i.size <= MAX_FILE_SIZE);
-
-      for (let i = 0; i < files.length; i++) {
-        try {
-          const content = await readFileTool(files[i].path);
-          await this.index.addDocument(files[i].path, content);
-          this.indexedFiles++;
-        } catch {
-          // fichier illisible ou bloqué — on continue
-        }
-        onProgress?.(i + 1, files.length);
-      }
-      return this.indexedFiles;
-    } finally {
+    this.inFlight = this.runIndexWorkspace(onProgress).finally(() => {
       this.indexing = false;
+      this.inFlight = null;
+    });
+    return this.inFlight;
+  }
+
+  private async runIndexWorkspace(onProgress?: (indexed: number, total: number) => void): Promise<number> {
+    this.index.clear();
+    this.indexedFiles = 0;
+
+    const items = await listDirectoryTool('.', true);
+    const files = items.filter(i => !i.isDirectory && isIndexableFile(i.path) && i.size <= MAX_FILE_SIZE);
+
+    for (let i = 0; i < files.length; i++) {
+      try {
+        const content = await readFileTool(files[i].path);
+        await this.index.addDocument(files[i].path, content);
+        this.indexedFiles++;
+      } catch {
+        // fichier illisible ou bloqué — on continue
+      }
+      onProgress?.(i + 1, files.length);
     }
+    return this.indexedFiles;
   }
 
   /** Ré-indexe un fichier après modification. */

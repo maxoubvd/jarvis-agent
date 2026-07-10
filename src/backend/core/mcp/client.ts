@@ -1,3 +1,6 @@
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { Client as McpClient } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport, getDefaultEnvironment } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
@@ -5,6 +8,28 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { McpServerConfig } from '../../config/config-manager.js';
+
+/**
+ * Répertoires d'installation connus de `uv`/`uvx` (installateur officiel astral.sh),
+ * absents du PATH hérité par l'Extension Host si l'outil a été installé après le
+ * démarrage de VS Code (le process ne relit pas le PATH utilisateur à chaud).
+ */
+function knownUvInstallDirs(): string[] {
+  const home = os.homedir();
+  return process.platform === 'win32'
+    ? [path.join(home, '.local', 'bin')]
+    : [path.join(home, '.local', 'bin'), path.join(home, '.cargo', 'bin')];
+}
+
+/** Ajoute au PATH les répertoires connus d'installation de `uv`/`uvx` s'ils existent et n'y sont pas déjà. */
+function augmentPathForUv(env: Record<string, string>): Record<string, string> {
+  const sep = process.platform === 'win32' ? ';' : ':';
+  const currentPath = env.PATH ?? '';
+  const existing = new Set(currentPath.split(sep).filter(Boolean));
+  const toAdd = knownUvInstallDirs().filter(dir => !existing.has(dir) && fs.existsSync(dir));
+  if (toAdd.length === 0) return env;
+  return { ...env, PATH: [currentPath, ...toAdd].filter(Boolean).join(sep) };
+}
 
 export interface McpToolInfo {
   name: string;
@@ -58,12 +83,16 @@ export class JarvisMcpClient {
       if (!this.config.command) {
         throw new Error(`MCP ${this.serverName}: 'command' requis pour le transport stdio`);
       }
+      // Fusionne avec l'environnement par défaut : un `env` fourni tel quel
+      // REMPLACERAIT l'environnement du process (PATH perdu → npx/uvx cassés).
+      let env = { ...getDefaultEnvironment(), ...this.config.env };
+      if (this.config.command === 'uvx' || this.config.command === 'uv') {
+        env = augmentPathForUv(env);
+      }
       return new StdioClientTransport({
         command: this.config.command,
         args: this.config.args ?? [],
-        // Fusionne avec l'environnement par défaut : un `env` fourni tel quel
-        // REMPLACERAIT l'environnement du process (PATH perdu → npx/uvx cassés).
-        env: this.config.env ? { ...getDefaultEnvironment(), ...this.config.env } : undefined
+        env
       });
     }
     if (!this.config.url) {

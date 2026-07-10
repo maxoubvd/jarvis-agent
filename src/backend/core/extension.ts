@@ -1760,6 +1760,11 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     return this.indexer;
   }
 
+  /** Rafraîchit le statut d'indexation affiché dans les Settings (section Workspaces). */
+  public notifyIndexStatus(): void {
+    if (this._view?.webview) this.postIndexStatus(this._view.webview);
+  }
+
   public async inlineEdit(): Promise<void> {
     const editor = vscode.window.activeTextEditor;
     if (!editor) {
@@ -2112,6 +2117,9 @@ export class JarvisExtension {
           progress.report({ message: `${done}/${total} fichiers` });
         });
         vscode.window.showInformationMessage(`Jarvis: ${count} files indexed for RAG search.`);
+        // Rafraîchit l'état affiché dans Settings > Workspaces si la sidebar est ouverte
+        // (jusqu'ici seul le chemin webview → indexWorkspace notifiait le webview).
+        this.sidebarProvider.notifyIndexStatus();
       }
     );
   }
