@@ -23,6 +23,8 @@
     extraCommands?: CommandItem[];
     /** Suggestions de fichiers du workspace pour la mention `@`. */
     fileSuggestions?: string[];
+    /** Sites de documentation configurés (Settings > Docs) pour la mention `@docs:`. */
+    docsSuggestions?: string[];
     /** Profils de workspace sélectionnables (Settings > Workspaces). */
     workspaces?: Array<{ id: string; name: string }>;
     activeWorkspaceId?: string | null;
@@ -31,6 +33,8 @@
     onSend?: (text: string) => void;
     /** Demande au backend les fichiers correspondant à la saisie. */
     onQueryFiles?: (query: string) => void;
+    /** Demande au backend les sources de documentation correspondant à la saisie. */
+    onQueryDocs?: (query: string) => void;
     onWorkspaceChange?: (id: string | null) => void;
     onApprovalRespond?: (decision: 'allow' | 'allow-session' | 'deny', feedback?: string) => void;
     availableModels?: string[];
@@ -48,11 +52,13 @@
     showThinking = true,
     extraCommands = [],
     fileSuggestions = [],
+    docsSuggestions = [],
     workspaces = [],
     activeWorkspaceId = null,
     approvalRequest = null,
     onSend = () => {},
     onQueryFiles = () => {},
+    onQueryDocs = () => {},
     onWorkspaceChange = () => {},
     onApprovalRespond = () => {},
     availableModels = [],
@@ -89,6 +95,8 @@
 
   /** Dernière requête fichiers envoyée — évite de re-demander à chaque re-rendu. */
   let lastFileQuery: string | null = null;
+  /** Dernière requête docs envoyée — évite de re-demander à chaque re-rendu. */
+  let lastDocsQuery: string | null = null;
 
   /** Requête fichiers dérivée du token `@` courant (`@file:src/a` → `src/a`). */
   function fileQueryFor(partial: string): string {
@@ -100,6 +108,11 @@
     return /\s/.test(path) ? `@file:"${path}" ` : `@file:${path} `;
   }
 
+  /** Une source docs avec espaces doit être citée pour rester une seule mention. */
+  function docsInsert(label: string): string {
+    return /\s/.test(label) ? `@docs:"${label}" ` : `@docs:${label} `;
+  }
+
   function refreshMenu() {
     if (!textareaEl) return;
     const caret = textareaEl.selectionStart ?? inputText.length;
@@ -107,10 +120,25 @@
     if (!match) {
       showMenu = false;
       lastFileQuery = null;
+      lastDocsQuery = null;
       return;
     }
     let items = filterCommands(match, extraCommands);
-    if (match.trigger === '@') {
+    if (match.trigger === '@' && match.partial.startsWith('docs:')) {
+      // Mention de doc : sites de documentation + .md du workspace proposés
+      // directement sous les commandes @, comme pour @file:.
+      const query = match.partial.slice('docs:'.length);
+      if (query !== lastDocsQuery) {
+        lastDocsQuery = query;
+        onQueryDocs(query);
+      }
+      const q = query.toLowerCase();
+      const docItems: CommandItem[] = docsSuggestions
+        .filter(p => !q || p.toLowerCase().includes(q))
+        .map(p => ({ trigger: '@' as const, insert: docsInsert(p), label: p, detail: 'Documentation site' }));
+      const seen = new Set(items.map(i => i.insert));
+      items = [...items, ...docItems.filter(i => !seen.has(i.insert))];
+    } else if (match.trigger === '@') {
       // Mention de fichier : les fichiers du workspace sont proposés
       // directement sous les commandes @.
       const query = fileQueryFor(match.partial);
@@ -142,10 +170,11 @@
   }
 
   // Les suggestions arrivent en asynchrone : on rafraîchit le menu ouvert.
-  // untrack : l'effet ne doit dépendre QUE de fileSuggestions (refreshMenu
+  // untrack : l'effet ne doit dépendre QUE de fileSuggestions/docsSuggestions (refreshMenu
   // lit/écrit selectedIndex & co, ce qui re-déclencherait l'effet).
   $effect(() => {
     void fileSuggestions;
+    void docsSuggestions;
     untrack(() => refreshMenu());
   });
 

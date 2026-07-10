@@ -229,7 +229,6 @@ export interface DocSite {
 export interface WorkspaceProfile {
   id: string;
   name: string;
-  folder: string;
   instructions: string;
   enabled: boolean;
 }

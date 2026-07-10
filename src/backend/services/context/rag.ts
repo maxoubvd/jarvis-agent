@@ -15,6 +15,23 @@ export interface RagSearchResult {
   score: number;
 }
 
+/** Formatte des résultats de recherche RAG en bloc de contexte lisible (chemin, lignes, extrait). */
+export function formatSearchResults(results: RagSearchResult[]): string {
+  return results.map(r => `— ${r.path} (lignes ${r.startLine}-${r.endLine}):\n${r.snippet}`).join('\n\n');
+}
+
+/**
+ * Augmentation de contexte (spec §5.2) : ajoute au texte de la tâche les résultats de
+ * recherche jugés pertinents. Un score de cosine similarity brut n'est pas un signal de
+ * pertinence fiable dans l'absolu (cf. mesures empiriques) — le seuil ne filtre donc que
+ * le bruit le plus net (score quasi nul/négatif), pas une vraie coupure de pertinence.
+ */
+export function augmentWithCodeContext(task: string, results: RagSearchResult[], minScore = 0.15): string {
+  const relevant = results.filter(r => r.score > minScore);
+  if (relevant.length === 0) return task;
+  return `${task}\n\n--- CONTEXTE DU PROJET (recherche automatique) ---\n${formatSearchResults(relevant)}`;
+}
+
 const CHUNK_LINES = 40;
 const CHUNK_OVERLAP = 8;
 

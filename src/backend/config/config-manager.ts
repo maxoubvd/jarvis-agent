@@ -166,11 +166,14 @@ export interface DocSite {
  */
 export type ToolPolicy = 'auto' | 'ask' | 'excluded';
 
-/** Profil de workspace : instructions type CLAUDE.md injectées dans le prompt. */
+/**
+ * Profil de workspace : instructions type CLAUDE.md injectées dans le prompt système
+ * quand actif. Pur profil de contexte — ne change PAS le dossier accessible à l'agent
+ * (toujours celui ouvert dans VS Code, cf. SandboxManager).
+ */
 export interface WorkspaceProfile {
   id: string;
   name: string;
-  folder: string;
   instructions: string;
   enabled: boolean;
 }

@@ -13,7 +13,6 @@ function config(partial: Partial<JarvisConfig>): JarvisConfig {
 const profile: WorkspaceProfile = {
   id: 'ws-1',
   name: 'API Project',
-  folder: 'C:\\dev\\api',
   instructions: 'Stack: Node + Fastify.\nAlways write tests.',
   enabled: true
 };

@@ -1,5 +1,9 @@
 import Parser from 'web-tree-sitter';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
+
+// Compilation en ESM (Node16) : `__dirname` n'existe pas nativement, il faut le dériver de `import.meta.url`.
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export type PruneLevel = 'none' | 'function' | 'class' | 'module';
 
@@ -19,26 +23,36 @@ interface CodeBlock {
   node: Parser.SyntaxNode;
 }
 
-let parserReady = false;
-let currentLang = '';
+/** Grammaire WASM (media/) à charger par extension de fichier. */
+const GRAMMAR_BY_EXTENSION: Record<string, string> = {
+  '.ts': 'tree-sitter-typescript.wasm',
+  '.tsx': 'tree-sitter-tsx.wasm',
+  '.jsx': 'tree-sitter-tsx.wasm', // grammaire TSX = TS + JSX, superset valide pour .jsx
+  '.js': 'tree-sitter-javascript.wasm'
+};
 
-/** Initialise web-tree-sitter si ce n'est pas déjà fait. */
+let parserInitPromise: Promise<void> | null = null;
+/** Une grammaire compilée est réutilisable pour tout parse ultérieur — évite de recharger le WASM à chaque appel. */
+const languageCache = new Map<string, Parser.Language>();
+
+/** Initialise web-tree-sitter (une seule fois) et charge/­met en cache la grammaire de `extension`. */
 async function ensureParser(extension: string): Promise<Parser | null> {
-  if (extension !== '.ts' && extension !== '.js' && extension !== '.tsx' && extension !== '.jsx') {
-    // Pour cet exemple, on limite TS/JS. À étendre avec d'autres WASM.
-    return null;
-  }
-  
+  const grammarFile = GRAMMAR_BY_EXTENSION[extension];
+  if (!grammarFile) return null;
+
   try {
-    if (!parserReady) {
-      await Parser.init();
-      parserReady = true;
+    if (!parserInitPromise) parserInitPromise = Parser.init();
+    await parserInitPromise;
+
+    let lang = languageCache.get(grammarFile);
+    if (!lang) {
+      // Depuis dist/backend/services/context/pruner.js : 4 niveaux pour remonter à la racine du package.
+      const langWasmPath = path.join(__dirname, '..', '..', '..', '..', 'media', grammarFile);
+      lang = await Parser.Language.load(langWasmPath);
+      languageCache.set(grammarFile, lang);
     }
+
     const parser = new Parser();
-    // En production, il faut packager tree-sitter-typescript.wasm
-    // avec l'extension ou le télécharger à la volée.
-    const langWasmPath = path.join(__dirname, '..', '..', '..', 'media', 'tree-sitter-typescript.wasm');
-    const lang = await Parser.Language.load(langWasmPath);
     parser.setLanguage(lang);
     return parser;
   } catch (err) {

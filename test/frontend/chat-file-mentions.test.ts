@@ -90,3 +90,54 @@ describe('@ file mentions (Claude Code style)', () => {
     expect(chatTextarea().value).toBe('@file:"my folder/read me.md" ');
   });
 });
+
+describe('@docs: mentions', () => {
+  it('typing @docs: requests doc suggestions and lists them in the menu', async () => {
+    render(App);
+    await tick();
+
+    await type('@docs:');
+    const query = posted.find(m => m.type === 'queryDocs');
+    expect(query).toBeTruthy();
+    expect(query?.query).toBe('');
+
+    postToWebview({ type: 'docsSuggestions', docs: ['Svelte Docs', 'MDN'] });
+    await tick();
+
+    expect(screen.getByText('Svelte Docs')).toBeTruthy();
+    expect(screen.getByText('MDN')).toBeTruthy();
+  });
+
+  it('narrows the query while typing and inserts @docs:<label> on accept', async () => {
+    render(App);
+    await tick();
+
+    await type('@docs:mdn');
+    const queries = posted.filter(m => m.type === 'queryDocs');
+    expect(queries.at(-1)?.query).toBe('mdn');
+
+    postToWebview({ type: 'docsSuggestions', docs: ['MDN'] });
+    await tick();
+
+    const item = screen.getByText('MDN');
+    item.closest('li')!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    await tick();
+
+    expect(chatTextarea().value).toBe('@docs:MDN ');
+  });
+
+  it('quotes doc labels containing spaces so the mention stays parseable', async () => {
+    render(App);
+    await tick();
+
+    await type('@docs:svelte');
+    postToWebview({ type: 'docsSuggestions', docs: ['Svelte Docs'] });
+    await tick();
+
+    const item = screen.getByText('Svelte Docs');
+    item.closest('li')!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    await tick();
+
+    expect(chatTextarea().value).toBe('@docs:"Svelte Docs" ');
+  });
+});

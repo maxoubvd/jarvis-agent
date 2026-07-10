@@ -19,6 +19,7 @@ import { WorkspaceIndexer } from '../services/context/indexer.js';
 import { expandMentions } from '../services/context/mentions.js';
 import { DocsService, mergeSearchResults } from '../services/context/docs.js';
 import type { RagSearchResult } from '../services/context/rag.js';
+import { augmentWithCodeContext } from '../services/context/rag.js';
 import { operationLogger } from '../services/logger.js';
 import { SecretScrubber } from './utils/scrubber.js';
 import { SandboxManager } from './utils/sandbox.js';
@@ -177,6 +178,28 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     return mergeSearchResults(5, internal, external);
   }
 
+  /**
+   * Augmentation de contexte RAG (spec §5.2) : cherche dans l'index sémantique du
+   * workspace des snippets de code potentiellement pertinents pour la tâche, et les
+   * ajoute au prompt envoyé au modèle. N'affecte que le prompt de CET appel — le texte
+   * inséré dans `this.history` par l'appelant reste non augmenté (pas de pollution de
+   * l'historique persistant/affiché).
+   */
+  private async augmentTaskWithCodeContext(task: string): Promise<string> {
+    if (this.indexer.index.size === 0 || task.trim().length < 20) return task;
+    try {
+      const results = await this.indexer.search(task, 3);
+      const augmented = augmentWithCodeContext(task, results);
+      if (augmented !== task) {
+        operationLogger.log('rag', 'Contexte augmenté avec des snippets pertinents du projet.');
+      }
+      return augmented;
+    } catch (err) {
+      operationLogger.log('rag', `Augmentation de contexte échouée: ${err instanceof Error ? err.message : err}`, 'error');
+      return task;
+    }
+  }
+
   private getConfiguredAgents() {
     try {
       return getAgents(getConfigManager().getConfig());
@@ -326,6 +349,11 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
       case 'queryFiles':
         if (typeof message.query === 'string') {
           void this.onQueryFiles(webview, message.query);
+        }
+        break;
+      case 'queryDocs':
+        if (typeof message.query === 'string') {
+          void this.onQueryDocs(webview, message.query);
         }
         break;
       case 'openFile':
@@ -537,6 +565,25 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
       this.post(webview, { type: 'fileSuggestions', files: filePaths });
     } catch {
       this.post(webview, { type: 'fileSuggestions', files: [] });
+    }
+  }
+
+  /**
+   * Suggestions pour la mention `@docs:` (spec Phase 4) : propose les sites de
+   * documentation configurés et activés (Settings > Docs) — @docs: interroge les
+   * sites crawlés, pas les fichiers du workspace (voir le texte de DocsSection.svelte).
+   */
+  private async onQueryDocs(webview: vscode.Webview, query: string): Promise<void> {
+    try {
+      const q = query.trim().toLowerCase();
+      const sites = getConfigManager().getConfig().docs ?? [];
+      const suggestions = sites
+        .filter(site => site.enabled && (!q || site.title.toLowerCase().includes(q)))
+        .map(site => site.title);
+
+      this.post(webview, { type: 'docsSuggestions', docs: suggestions });
+    } catch {
+      this.post(webview, { type: 'docsSuggestions', docs: [] });
     }
   }
 
@@ -1433,9 +1480,12 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
   ): Promise<string | void> {
     this.post(webview, { type: 'chatStart' });
     this.currentAbortController = new AbortController();
-    
+
     // Assure que le fichier .jarvisignore est généré au plus tôt dans l'espace de travail via l'API asynchrone VS Code
     try { await new SandboxManager().ensureIgnoreFile(); } catch { /* ignore */ }
+
+    // Augmentation de contexte RAG (spec §5.2) : snippets de code pertinents ajoutés au prompt.
+    task = await this.augmentTaskWithCodeContext(task);
 
     let result;
     const started = Date.now();

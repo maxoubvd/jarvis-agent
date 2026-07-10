@@ -5,7 +5,6 @@
 
   interface Props {
     items?: WorkspaceProfile[];
-    currentFolder?: string;
     indexStatus?: { indexing: boolean; fileCount: number } | null;
     onChange?: (next: WorkspaceProfile[]) => void;
     onReindex?: () => void;
@@ -13,7 +12,6 @@
 
   let {
     items = [],
-    currentFolder = '',
     indexStatus = null,
     onChange = () => {},
     onReindex = () => {}
@@ -30,7 +28,6 @@
       {
         id,
         name: 'My workspace',
-        folder: currentFolder,
         instructions: '',
         enabled: true
       }
@@ -53,8 +50,9 @@
   </div>
 
   <p class="j-hint">
-    A workspace is a context profile: its instructions are injected into the
-    system prompt when it is selected in the Chat tab.
+    A workspace is a <strong>context profile</strong>, not a folder switcher: its instructions
+    are injected into the system prompt when selected in the Chat tab. It does <strong>not</strong>
+    change which files the agent can access — that is always the folder currently open in VS Code.
   </p>
 
   {#if items.length === 0}
@@ -71,8 +69,7 @@
         >
           <Icon name={expanded[workspace.id] ? 'chevron-up' : 'chevron-down'} size={13} />
         </button>
-        <span class="j-title">{workspace.name.trim() || '(unnamed workspace)'}</span>
-        <span class="j-sub j-grow">{workspace.folder}</span>
+        <span class="j-title j-grow">{workspace.name.trim() || '(unnamed workspace)'}</span>
         <Toggle
           checked={workspace.enabled}
           label="Enabled"
@@ -91,16 +88,6 @@
           placeholder="Name"
           value={workspace.name}
           oninput={e => patch(index, { name: (e.target as HTMLInputElement).value })}
-        />
-      </label>
-
-      <label class="j-field">
-        <span>Folder</span>
-        <input
-          class="j-input"
-          placeholder={currentFolder || 'C:\\path\\to\\project'}
-          value={workspace.folder}
-          oninput={e => patch(index, { folder: (e.target as HTMLInputElement).value })}
         />
       </label>
 

@@ -88,6 +88,7 @@
   let extraCommands = $state<CommandItem[]>([]);
   let mcpServers = $state<McpServerStatus[]>([]);
   let fileSuggestions = $state<string[]>([]);
+  let docsSuggestions = $state<string[]>([]);
   let approvalRequest = $state<ApprovalRequest | null>(null);
   let pendingChanges = $state<PendingFileChange[]>([]);
 
@@ -193,6 +194,7 @@
       file?: string;
       startLine?: number;
       endLine?: number;
+      docs?: string[];
     };
 
     switch (msg.type) {
@@ -251,6 +253,9 @@
         break;
       case 'fileSuggestions':
         fileSuggestions = msg.files ?? [];
+        break;
+      case 'docsSuggestions':
+        docsSuggestions = msg.docs ?? [];
         break;
       case 'approvalRequest':
         approvalRequest = {
@@ -492,6 +497,10 @@
     vscode?.postMessage({ type: 'queryFiles', query });
   }
 
+  function handleQueryDocs(query: string) {
+    vscode?.postMessage({ type: 'queryDocs', query });
+  }
+
   function handleApprovalRespond(decision: 'allow' | 'allow-session' | 'deny', feedback?: string) {
     const id = approvalRequest?.id;
     approvalRequest = null;
@@ -627,6 +636,7 @@
           {showThinking}
           {extraCommands}
           {fileSuggestions}
+          {docsSuggestions}
           {workspaces}
           {activeWorkspaceId}
           {approvalRequest}
@@ -635,6 +645,7 @@
           firstName={settings?.firstName}
           onSend={handleSend}
           onQueryFiles={handleQueryFiles}
+          onQueryDocs={handleQueryDocs}
           onWorkspaceChange={handleWorkspaceChange}
           onApprovalRespond={handleApprovalRespond}
           onModelChange={handleModelChange}
@@ -657,7 +668,6 @@
           {saveStatus}
           {mcpServers}
           {docsStatuses}
-          {currentFolder}
           {indexStatus}
           onSave={handleSaveSettings}
           onIndexDocs={handleIndexDocs}

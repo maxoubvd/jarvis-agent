@@ -1,4 +1,4 @@
-import { RagSearchResult } from './rag.js';
+import { RagSearchResult, formatSearchResults } from './rag.js';
 
 export interface MentionDeps {
   readFile(path: string): Promise<string>;
@@ -13,9 +13,9 @@ export interface ExpandedPrompt {
   mentions: Array<{ kind: 'file' | 'docs'; value: string; ok: boolean }>;
 }
 
-// Chemin avec espaces autorisé via la forme citée : @file:"my folder/file.md"
+// Chemin/requête avec espaces autorisés via la forme citée : @file:"my folder/file.md", @docs:"my query"
 const FILE_MENTION = /@file:(?:"([^"]+)"|(\S+))/g;
-const DOCS_MENTION = /@docs:(\S+)/g;
+const DOCS_MENTION = /@docs:(?:"([^"]+)"|(\S+))/g;
 
 /**
  * Expansion des mentions `@file:<chemin>` et `@docs:<requête>` (spec Phase 4) :
@@ -39,13 +39,10 @@ export async function expandMentions(text: string, deps: MentionDeps): Promise<E
   }
 
   for (const match of [...text.matchAll(DOCS_MENTION)]) {
-    const query = match[1].replace(/[-_]/g, ' ');
+    const query = (match[1] ?? match[2]).replace(/[-_]/g, ' ');
     const results = (await deps.searchDocs?.(query)) ?? [];
     if (results.length > 0) {
-      const snippets = results
-        .slice(0, 3)
-        .map(r => `— ${r.path} (lignes ${r.startLine}-${r.endLine}):\n${r.snippet}`)
-        .join('\n\n');
+      const snippets = formatSearchResults(results.slice(0, 3));
       contextParts.push(`Documentation pertinente pour "${query}":\n${snippets}`);
       mentions.push({ kind: 'docs', value: query, ok: true });
     } else {
@@ -57,7 +54,7 @@ export async function expandMentions(text: string, deps: MentionDeps): Promise<E
     return { expanded: text, mentions };
   }
 
-  const cleaned = text.replace(FILE_MENTION, '$1$2').replace(DOCS_MENTION, '$1');
+  const cleaned = text.replace(FILE_MENTION, '$1$2').replace(DOCS_MENTION, '$1$2');
   return {
     expanded: `${cleaned}\n\n--- CONTEXTE ---\n${contextParts.join('\n\n')}`,
     mentions

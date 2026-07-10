@@ -32,7 +32,6 @@
     saveStatus?: { ok: boolean; error?: string; pending?: boolean } | null;
     mcpServers?: McpServerStatus[];
     docsStatuses?: DocsSiteStatus[];
-    currentFolder?: string;
     indexStatus?: { indexing: boolean; fileCount: number } | null;
     onSave?: (config: JarvisConfig) => void;
     onIndexDocs?: (id: string) => void;
@@ -47,7 +46,6 @@
     saveStatus = null,
     mcpServers = [],
     docsStatuses = [],
-    currentFolder = '',
     indexStatus = null,
     onSave = () => {},
     onIndexDocs = () => {},
@@ -390,7 +388,6 @@
   <!-- Workspaces -->
   <WorkspacesSection
     items={workspaces}
-    {currentFolder}
     {indexStatus}
     onChange={next => { workspaces = next; markDirty(); }}
     {onReindex}

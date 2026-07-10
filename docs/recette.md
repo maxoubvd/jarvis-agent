@@ -65,21 +65,21 @@ Ce document liste l'intégralité des scénarios de test pour s'assurer du parfa
 - [X] **Résultat attendu** : Le contenu de `src/index.ts` est lu et injecté. Jarvis explique correctement le code.
 
 ### 4.2 Recherche RAG (Semantic Search) avec `@docs:`
-- [ ] **Prérequis** : Utilisez la commande `Jarvis: Index Workspace (RAG)` depuis la palette VS Code (Ctrl+Shift+P) pour vectoriser le projet. Attendez la notification de succès.
-- [ ] **Action** : Tapez une requête sémantique approximative : "Comment est gérée l'interface utilisateur @docs:".
-- [ ] **Résultat attendu** : Sans mot exact, la librairie `@xenova/transformers` (all-MiniLM-L6-v2) trouve les fichiers pertinents grâce aux embeddings cosinus. Jarvis utilise ce contexte pour répondre.
+- [X] **Prérequis** : Utilisez la commande `Jarvis: Index Workspace (RAG)` depuis la palette VS Code (Ctrl+Shift+P) pour vectoriser le projet. Attendez la notification de succès.
+- [X] **Action** : Tapez une requête sémantique approximative : "Comment est gérée l'interface utilisateur @docs:".
+- [X] **Résultat attendu** : Sans mot exact, la librairie `@xenova/transformers` (all-MiniLM-L6-v2) trouve les fichiers pertinents grâce aux embeddings cosinus. Jarvis utilise ce contexte pour répondre.
 
 ### 4.3 Context Pruning (AST Tree-Sitter)
-- [ ] **Action** : Demandez à Jarvis d'analyser un énorme fichier TS (> 1000 lignes) contenant de nombreuses fonctions, en lui disant de se focaliser sur UNE fonction spécifique.
-- [ ] **Résultat attendu** : L'agent doit lire le fichier, et grâce à `web-tree-sitter`, élaguer les fonctions inutiles (gardant seulement leurs signatures) pour ne lire que le corps de la fonction ciblée, ce qui réduit drastiquement la consommation de tokens visible dans la jauge.
+- [X] **Action** : Demandez à Jarvis d'analyser un énorme fichier TS (> 1000 lignes) contenant de nombreuses fonctions, en lui disant de se focaliser sur UNE fonction spécifique.
+- [X] **Résultat attendu** : L'agent doit lire le fichier, et grâce à `web-tree-sitter`, élaguer les fonctions inutiles (gardant seulement leurs signatures) pour ne lire que le corps de la fonction ciblée, ce qui réduit drastiquement la consommation de tokens visible dans la jauge.
 
 ---
 
 ## 5. Exécution de Commandes Terminal et HITL (Human In The Loop)
 
 ### 5.1 Mode Strict
-- [ ] **Action** : Dans les configurations, passez `jarvis.hitl.mode` à `strict`. Demandez "Fais un ls -la".
-- [ ] **Résultat attendu** : Avant d'exécuter la commande dans le terminal, une interface d'approbation s'affiche. Le bouton "Allow" doit être cliqué pour que la commande s'exécute.
+- [X] **Action** : Dans les configurations, passez `jarvis.hitl.mode` à `strict`. Demandez "Fais un ls -la".
+- [X] **Résultat attendu** : Avant d'exécuter la commande dans le terminal, une interface d'approbation s'affiche. Le bouton "Allow" doit être cliqué pour que la commande s'exécute.
 
 ### 5.2 Mode Moderate
 - [ ] **Action** : Passez en mode `moderate`. Demandez un `ls -la`.

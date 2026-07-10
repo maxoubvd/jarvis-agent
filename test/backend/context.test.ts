@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { RagIndex, isIndexableFile } from '../../src/backend/services/context/rag.js';
+import { RagIndex, isIndexableFile, augmentWithCodeContext, type RagSearchResult } from '../../src/backend/services/context/rag.js';
 import { pruneContext, choosePruneLevel, extractBlocks } from '../../src/backend/services/context/pruner.js';
 import { expandMentions } from '../../src/backend/services/context/mentions.js';
 
@@ -55,6 +55,42 @@ describe('RagIndex (spec §5.2 — RAG local)', () => {
   });
 });
 
+describe('augmentWithCodeContext (spec §5.2 — augmentation de contexte)', () => {
+  const result = (score: number, path = 'auth.ts'): RagSearchResult => ({
+    path,
+    startLine: 1,
+    endLine: 5,
+    snippet: 'export function validatePassword() { /* ... */ }',
+    score
+  });
+
+  it('appends relevant snippets to the task under a labeled context block', () => {
+    const task = 'Ajoute une validation du mot de passe';
+    const augmented = augmentWithCodeContext(task, [result(0.55)]);
+    expect(augmented).toContain(task);
+    expect(augmented).toContain('--- CONTEXTE DU PROJET (recherche automatique) ---');
+    expect(augmented).toContain('auth.ts (lignes 1-5)');
+  });
+
+  it('returns the task unchanged when no result clears the noise floor', () => {
+    const task = 'Ajoute une validation du mot de passe';
+    const augmented = augmentWithCodeContext(task, [result(0.05), result(-0.02)]);
+    expect(augmented).toBe(task);
+  });
+
+  it('returns the task unchanged for an empty result set', () => {
+    const task = 'Ajoute une validation du mot de passe';
+    expect(augmentWithCodeContext(task, [])).toBe(task);
+  });
+
+  it('only includes results above the noise floor, not the weak ones', () => {
+    const task = 'Ajoute une validation du mot de passe';
+    const augmented = augmentWithCodeContext(task, [result(0.5, 'auth.ts'), result(0.05, 'unrelated.ts')]);
+    expect(augmented).toContain('auth.ts');
+    expect(augmented).not.toContain('unrelated.ts');
+  });
+});
+
 describe('ContextPruner (spec §8.3)', () => {
   const sample = [
     "import { x } from './x';",
@@ -79,6 +115,24 @@ describe('ContextPruner (spec §8.3)', () => {
     expect(pruned).toContain('return a * 2;');
     expect(pruned).not.toContain('return 42;');
     expect(pruned).toContain('dropMe');
+  });
+
+  it('uses the Tree-sitter AST path, not the naive-brace regex fallback', async () => {
+    // Une accolade dans une chaîne casserait le compteur d'accolades naïf du fallback regex
+    // (fin de bloc prématurée) ; l'AST Tree-sitter ne s'y trompe pas.
+    const tricky = [
+      'export function tricky() {',
+      '  const s = "a } b";',
+      '  return s;',
+      '}',
+      '',
+      'export function after() {',
+      '  return 1;',
+      '}'
+    ].join('\n');
+    const pruned = await pruneContext(tricky, { level: 'function', symbol: 'tricky', fileExtension: '.ts' });
+    expect(pruned).toContain('return s;');
+    expect(pruned).toContain('}');
   });
 
   it('level none returns full content', async () => {
@@ -148,5 +202,16 @@ describe('Mentions @file / @docs (spec Phase 4)', () => {
     });
     expect(result.expanded).toContain('contenu de my folder/read me.md');
     expect(result.mentions).toEqual([{ kind: 'file', value: 'my folder/read me.md', ok: true }]);
+  });
+
+  it('supports quoted docs queries with spaces (@docs:"…")', async () => {
+    const result = await expandMentions('Comment faire ? @docs:"hitl config"', {
+      readFile: async () => '',
+      searchDocs: async () => [
+        { path: 'README.md', startLine: 1, endLine: 5, snippet: 'Le HITL se configure via jarvis.hitl.mode', score: 0.8 }
+      ]
+    });
+    expect(result.expanded).toContain('jarvis.hitl.mode');
+    expect(result.mentions).toEqual([{ kind: 'docs', value: 'hitl config', ok: true }]);
   });
 });
