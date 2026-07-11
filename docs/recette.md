@@ -118,8 +118,8 @@ Ce document liste l'intégralité des scénarios de test pour s'assurer du parfa
 - [X] **Résultat attendu** : L'outil `list_dir` de Jarvis est aveugle au dossier `secrets/` et refuse d'y accéder, même via une lecture explicite de fichier.
 
 ### 7.4 Protocol MCP (Serveurs Externes)
-- [ ] **Action** : Allez dans l'onglet Settings > MCP. Ajoutez un serveur MCP externe (par exemple le serveur local "sqlite" ou "brave-search").
-- [ ] **Résultat attendu** : Le serveur s'initialise. Si vous demandez à l'Agent "Utilise Brave Search pour chercher les news du jour", il utilisera automatiquement l'outil fourni par le serveur MCP.
+- [X] **Action** : Allez dans l'onglet Settings > MCP. Ajoutez un serveur MCP externe (par exemple le serveur local "sqlite" ou "brave-search").
+- [X] **Résultat attendu** : Le serveur s'initialise. Si vous demandez à l'Agent "Utilise Brave Search pour chercher les news du jour", il utilisera automatiquement l'outil fourni par le serveur MCP.
 
 ---
 
@@ -129,7 +129,7 @@ Ce document liste l'intégralité des scénarios de test pour s'assurer du parfa
 - [ ] **Action** : Demandez du code Python, HTML, et Rust.
 - [ ] **Résultat attendu** : Le code est correctement coloré dans le Chat (PrismJS) avec un bouton de copie fonctionnel ("Copy to clipboard").
 
-### 8.2 Bouton d'Annulation (Kill Switch)
+### 8.2 Bouton d'Annulation (Kill Switch) 
 - [ ] **Action** : Demandez à l'IA d'écrire un très long script ou lancez une boucle d'agent complexe. Pendant que l'IA génère sa réponse, cliquez sur le bouton "Stop" (carré) qui a remplacé le bouton d'envoi.
 - [ ] **Résultat attendu** : La génération s'arrête instantanément, l'appel réseau est annulé (`AbortController`), et l'interface redevient disponible pour un nouveau message.
 

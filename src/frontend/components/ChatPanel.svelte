@@ -1,6 +1,24 @@
 <script lang="ts">
   import type { Message, ApprovalRequest } from '../shared/types';
   import { marked } from 'marked';
+  import Prism from 'prismjs';
+  import 'prismjs/components/prism-markup';
+  import 'prismjs/components/prism-css';
+  import 'prismjs/components/prism-clike';
+  import 'prismjs/components/prism-javascript';
+  import 'prismjs/components/prism-typescript';
+  import 'prismjs/components/prism-jsx';
+  import 'prismjs/components/prism-tsx';
+  import 'prismjs/components/prism-python';
+  import 'prismjs/components/prism-rust';
+  import 'prismjs/components/prism-json';
+  import 'prismjs/components/prism-bash';
+  import 'prismjs/components/prism-c';
+  import 'prismjs/components/prism-cpp';
+  import 'prismjs/components/prism-csharp';
+  import 'prismjs/components/prism-go';
+  import 'prismjs/components/prism-java';
+  import 'prismjs/components/prism-yaml';
   import { untrack } from 'svelte';
   import { matchTrigger, filterCommands, type CommandItem } from '../shared/commands';
   import Icon from './Icon.svelte';
@@ -201,7 +219,57 @@
     });
   }
 
-  marked.setOptions({ breaks: true, gfm: true });
+  /** Alias courants vers les noms de grammaire Prism enregistrés ci-dessus. */
+  const PRISM_LANG_ALIASES: Record<string, string> = {
+    js: 'javascript',
+    mjs: 'javascript',
+    cjs: 'javascript',
+    ts: 'typescript',
+    py: 'python',
+    py3: 'python',
+    rs: 'rust',
+    sh: 'bash',
+    shell: 'bash',
+    zsh: 'bash',
+    console: 'bash',
+    html: 'markup',
+    xml: 'markup',
+    svg: 'markup',
+    svelte: 'markup',
+    vue: 'markup',
+    yml: 'yaml',
+    'c++': 'cpp',
+    cs: 'csharp',
+    'c#': 'csharp'
+  };
+
+  function escapeHtml(str: string): string {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  /** Coloration syntaxique des blocs de code via Prism (spec §8.1). */
+  function highlightCode(code: string, lang: string): string {
+    const key = lang.toLowerCase();
+    const grammarName = PRISM_LANG_ALIASES[key] ?? key;
+    const grammar = grammarName ? Prism.languages[grammarName] : undefined;
+    if (!grammar) return escapeHtml(code);
+    try {
+      return Prism.highlight(code, grammar, grammarName);
+    } catch {
+      return escapeHtml(code);
+    }
+  }
+
+  const renderer = new marked.Renderer();
+  renderer.code = (code: string, infostring: string | undefined, _escaped: boolean) => {
+    const lang = (infostring || '').trim().split(/\s+/)[0] ?? '';
+    const body = code.replace(/\n$/, '');
+    const highlighted = lang ? highlightCode(body, lang) : escapeHtml(body);
+    const cls = lang ? ` class="language-${lang.toLowerCase()}"` : '';
+    return `<pre><code${cls}>${highlighted}\n</code></pre>\n`;
+  };
+
+  marked.setOptions({ breaks: true, gfm: true, renderer });
 
   interface Segment {
     type: 'markdown' | 'thinking';
@@ -782,7 +850,77 @@
   }
 
   .markdown :global(a) {
-    color: var(--vscode-textLink-foreground);
+    color: var(--jarvis-gold);
+  }
+
+  /* Coloration syntaxique Prism (spec §8.1) — palette Iron Man (or/rouge) sur fond éditeur. */
+  .markdown :global(.token.comment),
+  .markdown :global(.token.prolog),
+  .markdown :global(.token.doctype),
+  .markdown :global(.token.cdata) {
+    color: var(--vscode-descriptionForeground);
+    font-style: italic;
+  }
+
+  .markdown :global(.token.keyword),
+  .markdown :global(.token.atrule),
+  .markdown :global(.token.important) {
+    color: var(--jarvis-gold);
+  }
+
+  .markdown :global(.token.string),
+  .markdown :global(.token.char),
+  .markdown :global(.token.attr-value) {
+    color: #d69a5c;
+  }
+
+  .markdown :global(.token.function),
+  .markdown :global(.token.class-name) {
+    color: #e08a5f;
+  }
+
+  .markdown :global(.token.number),
+  .markdown :global(.token.boolean),
+  .markdown :global(.token.constant),
+  .markdown :global(.token.symbol) {
+    color: #d9b36c;
+  }
+
+  .markdown :global(.token.tag),
+  .markdown :global(.token.selector),
+  .markdown :global(.token.deleted) {
+    color: var(--jarvis-accent-hover);
+  }
+
+  .markdown :global(.token.attr-name),
+  .markdown :global(.token.property),
+  .markdown :global(.token.builtin),
+  .markdown :global(.token.inserted) {
+    color: #c9a86a;
+  }
+
+  .markdown :global(.token.operator),
+  .markdown :global(.token.entity),
+  .markdown :global(.token.punctuation) {
+    color: var(--vscode-descriptionForeground);
+  }
+
+  .markdown :global(.token.regex),
+  .markdown :global(.token.variable) {
+    color: #e8b84b;
+  }
+
+  .markdown :global(.token.url) {
+    color: var(--jarvis-gold);
+    text-decoration: underline;
+  }
+
+  .markdown :global(.token.bold) {
+    font-weight: 600;
+  }
+
+  .markdown :global(.token.italic) {
+    font-style: italic;
   }
 
   .markdown :global(ul),
@@ -809,7 +947,7 @@
     left: -100%;
     width: 50%;
     height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(100, 150, 255, 0.15), transparent);
+    background: linear-gradient(90deg, transparent, rgba(232, 184, 75, 0.22), transparent);
     animation: wave 2s infinite linear;
     pointer-events: none;
   }
@@ -861,7 +999,7 @@
     background: var(--vscode-editorWidget-background);
     padding: 4px 8px;
     border-radius: 4px;
-    border-left: 2px solid var(--vscode-terminal-ansiCyan, #00bfff);
+    border-left: 2px solid var(--jarvis-gold);
     align-self: flex-start;
   }
 
@@ -883,11 +1021,11 @@
     transition: all 0.2s ease;
   }
   .btn-primary {
-    background: var(--vscode-button-background, #007acc);
-    color: var(--vscode-button-foreground, #ffffff);
+    background: var(--jarvis-gold);
+    color: #241a05;
   }
   .btn-primary:hover:not(:disabled) {
-    background: var(--vscode-button-hoverBackground, #0062a3);
+    background: var(--jarvis-gold-hover);
   }
   .btn-secondary {
     background: var(--vscode-button-secondaryBackground, #5f6a79);
@@ -935,8 +1073,8 @@
   }
 
   .ac-item.selected {
-    background: var(--vscode-editorSuggestWidget-selectedBackground, var(--vscode-list-activeSelectionBackground));
-    color: var(--vscode-list-activeSelectionForeground);
+    background: var(--jarvis-gold-dim);
+    color: var(--vscode-editor-foreground);
   }
 
   .ac-label {
@@ -984,8 +1122,8 @@
 
   .send-btn {
     align-self: flex-end;
-    background: var(--vscode-button-background);
-    color: var(--vscode-button-foreground);
+    background: var(--jarvis-gold);
+    color: #241a05;
     border: none;
     border-radius: var(--jarvis-radius-md);
     padding: var(--jarvis-space-2) var(--jarvis-space-3);
@@ -997,7 +1135,7 @@
     height: 36px;
   }
   .send-btn:hover:not(:disabled) {
-    background: var(--vscode-button-hoverBackground);
+    background: var(--jarvis-gold-hover);
   }
   .send-btn.stop-btn {
     background: var(--vscode-errorForeground);

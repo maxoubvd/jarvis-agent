@@ -781,11 +781,12 @@
     align-items: center;
     gap: 6px;
     padding: 4px 8px;
-    background: var(--vscode-badge-background, var(--vscode-button-secondaryBackground));
-    color: var(--vscode-badge-foreground, var(--vscode-button-secondaryForeground));
+    background: var(--jarvis-gold-dim);
+    color: var(--jarvis-gold);
+    border: 1px solid transparent;
     border-radius: var(--jarvis-radius-sm);
     font-size: var(--jarvis-text-xs);
-    font-weight: 500;
+    font-weight: 600;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;

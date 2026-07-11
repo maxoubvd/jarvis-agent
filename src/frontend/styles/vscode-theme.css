@@ -19,18 +19,18 @@
   --vscode-input-placeholderForeground: var(--vscode-input-placeholderForeground, #9b9ba9cc);
   
   /* Buttons */
-  --vscode-button-background: var(--vscode-button-background, #0e6398);
-  --vscode-button-foreground: var(--vscode-button-foreground, #ffffff);
-  --vscode-button-hoverBackground: var(--vscode-button-hoverBackground, #1177bb);
+  --vscode-button-background: var(--vscode-button-background, var(--jarvis-gold, #e8b84b));
+  --vscode-button-foreground: var(--vscode-button-foreground, #241a05);
+  --vscode-button-hoverBackground: var(--vscode-button-hoverBackground, var(--jarvis-gold-hover, #f2c968));
   --vscode-button-secondaryBackground: var(--vscode-button-secondaryBackground, #3a3a3a);
   --vscode-button-secondaryForeground: var(--vscode-button-secondaryForeground, #cccccc);
   --vscode-button-secondaryHoverBackground: var(--vscode-button-secondaryHoverBackground, #454545);
-  
+
   /* Lists & Sidebars */
   --vscode-sideBar-background: var(--vscode-sideBar-background, #252526);
   --vscode-sideBar-foreground: var(--vscode-sideBar-foreground, #cccccc);
-  --vscode-list-activeSelectionBackground: var(--vscode-list-activeSelectionBackground, #0e6398);
-  --vscode-list-activeSelectionForeground: var(--vscode-list-activeSelectionForeground, #ffffff);
+  --vscode-list-activeSelectionBackground: var(--vscode-list-activeSelectionBackground, var(--jarvis-gold, #e8b84b));
+  --vscode-list-activeSelectionForeground: var(--vscode-list-activeSelectionForeground, #241a05);
   --vscode-list-hoverBackground: var(--vscode-list-hoverBackground, #2a2a2a);
   --vscode-list-hoverForeground: var(--vscode-list-hoverForeground, #cccccc);
   
@@ -42,8 +42,8 @@
   --vscode-panel-section-border: var(--vscode-panel-section-border, #3c3c3c);
   
   /* Status Bar */
-  --vscode-statusBar-background: var(--vscode-statusBar-background, #007acc);
-  --vscode-statusBar-foreground: var(--vscode-statusBar-foreground, #ffffff);
+  --vscode-statusBar-background: var(--vscode-statusBar-background, var(--jarvis-gold, #e8b84b));
+  --vscode-statusBar-foreground: var(--vscode-statusBar-foreground, #241a05);
   
   /* Tabs */
   --vscode-tab-background: var(--vscode-tab-background, #2d2d2d);
@@ -54,9 +54,9 @@
   
   /* Text */
   --vscode-textBlockQuote-background: var(--vscode-textBlockQuote-background, #2a2a2a);
-  --vscode-textBlockQuote-border: var(--vscode-textBlockQuote-border, #0e6398);
-  --vscode-textLink-foreground: var(--vscode-textLink-foreground, #4da6ff);
-  --vscode-textLink-activeForeground: var(--vscode-textLink-activeForeground, #4da6ff);
+  --vscode-textBlockQuote-border: var(--vscode-textBlockQuote-border, var(--jarvis-gold, #e8b84b));
+  --vscode-textLink-foreground: var(--vscode-textLink-foreground, var(--jarvis-gold, #e8b84b));
+  --vscode-textLink-activeForeground: var(--vscode-textLink-activeForeground, var(--jarvis-gold-hover, #f2c968));
   --vscode-textPreformat-foreground: var(--vscode-textPreformat-foreground, #d4d4d4);
   
   /* Markdown */
@@ -79,16 +79,16 @@
   --vscode-editorLineNumber-foreground: var(--vscode-editorLineNumber-foreground, #6e7681);
   --vscode-editorLineNumber-activeForeground: var(--vscode-editorLineNumber-activeForeground, #a3a7af);
   --vscode-editorCursor-foreground: var(--vscode-editorCursor-foreground, #aeafad);
-  --vscode-editor-selectionBackground: var(--vscode-editor-selectionBackground, #264f78);
-  
+  --vscode-editor-selectionBackground: var(--vscode-editor-selectionBackground, rgba(232, 184, 75, 0.25));
+
   /* Focus */
-  --vscode-focusBorder: var(--vscode-focusBorder, #0e6398);
-  --vscode-inputOption-activeBorder: var(--vscode-inputOption-activeBorder, #0e6398);
-  
+  --vscode-focusBorder: var(--vscode-focusBorder, var(--jarvis-gold, #e8b84b));
+  --vscode-inputOption-activeBorder: var(--vscode-inputOption-activeBorder, var(--jarvis-gold, #e8b84b));
+
   /* Charts & Stats */
-  --vscode-chart-line: var(--vscode-chart-line, #4da6ff);
+  --vscode-chart-line: var(--vscode-chart-line, var(--jarvis-gold, #e8b84b));
   --vscode-chart-axis-line: var(--vscode-chart-axis-line, #3c3c3c);
-  --vscode-progressBar-background: var(--vscode-progressBar-background, #0e6398);
+  --vscode-progressBar-background: var(--vscode-progressBar-background, var(--jarvis-gold, #e8b84b));
 }
 
 /* Base styles using VS Code variables */
