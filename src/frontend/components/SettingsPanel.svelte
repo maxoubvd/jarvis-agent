@@ -56,6 +56,7 @@
     onRequestGitInit = () => {}
   }: Props = $props();
 
+  let firstName = $state('');
   let modelItems = $state<ModelItem[]>([]);
   let defaultModel = $state<string>('');
   let optimization = $state<OptimizationConfig>({});
@@ -77,6 +78,7 @@
   $effect(() => {
     const incoming = settings;
     if (!incoming) return;
+    firstName = incoming.firstName ?? '';
     modelItems = structuredClone($state.snapshot(incoming.models.items ?? [])) as ModelItem[];
     defaultModel = incoming.models.default ?? '';
     optimization = structuredClone($state.snapshot(incoming.optimization ?? {}));
@@ -223,6 +225,7 @@
 
     const config: JarvisConfig = {
       version: settings?.version ?? 1,
+      firstName: firstName.trim() || undefined,
       models: {
         default: defaultModel || null,
         items
@@ -267,7 +270,7 @@
       version: 1,
       models: { default: null, items: [] },
       optimization: {},
-      firstName: settings?.firstName
+      firstName: firstName.trim() || undefined
     };
     onSave(resetConfig);
   }
@@ -309,6 +312,20 @@
     Stored in the global config (<code>~/.jarvis/config.json</code>). No model is configured by
     default — add a provider and API key to get started.
   </p>
+
+  <!-- Profile -->
+  <div class="group">
+    <div class="group-head"><h3>Profile</h3></div>
+    <label class="field">
+      <span>First name</span>
+      <input
+        bind:value={firstName}
+        oninput={markDirty}
+        placeholder="Your first name"
+        style="max-width: 16rem;"
+      />
+    </label>
+  </div>
 
   <!-- Models -->
   <ModelsSection

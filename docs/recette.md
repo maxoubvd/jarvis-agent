@@ -126,50 +126,50 @@ Ce document liste l'intégralité des scénarios de test pour s'assurer du parfa
 ## 8. Interface Webview (UI)
 
 ### 8.1 Markdown et Code Highlighting
-- [ ] **Action** : Demandez du code Python, HTML, et Rust.
-- [ ] **Résultat attendu** : Le code est correctement coloré dans le Chat (PrismJS) avec un bouton de copie fonctionnel ("Copy to clipboard").
+- [X] **Action** : Demandez du code Python, HTML, et Rust.
+- [X] **Résultat attendu** : Le code est correctement coloré dans le Chat (PrismJS) avec un bouton de copie fonctionnel ("Copy to clipboard").
 
 ### 8.2 Bouton d'Annulation (Kill Switch) 
-- [ ] **Action** : Demandez à l'IA d'écrire un très long script ou lancez une boucle d'agent complexe. Pendant que l'IA génère sa réponse, cliquez sur le bouton "Stop" (carré) qui a remplacé le bouton d'envoi.
-- [ ] **Résultat attendu** : La génération s'arrête instantanément, l'appel réseau est annulé (`AbortController`), et l'interface redevient disponible pour un nouveau message.
+- [X] **Action** : Demandez à l'IA d'écrire un très long script ou lancez une boucle d'agent complexe. Pendant que l'IA génère sa réponse, cliquez sur le bouton "Stop" (carré) qui a remplacé le bouton d'envoi.
+- [X] **Résultat attendu** : La génération s'arrête instantanément, l'appel réseau est annulé (`AbortController`), et l'interface redevient disponible pour un nouveau message.
 
 ### 8.3 Navigation
-- [ ] **Action** : Passez de l'onglet Chat à l'onglet Settings, puis Analytics.
-- [ ] **Résultat attendu** : La transition est fluide (sans rechargement complet de la page). Les Settings conservent leurs valeurs.
+- [X] **Action** : Passez de l'onglet Chat à l'onglet Settings, puis Analytics.
+- [X] **Résultat attendu** : La transition est fluide (sans rechargement complet de la page). Les Settings conservent leurs valeurs.
 
 ---
 
 ## 9. Onboarding (Écran de Bienvenue)
 
 ### 9.1 Premier lancement (aucun modèle)
-- [ ] **Prérequis** : Videz ou supprimez `~/.jarvis/config.json` (aucun modèle configuré), puis lancez l'Extension Development Host (`F5`).
-- [ ] **Action** : Ouvrez le panneau Jarvis.
-- [ ] **Résultat attendu** : Au lieu de la simple bannière « No model configured », un **écran de Bienvenue plein panneau** s'affiche : titre, indicateur d'étapes (Provider → Connexion → Tour) et une grille de fournisseurs (Ollama, OpenRouter, OpenAI, Anthropic, Mistral, LM Studio).
+- [X] **Prérequis** : Videz ou supprimez `~/.jarvis/config.json` (aucun modèle configuré), puis lancez l'Extension Development Host (`F5`).
+- [X] **Action** : Ouvrez le panneau Jarvis.
+- [X] **Résultat attendu** : Au lieu de la simple bannière « No model configured », un **écran de Bienvenue plein panneau** s'affiche : titre, indicateur d'étapes (Provider → Connexion → Tour) et une grille de fournisseurs (Ollama, OpenRouter, OpenAI, Anthropic, Mistral, LM Studio).
 
 ### 9.2 Test de connexion d'un provider
-- [ ] **Action** : Choisissez un fournisseur (ex. Ollama), renseignez un modèle (ex. `qwen2.5-coder:7b`), cliquez « Continuer » puis « Tester la connexion ».
-- [ ] **Résultat attendu** : Un « ping » est envoyé via un provider éphémère. En cas de succès, un bandeau vert « Connexion réussie » apparaît. En cas d'erreur (clé invalide, serveur éteint), un bandeau rouge affiche le message d'erreur. La config n'est PAS encore sauvegardée à ce stade.
+- [X] **Action** : Choisissez un fournisseur (ex. Ollama), renseignez un modèle (ex. `qwen2.5-coder:7b`), cliquez « Continuer » puis « Tester la connexion ».
+- [X] **Résultat attendu** : Un « ping » est envoyé via un provider éphémère. En cas de succès, un bandeau vert « Connexion réussie » apparaît. En cas d'erreur (clé invalide, serveur éteint), un bandeau rouge affiche le message d'erreur. La config n'est PAS encore sauvegardée à ce stade.
 
 ### 9.3 Tour visuel des 3 features
-- [ ] **Action** : Cliquez « Enregistrer et continuer ». Le modèle est persisté (via `updateSettings`) et devient le modèle par défaut. Le tour démarre.
-- [ ] **Résultat attendu** : Trois slides successives présentent **le Chat agentique**, **l'édition inline Cmd+K** et **les @mentions** (`@file:` / `@docs:`). La navigation (points + Précédent/Suivant) fonctionne. Le bouton final « Commencer à coder » ferme l'écran et ouvre le chat.
+- [X] **Action** : Cliquez « Enregistrer et continuer ». Le modèle est persisté (via `updateSettings`) et devient le modèle par défaut. Le tour démarre.
+- [X] **Résultat attendu** : Trois slides successives présentent **le Chat agentique**, **l'édition inline Cmd+K** et **les @mentions** (`@file:` / `@docs:`). La navigation (points + Précédent/Suivant) fonctionne. Le bouton final « Commencer à coder » ferme l'écran et ouvre le chat.
 
 ### 9.4 Non-réaffichage après complétion
-- [ ] **Action** : Rechargez la fenêtre (`Developer: Reload Window`).
-- [ ] **Résultat attendu** : L'écran de Bienvenue **ne réapparaît pas** (l'état `jarvis.onboardingDone` est stocké dans le `globalState`). Le chat s'ouvre directement. (Un utilisateur déjà configuré arrive directement au tour la 1ʳᵉ fois, puis plus jamais.)
+- [X] **Action** : Rechargez la fenêtre (`Developer: Reload Window`).
+- [X] **Résultat attendu** : L'écran de Bienvenue **ne réapparaît pas** (l'état `jarvis.onboardingDone` est stocké dans le `globalState`). Le chat s'ouvre directement. (Un utilisateur déjà configuré arrive directement au tour la 1ʳᵉ fois, puis plus jamais.)
 
 ---
 
 ## 10. Prompt Caching (implicite + statistiques)
 
 ### 10.1 Tokens « cached » visibles dans la jauge
-- [ ] **Prérequis** : Un modèle cloud avec cache implicite (OpenAI `gpt-4o-mini`, DeepSeek via OpenRouter…).
-- [ ] **Action** : Envoyez un premier message long (grand contexte : règles + fichiers). Puis, dans la même discussion, envoyez un second message qui réutilise le même préfixe système.
-- [ ] **Résultat attendu** : Dépliez la jauge de tokens (« Tokens used »). À partir du 2ᵉ message, une ligne verte **« ⚡ Cached: N »** apparaît, indiquant les tokens du prompt servis depuis le cache du provider (issus de `usage.prompt_tokens_details.cached_tokens` / `prompt_cache_hit_tokens`).
+- [X] **Prérequis** : Un modèle cloud avec cache implicite (OpenAI `gpt-4o-mini`, DeepSeek via OpenRouter…).
+- [X] **Action** : Envoyez un premier message long (grand contexte : règles + fichiers). Puis, dans la même discussion, envoyez un second message qui réutilise le même préfixe système.
+- [X] **Résultat attendu** : Dépliez la jauge de tokens (« Tokens used »). À partir du 2ᵉ message, une ligne verte **« ⚡ Cached: N »** apparaît, indiquant les tokens du prompt servis depuis le cache du provider (issus de `usage.prompt_tokens_details.cached_tokens` / `prompt_cache_hit_tokens`).
 
 ### 10.2 Latence réduite sur préfixe stable
-- [ ] **Action** : Comparez le temps de première réponse entre le 1ᵉʳ appel (cache froid) et les suivants (cache chaud).
-- [ ] **Résultat attendu** : Les appels réutilisant le préfixe stable (system prompt + règles) répondent plus vite. Aucun réglage manuel : le cache est géré côté API tant que le préfixe reste identique d'un tour à l'autre.
+- [X] **Action** : Comparez le temps de première réponse entre le 1ᵉʳ appel (cache froid) et les suivants (cache chaud).
+- [X] **Résultat attendu** : Les appels réutilisant le préfixe stable (system prompt + règles) répondent plus vite. Aucun réglage manuel : le cache est géré côté API tant que le préfixe reste identique d'un tour à l'autre.
 
 ---
 
@@ -189,16 +189,16 @@ Ce document liste l'intégralité des scénarios de test pour s'assurer du parfa
 ## 12. Persistance de Session (Jauge & Historique)
 
 ### 12.1 Jauge restaurée après Reload Window
-- [ ] **Action** : Discutez jusqu'à faire monter la jauge (tokens > 0), puis `Developer: Reload Window`.
-- [ ] **Résultat attendu** : Après rechargement, la **jauge de tokens conserve sa valeur** (input/output/cached + historique des 5 dernières requêtes), restaurée depuis le `workspaceState` (`jarvis.tokenState`).
+- [X] **Action** : Discutez jusqu'à faire monter la jauge (tokens > 0), puis `Developer: Reload Window`.
+- [X] **Résultat attendu** : Après rechargement, la **jauge de tokens conserve sa valeur** (input/output/cached + historique des 5 dernières requêtes), restaurée depuis le `workspaceState` (`jarvis.tokenState`).
 
 ### 12.2 Historique du chat restauré
-- [ ] **Action** : Après le reload, observez le panneau de chat.
-- [ ] **Résultat attendu** : Les **messages de la discussion en cours réapparaissent** (rehydratation depuis `SessionStore` / `.vscode/jarvis-sessions.json`). La conversation peut continuer avec le contexte précédent.
+- [X] **Action** : Après le reload, observez le panneau de chat.
+- [X] **Résultat attendu** : Les **messages de la discussion en cours réapparaissent** (rehydratation depuis `SessionStore` / `.vscode/jarvis-sessions.json`). La conversation peut continuer avec le contexte précédent.
 
 ### 12.3 Persistance après redémarrage complet
-- [ ] **Action** : Fermez entièrement VS Code puis rouvrez le même workspace.
-- [ ] **Résultat attendu** : Jauge et historique sont toujours présents (le `workspaceState` survit au redémarrage). `/new` remet à zéro la jauge ET l'instantané persisté.
+- [X] **Action** : Fermez entièrement VS Code puis rouvrez le même workspace.
+- [X] **Résultat attendu** : Jauge et historique sont toujours présents (le `workspaceState` survit au redémarrage). `/new` remet à zéro la jauge ET l'instantané persisté.
 
 ---
 
