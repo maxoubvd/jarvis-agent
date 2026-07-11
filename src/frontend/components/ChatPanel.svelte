@@ -92,6 +92,15 @@
   let menuItems = $state<CommandItem[]>([]);
   let selectedIndex = $state(0);
   let tokenStart = $state(0);
+  let acListEl: HTMLUListElement | undefined = $state();
+
+  // Garde l'item survolé au clavier visible dans la liste (le scroll ne suit
+  // pas tout seul la sélection sur ArrowUp/ArrowDown sinon).
+  $effect(() => {
+    void selectedIndex;
+    if (!showMenu || !acListEl) return;
+    acListEl.querySelector('.selected')?.scrollIntoView({ block: 'nearest' });
+  });
 
   /** Dernière requête fichiers envoyée — évite de re-demander à chaque re-rendu. */
   let lastFileQuery: string | null = null;
@@ -457,7 +466,7 @@
     <div class="input-actions">
       <div class="input-wrap">
         {#if showMenu && menuItems.length > 0}
-          <ul class="autocomplete" role="listbox">
+          <ul class="autocomplete" role="listbox" bind:this={acListEl}>
             {#each menuItems as item, i (item.insert)}
               <li
                 role="option"

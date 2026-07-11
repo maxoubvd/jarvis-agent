@@ -110,8 +110,8 @@ Ce document liste l'intégralité des scénarios de test pour s'assurer du parfa
 - [X] **Résultat attendu** : En bas à droite de l'éditeur VS Code, la barre de statut `$(hubot) Jarvis X%` s'incrémente. Le survol avec la souris indique les tokens In/Out. Au-delà d'un seuil critique (80%), elle passe en orange/rouge.
 
 ### 7.2 Checkpoints et Rollback
-- [ ] **Action** : Effectuez plusieurs requêtes qui modifient le projet. Puis utilisez la commande `Jarvis: List Checkpoints` ou `/rollback`.
-- [ ] **Résultat attendu** : Une liste des sauvegardes git (ou internes) s'affiche. Sélectionner un checkpoint précédent restaure les fichiers à l'état exact de ce moment-là.
+- [X] **Action** : Effectuez plusieurs requêtes qui modifient le projet. Puis utilisez la commande `Jarvis: List Checkpoints` ou `/rollback`.
+- [X] **Résultat attendu** : Une liste des sauvegardes git (ou internes) s'affiche. Sélectionner un checkpoint précédent restaure les fichiers à l'état exact de ce moment-là.
 
 ### 7.3 `.jarvisignore`
 - [ ] **Action** : Utilisez `Jarvis: Generate .jarvisignore` pour créer le fichier. Ajoutez-y un répertoire sensible (ex: `secrets/`). Demandez à Jarvis de lister les fichiers du projet.

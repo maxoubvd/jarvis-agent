@@ -60,4 +60,10 @@ describe('filterCommands', () => {
   it('returns empty for an unknown token', () => {
     expect(filterCommands(matchTrigger('/zzz', 4)!)).toHaveLength(0);
   });
+
+  it('suggests /rollback', () => {
+    const items = filterCommands(matchTrigger('/roll', 5)!);
+    expect(items).toHaveLength(1);
+    expect(items[0].label).toBe('/rollback');
+  });
 });

@@ -34,22 +34,30 @@ export class CheckpointManager {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const name = `jarvis/checkpoint-${timestamp}-${type}-${this.sanitize(description)}`;
 
-    // `git stash push --include-untracked` keeps the working tree changes
-    // stashed but also restores them (via `stash apply` below on rollback).
-    const result = await executeTerminalCommand(
-      `git stash push --include-untracked -m "${name}"`
-    );
+    // `git stash push` (even followed by an immediate `apply`) resets the
+    // working tree to HEAD as its first step, which is a window where the
+    // user's files are genuinely gone from disk until the re-apply succeeds.
+    // `git add -A` + `git stash create` + `git stash store` records the exact
+    // same snapshot (tracked + untracked changes) but only ever touches the
+    // index, never the working tree — so there is no state in which a file
+    // can go missing while a checkpoint is being created.
+    await executeTerminalCommand('git add -A');
+    const create = await executeTerminalCommand(`git stash create "${name}"`);
+    await executeTerminalCommand('git reset'); // undo the staging above, working tree untouched
 
-    if (!result.success) {
-      // "No local changes to save" is not a fatal error — nothing to checkpoint.
-      if (result.stdout.includes('No local changes') || result.stderr.includes('No local changes')) {
-        return null;
-      }
-      throw new Error(result.stderr || 'Échec de création du checkpoint');
+    if (!create.success) {
+      throw new Error(create.stderr || 'Échec de création du checkpoint');
     }
 
-    // Re-apply so the user keeps working on their changes after the snapshot.
-    await executeTerminalCommand('git stash apply');
+    const sha = create.stdout.trim();
+    if (!sha) {
+      return null; // Clean working tree — nothing to checkpoint.
+    }
+
+    const store = await executeTerminalCommand(`git stash store -m "${name}" ${sha}`);
+    if (!store.success) {
+      throw new Error(store.stderr || 'Échec de l\'enregistrement du checkpoint');
+    }
 
     return {
       id: name,
@@ -87,11 +95,64 @@ export class CheckpointManager {
     return checkpoints;
   }
 
-  public async rollback(ref: string): Promise<RollbackResult> {
-    const result = await executeTerminalCommand(`git stash apply ${ref}`);
+  private parseUntrackedConflicts(stderr: string): string[] {
+    return stderr
+      .split('\n')
+      .map(line => line.match(/^(.+) already exists, no checkout$/))
+      .filter((m): m is RegExpMatchArray => m !== null)
+      .map(m => m[1].trim());
+  }
+
+  /**
+   * Runs `git stash apply [ref]`, retrying once if it's blocked by untracked
+   * files that already exist on disk (see `rollback()` for why that happens).
+   */
+  private async applyStash(ref: string): Promise<RollbackResult> {
+    const command = ref ? `git stash apply ${ref}` : 'git stash apply';
+    let result = await executeTerminalCommand(command);
+
+    if (!result.success && result.stderr.includes('could not restore untracked files from stash')) {
+      const conflicts = this.parseUntrackedConflicts(result.stderr);
+      for (const file of conflicts) {
+        await executeTerminalCommand(`git clean -fd -- "${file}"`);
+      }
+      if (conflicts.length > 0) {
+        result = await executeTerminalCommand(command);
+      }
+    }
+
     if (!result.success) {
       return { success: false, error: result.stderr || 'Échec du rollback' };
     }
+
+    // The stash's index reflects the `git add -A` done at checkpoint time,
+    // so a bare apply leaves the restored files staged; unstage them so the
+    // working tree looks like it did before the checkpoint, not pre-staged.
+    await executeTerminalCommand('git reset');
     return { success: true };
+  }
+
+  public async rollback(ref: string): Promise<RollbackResult> {
+    return this.applyStash(ref);
+  }
+
+  /**
+   * Discards every change made since the most recent checkpoint and restores
+   * that checkpoint's snapshot exactly (used by the `/rollback` chat shortcut,
+   * one message = one checkpoint). Unlike `rollback()`, which merges an old
+   * stash onto whatever is currently on disk, this first resets the tree back
+   * to HEAD so the stash re-applies cleanly instead of merging on top of the
+   * newer edits it's supposed to undo.
+   */
+  public async rollbackToLastCheckpoint(): Promise<RollbackResult> {
+    const checkpoints = await this.listCheckpoints();
+    if (checkpoints.length === 0) {
+      return { success: false, error: 'Aucun checkpoint disponible' };
+    }
+
+    await executeTerminalCommand('git checkout -- .');
+    await executeTerminalCommand('git clean -fd');
+
+    return this.rollback(checkpoints[0].ref);
   }
 }

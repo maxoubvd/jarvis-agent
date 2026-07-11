@@ -35,6 +35,7 @@ import {
   readFileTool,
   writeFileTool,
   listDirectoryTool,
+  getSandbox,
   setSandbox
 } from './mcp/tools/fileSystem.js';
 import { executeTerminalCommand } from './mcp/tools/terminal.js';
@@ -1057,6 +1058,11 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
       return;
     }
 
+    if (/^\/rollback\s*$/.test(rawText)) {
+      await this.onRollbackLastMessage(webview);
+      return;
+    }
+
     // Prompts enregistrés : `/nom args` → contenu du prompt + args
     // (les commandes réservées /tdd, /workflow, /agent ne sont jamais masquées).
     if (rawText.startsWith('/')) {
@@ -1509,7 +1515,7 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
       const orchestrator = this.buildOrchestrator(active, registry, persona);
 
       // Checkpoint avant action agentique (spec §6.2)
-      await this.getCheckpoints().createCheckpoint('action', task.slice(0, 40)).catch(() => null);
+      await this.getCheckpoints().createCheckpoint('action', task.slice(0, 40)).catch(err => this.reportCheckpointFailure(err));
 
       result = await orchestrator.run(task, history || [], this.agentEvents(webview));
     } catch (err) {
@@ -1569,7 +1575,7 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     const testCommand = this.getOpt(opt.tddTestCommand, 'tdd.testCommand', 'npm test');
     const timeout = this.getOpt(opt.terminalTimeout, 'terminal.timeout', 30000);
 
-    await this.getCheckpoints().createCheckpoint('workflow', `tdd-${task.slice(0, 30)}`).catch(() => null);
+    await this.getCheckpoints().createCheckpoint('workflow', `tdd-${task.slice(0, 30)}`).catch(err => this.reportCheckpointFailure(err));
 
     const loop = new AutoTDDLoop(active.provider, {
       writeFile: async (p, content) => {
@@ -1656,7 +1662,7 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     this.currentAbortController = new AbortController();
     const orchestrator = this.buildOrchestrator(active, registry);
     const runner = new WorkflowRunner(orchestrator, async () => {
-      await this.getCheckpoints().createCheckpoint('workflow', `${workflowId}-${task.slice(0, 30)}`).catch(() => null);
+      await this.getCheckpoints().createCheckpoint('workflow', `${workflowId}-${task.slice(0, 30)}`).catch(err => this.reportCheckpointFailure(err));
     }, this.getConfiguredWorkflows());
 
     const started = Date.now();
@@ -1781,6 +1787,16 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     }
   }
 
+  // Un checkpoint qui échoue silencieusement (`.catch(() => null)`) peut laisser
+  // les fichiers de l'utilisateur uniquement dans le stash git, sans qu'il le
+  // sache — donc on notifie systématiquement au lieu d'avaler l'erreur.
+  private reportCheckpointFailure(err: unknown): null {
+    const msg = err instanceof Error ? err.message : String(err);
+    vscode.window.showErrorMessage(`Jarvis: checkpoint failed — ${msg}`);
+    operationLogger.log('checkpoint', msg, 'error');
+    return null;
+  }
+
   private async onRollback(webview: vscode.Webview, ref: string): Promise<void> {
     const result = await this.getCheckpoints().rollback(ref);
     if (result.success) {
@@ -1790,6 +1806,21 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
       vscode.window.showErrorMessage(`Jarvis: rollback failed — ${result.error}`);
       operationLogger.log('rollback', `${ref}: ${result.error}`, 'error');
     }
+    await this.onListCheckpoints(webview);
+  }
+
+  // `/rollback` chat shortcut : annule toutes les modifications de fichiers
+  // faites depuis le dernier message (dernier checkpoint 'action'/'workflow').
+  private async onRollbackLastMessage(webview: vscode.Webview): Promise<void> {
+    const result = await this.getCheckpoints().rollbackToLastCheckpoint();
+    if (result.success) {
+      operationLogger.log('rollback', 'last-message', 'success');
+      this.post(webview, { type: 'chatChunk', text: "Modifications annulées : le projet a été restauré à l'état d'avant le dernier message." });
+    } else {
+      operationLogger.log('rollback', `last-message: ${result.error}`, 'error');
+      this.post(webview, { type: 'chatChunk', text: `Échec du rollback : ${result.error}` });
+    }
+    this.post(webview, { type: 'chatDone' });
     await this.onListCheckpoints(webview);
   }
 
@@ -2021,9 +2052,30 @@ export class JarvisExtension {
         `(⬆️ ${usage.inputTokens.toLocaleString()} / ⬇️ ${usage.outputTokens.toLocaleString()})`;
     };
 
-    // Checkpoint de session (spec §6.2)
+    // Checkpoint de session (spec §6.2). Un échec ici veut dire que les
+    // fichiers de l'utilisateur sont restés dans le stash git sans être
+    // restaurés sur le disque — ne jamais avaler cette erreur en silence.
     if (vscode.workspace.workspaceFolders?.length) {
-      void new CheckpointManager().createCheckpoint('session', 'session-start').catch(() => null);
+      void new CheckpointManager().createCheckpoint('session', 'session-start').catch(err => {
+        const msg = err instanceof Error ? err.message : String(err);
+        vscode.window.showErrorMessage(`Jarvis: checkpoint failed — ${msg}`);
+        operationLogger.log('checkpoint', msg, 'error');
+        return null;
+      });
+    }
+
+    // Recharge les patterns quand .jarvisignore est édité à la main dans
+    // l'éditeur (les commandes Add/Remove/Generate mettent déjà le sandbox à
+    // jour elles-mêmes ; ce watcher couvre le cas d'une édition manuelle du
+    // fichier, sinon le sandbox en mémoire reste périmé jusqu'au reload de
+    // l'extension et continue de montrer des fichiers censés être ignorés).
+    if (vscode.workspace.workspaceFolders?.length) {
+      const watcher = vscode.workspace.createFileSystemWatcher('**/.jarvisignore');
+      const reload = () => { void getSandbox().reloadIgnorePatterns(); };
+      watcher.onDidChange(reload);
+      watcher.onDidCreate(reload);
+      watcher.onDidDelete(reload);
+      this.context.subscriptions.push(watcher);
     }
   }
 

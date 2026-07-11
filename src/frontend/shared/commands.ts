@@ -20,7 +20,8 @@ export const SLASH_COMMANDS: CommandItem[] = [
   { trigger: '/', insert: '/resume ', label: '/resume', detail: 'Reprendre une ancienne discussion' },
   { trigger: '/', insert: '/agent ', label: '/agent', detail: 'Agentic mode on a task' },
   { trigger: '/', insert: '/tdd ', label: '/tdd', detail: 'Auto-TDD loop' },
-  { trigger: '/', insert: '/workflow ', label: '/workflow', detail: 'Run a predefined workflow' }
+  { trigger: '/', insert: '/workflow ', label: '/workflow', detail: 'Run a predefined workflow' },
+  { trigger: '/', insert: '/rollback', label: '/rollback', detail: 'Annuler les modifications depuis le dernier message' }
 ];
 
 export const AT_MENTIONS: CommandItem[] = [
