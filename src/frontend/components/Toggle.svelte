@@ -17,7 +17,18 @@
     role="switch"
     {checked}
     {disabled}
-    onchange={e => onchange((e.target as HTMLInputElement).checked)}
+    onchange={e => {
+      const target = e.target as HTMLInputElement;
+      onchange(target.checked);
+      // Le navigateur a déjà basculé la checkbox visuellement avant que ce
+      // handler ne s'exécute. Si le parent refuse le changement (`onchange`
+      // ne met pas `checked` à jour, ex: toggle intercepté par une
+      // confirmation), Svelte ne réapplique `checked` sur le DOM que si sa
+      // VALEUR change — donc rien ne corrige la checkbox sinon. On la
+      // resynchronise explicitement ici, après l'appel synchrone à
+      // `onchange` (qui a déjà eu l'occasion de mettre à jour l'état).
+      target.checked = checked;
+    }}
   />
   <span class="track" aria-hidden="true"><span class="thumb"></span></span>
   {#if label}<span class="text">{label}</span>{/if}

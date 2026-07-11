@@ -114,8 +114,8 @@ Ce document liste l'intégralité des scénarios de test pour s'assurer du parfa
 - [X] **Résultat attendu** : Une liste des sauvegardes git (ou internes) s'affiche. Sélectionner un checkpoint précédent restaure les fichiers à l'état exact de ce moment-là.
 
 ### 7.3 `.jarvisignore`
-- [ ] **Action** : Utilisez `Jarvis: Generate .jarvisignore` pour créer le fichier. Ajoutez-y un répertoire sensible (ex: `secrets/`). Demandez à Jarvis de lister les fichiers du projet.
-- [ ] **Résultat attendu** : L'outil `list_dir` de Jarvis est aveugle au dossier `secrets/` et refuse d'y accéder, même via une lecture explicite de fichier.
+- [X] **Action** : Utilisez `Jarvis: Generate .jarvisignore` pour créer le fichier. Ajoutez-y un répertoire sensible (ex: `secrets/`). Demandez à Jarvis de lister les fichiers du projet.
+- [X] **Résultat attendu** : L'outil `list_dir` de Jarvis est aveugle au dossier `secrets/` et refuse d'y accéder, même via une lecture explicite de fichier.
 
 ### 7.4 Protocol MCP (Serveurs Externes)
 - [ ] **Action** : Allez dans l'onglet Settings > MCP. Ajoutez un serveur MCP externe (par exemple le serveur local "sqlite" ou "brave-search").

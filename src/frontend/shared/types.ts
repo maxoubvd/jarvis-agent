@@ -273,6 +273,8 @@ export interface SettingsDefaults {
     description: string;
     command: string;
     defaultEnabled: boolean;
+    /** Dossier ouvert mais pas un dépôt git — activer requiert un "git init" (confirmation). */
+    requiresGitInit?: boolean;
   }>;
   /** Outils intégrés de l'agent — pour l'éditeur de politiques. */
   agentTools?: Array<{ name: string; description: string }>;

@@ -33,6 +33,8 @@
     onBuiltinToggle?: (id: string, enabled: boolean) => void;
     onBuiltinToolPolicy?: (id: string, tool: string, policy: ToolPolicy) => void;
     onEntriesChange?: (next: McpEntry[]) => void;
+    /** Demande au backend le flow "confirmer + git init" (serveur `requiresGitInit`). */
+    onRequestGitInit?: (id: string) => void;
   }
 
   let {
@@ -47,7 +49,8 @@
     onToolPoliciesChange = () => {},
     onBuiltinToggle = () => {},
     onBuiltinToolPolicy = () => {},
-    onEntriesChange = () => {}
+    onEntriesChange = () => {},
+    onRequestGitInit = () => {}
   }: Props = $props();
 
   let expanded = $state<Record<string, boolean>>({});
@@ -198,7 +201,22 @@
           <Toggle
             checked={enabled}
             label="Enabled"
-            onchange={on => onBuiltinToggle(builtin.id, on)}
+            title={builtin.requiresGitInit ? 'This folder isn\'t a git repository — enabling will offer to run git init' : undefined}
+            onchange={on => {
+              if (on && builtin.requiresGitInit) {
+                // Ne pas activer localement : le backend affiche une
+                // confirmation modale puis lance `git init` avant d'activer
+                // réellement le serveur (settings/mcpStatus rafraîchis après).
+                // On force explicitement `false` (au lieu de ne rien faire)
+                // pour que le switch — déjà basculé visuellement par le clic
+                // natif du checkbox — revienne bien à l'état éteint tant que
+                // le backend n'a pas confirmé.
+                onBuiltinToggle(builtin.id, false);
+                onRequestGitInit(builtin.id);
+                return;
+              }
+              onBuiltinToggle(builtin.id, on);
+            }}
           />
           {@render statusBadge(status)}
         </div>

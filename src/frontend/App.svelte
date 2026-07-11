@@ -493,6 +493,10 @@
     vscode?.postMessage({ type: 'indexWorkspace' });
   }
 
+  function handleRequestGitInit(id: string) {
+    vscode?.postMessage({ type: 'requestGitInit', id });
+  }
+
   function handleQueryFiles(query: string) {
     vscode?.postMessage({ type: 'queryFiles', query });
   }
@@ -674,6 +678,7 @@
           onReindex={handleReindex}
           onOpenConfig={handleOpenConfig}
           onOpenGuide={handleOpenGuide}
+          onRequestGitInit={handleRequestGitInit}
         />
       {:else if activeTab === 'checkpoints'}
         <CheckpointPanel

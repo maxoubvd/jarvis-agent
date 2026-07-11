@@ -1,7 +1,7 @@
 import { JarvisMcpClient, McpToolInfo } from './client.js';
 import type { ConfigManager, McpServerConfig, ToolPolicy } from '../../config/config-manager.js';
 import { getConfigManager } from '../../config/config-manager.js';
-import { getBuiltinMcpServers } from './builtin.js';
+import { getBuiltinMcpServers, isGitRepository } from './builtin.js';
 import { IN_PROCESS_SERVERS } from './in-process.js';
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import type { ToolDefinition, ToolParameter } from '../agent/tool-registry.js';
@@ -101,7 +101,16 @@ interface ConnectedServer {
 export class McpManager {
   private servers = new Map<string, ConnectedServer>();
   private errors = new Map<string, string>();
-  private initialized = false;
+  /**
+   * Single-flight guard : `getSettings` et `getMcpStatus` arrivent quasi
+   * simultanément depuis le webview (handleTabChange poste les deux d'un
+   * coup) et chacun appelle `initialize()`. Avec un simple booléen, le second
+   * appel voyait "déjà initialisé" et repartait aussitôt lire des statuts
+   * vides — la connexion réelle (connectAll) n'avait pas eu le temps de
+   * s'exécuter. En gardant la Promise elle-même, tout appelant concurrent
+   * attend la même connexion en cours au lieu de lire un état pas encore prêt.
+   */
+  private initPromise: Promise<void> | null = null;
 
   constructor(
     private readonly cfg: ConfigManager = getConfigManager(),
@@ -128,22 +137,29 @@ export class McpManager {
 
     const builtins: ResolvedServer[] = getBuiltinMcpServers(this.workspaceFolder)
       .filter(b => !(b.id in userServers))
-      .map(b => ({
-        name: b.id,
-        config: {
-          ...b.config,
-          // Un builtin lié au workspace reste listé mais inconnectable sans dossier.
-          enabled:
-            b.requiresWorkspace && !this.workspaceFolder
-              ? false
-              : overrides[b.id]?.enabled ?? b.config.enabled,
-          disabledTools: overrides[b.id]?.disabledTools,
-          toolPolicies: overrides[b.id]?.toolPolicies
-        },
-        builtin: true,
-        description: b.description,
-        inProcessFactory: b.inProcess ? IN_PROCESS_SERVERS[b.id] : undefined
-      }));
+      .map(b => {
+        // Un builtin lié au workspace reste listé mais inconnectable sans
+        // dossier ; un builtin lié à un dépôt git reste listé mais
+        // inconnectable si le dossier n'est pas lui-même une racine git
+        // (mcp-server-git échouerait avec "not a valid Git repository").
+        // Les deux gardes l'emportent sur un éventuel override utilisateur —
+        // sinon la connexion échoue quand même, juste plus tard.
+        const blocked =
+          (b.requiresWorkspace && !this.workspaceFolder) ||
+          (b.requiresOwnGitRepo && !isGitRepository(this.workspaceFolder));
+        return {
+          name: b.id,
+          config: {
+            ...b.config,
+            enabled: blocked ? false : overrides[b.id]?.enabled ?? b.config.enabled,
+            disabledTools: overrides[b.id]?.disabledTools,
+            toolPolicies: overrides[b.id]?.toolPolicies
+          },
+          builtin: true,
+          description: b.description,
+          inProcessFactory: b.inProcess ? IN_PROCESS_SERVERS[b.id] : undefined
+        };
+      });
 
     const users: ResolvedServer[] = Object.entries(userServers).map(([name, cfg]) => ({
       name,
@@ -156,9 +172,10 @@ export class McpManager {
 
   /** Connecte tous les serveurs activés ; les erreurs sont isolées par serveur. */
   public async initialize(): Promise<void> {
-    if (this.initialized) return;
-    this.initialized = true;
-    await this.connectAll();
+    if (!this.initPromise) {
+      this.initPromise = this.connectAll();
+    }
+    await this.initPromise;
   }
 
   private async connectAll(): Promise<void> {
@@ -191,8 +208,10 @@ export class McpManager {
     await Promise.all([...this.servers.values()].map(s => s.client.close().catch(() => undefined)));
     this.servers.clear();
     this.errors.clear();
-    this.initialized = true;
-    await this.connectAll();
+    // Un appel concurrent à initialize() doit attendre CETTE reconnexion, pas
+    // l'ancienne (déjà résolue) ni repartir aussitôt.
+    this.initPromise = this.connectAll();
+    await this.initPromise;
   }
 
   public getStatuses(): McpServerStatus[] {

@@ -82,19 +82,19 @@ const CONFIG = {
   optimization: {}
 };
 
-async function openSettingsWithConfig() {
+async function openSettingsWithConfig(defaults: typeof DEFAULTS = DEFAULTS) {
   render(App);
   await tick();
   // Le backend pousse status + settings au webviewReady.
   postToWebview({ type: 'status', text: 'Connected — model: GPT', models: ['GPT'], model: 'GPT', needsSetup: false });
-  postToWebview({ type: 'settings', config: CONFIG, defaults: DEFAULTS, currentFolder: 'C:\\proj', needsSetup: false });
+  postToWebview({ type: 'settings', config: CONFIG, defaults, currentFolder: 'C:\\proj', needsSetup: false });
   await tick();
   // Naviguer vers Settings (sidebar inline, viewport large par défaut).
   const settingsTab = screen.getAllByRole('button', { name: /Settings/ }).at(-1)!;
   settingsTab.click();
   await tick();
   // Le backend renvoie settings + mcpStatus quand on entre dans l'onglet.
-  postToWebview({ type: 'settings', config: CONFIG, defaults: DEFAULTS, currentFolder: 'C:\\proj', needsSetup: false });
+  postToWebview({ type: 'settings', config: CONFIG, defaults, currentFolder: 'C:\\proj', needsSetup: false });
   postToWebview({
     type: 'mcpStatus',
     servers: [
@@ -136,6 +136,34 @@ describe('settings panel interactions', () => {
     expandBtn.click();
     await tick();
     expect(memoryCard.textContent).toContain('create_entities');
+  });
+
+  it('enabling git when the folder needs "git init" asks the backend instead of toggling locally', async () => {
+    // Régression : le dossier ouvert n'est pas lui-même un dépôt git
+    // (requiresGitInit) — cliquer Enabled ne doit PAS activer le toggle
+    // directement, il doit demander au backend le flow de confirmation +
+    // git init (message `requestGitInit`), qui rafraîchira settings/mcpStatus
+    // une fois fait.
+    const defaultsNeedsGitInit = {
+      ...DEFAULTS,
+      builtinMcp: DEFAULTS.builtinMcp.map(b =>
+        b.id === 'git' ? { ...b, requiresGitInit: true } : b
+      )
+    };
+    await openSettingsWithConfig(defaultsNeedsGitInit);
+
+    const gitLabel = screen.getByText('Git');
+    const card = gitLabel.closest('.j-card') as HTMLElement;
+    const checkbox = card.querySelector('input[type="checkbox"]') as HTMLInputElement;
+
+    checkbox.click();
+    await tick();
+
+    // Pas de toggle optimiste : le backend confirme/refuse avant tout changement visible.
+    expect(checkbox.checked).toBe(false);
+    expect(posted.some(m => m.type === 'requestGitInit' && m.id === 'git')).toBe(true);
+    // Et surtout : pas de sauvegarde silencieuse de la config avec git activé.
+    expect(posted.some(m => m.type === 'updateSettings')).toBe(false);
   });
 
   it('clicking a model role toggle keeps the app responsive', async () => {

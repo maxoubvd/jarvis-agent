@@ -38,6 +38,7 @@
     onReindex?: () => void;
     onOpenConfig?: () => void;
     onOpenGuide?: () => void;
+    onRequestGitInit?: (id: string) => void;
   }
 
   let {
@@ -51,7 +52,8 @@
     onIndexDocs = () => {},
     onReindex = () => {},
     onOpenConfig = () => {},
-    onOpenGuide = () => {}
+    onOpenGuide = () => {},
+    onRequestGitInit = () => {}
   }: Props = $props();
 
   let modelItems = $state<ModelItem[]>([]);
@@ -330,6 +332,7 @@
     onBuiltinToggle={(id, on) => { builtinToggles[id] = on; markDirty(); }}
     {onBuiltinToolPolicy}
     onEntriesChange={next => { mcpEntries = next; markDirty(); }}
+    {onRequestGitInit}
   />
 
   <!-- Rules -->

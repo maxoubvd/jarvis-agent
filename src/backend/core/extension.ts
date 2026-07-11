@@ -40,7 +40,7 @@ import {
 } from './mcp/tools/fileSystem.js';
 import { executeTerminalCommand } from './mcp/tools/terminal.js';
 import { McpManager } from './mcp/manager.js';
-import { getBuiltinMcpServers, builtinCommandString } from './mcp/builtin.js';
+import { getBuiltinMcpServers, builtinCommandString, isGitRepository } from './mcp/builtin.js';
 
 const BASE_SYSTEM_PROMPT =
   'Tu es Jarvis, un assistant de code agentique intégré à VS Code. ' +
@@ -329,6 +329,9 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
         break;
       case 'getMcpStatus':
         await this.onGetMcpStatus(webview);
+        break;
+      case 'requestGitInit':
+        await this.onRequestGitInit(webview);
         break;
       case 'indexDocs':
         if (typeof message.id === 'string') {
@@ -740,6 +743,48 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     this.post(webview, { type: 'mcpStatus', servers: mcp.getStatuses() });
   }
 
+  /**
+   * Le builtin `git` reste désactivé par défaut si le dossier ouvert n'est
+   * pas lui-même une racine de dépôt git (`mcp-server-git` échoue sinon avec
+   * "not a valid Git repository"). Ce flow permet à l'utilisateur de
+   * l'activer explicitement depuis les Settings : confirmation modale (le
+   * "git init" est une action visible/irréversible, donc jamais silencieuse),
+   * puis `git init`, activation persistée, reconnexion.
+   */
+  private async onRequestGitInit(webview: vscode.Webview): Promise<void> {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (!workspaceFolder) return;
+
+    const choice = await vscode.window.showWarningMessage(
+      `This folder isn't a Git repository. Enabling the Git MCP server will run "git init" in ${workspaceFolder}. Continue?`,
+      { modal: true },
+      'OK'
+    );
+    if (choice !== 'OK') return;
+
+    const result = await executeTerminalCommand('git init', { cwd: workspaceFolder });
+    if (!result.success) {
+      vscode.window.showErrorMessage(`Jarvis: git init failed — ${result.stderr || result.stdout}`);
+      operationLogger.log('mcp', `git init échoué (${workspaceFolder}): ${result.stderr}`, 'error');
+      return;
+    }
+    operationLogger.log('mcp', `git init exécuté dans ${workspaceFolder}`, 'success');
+
+    try {
+      const config = getConfigManager().getGlobalConfig();
+      await getConfigManager().writeGlobal({
+        ...config,
+        builtinMcp: { ...config.builtinMcp, git: { ...config.builtinMcp?.git, enabled: true } }
+      });
+    } catch (err) {
+      operationLogger.log('mcp', `activation du builtin git échouée: ${err instanceof Error ? err.message : err}`, 'error');
+    }
+
+    await this.mcpManager?.reload().catch(() => undefined);
+    await this.onGetSettings(webview);
+    await this.onGetMcpStatus(webview);
+  }
+
   private postTokens(webview: vscode.Webview): void {
     const usage = this.tokenCounter.getUsage();
     
@@ -988,7 +1033,8 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
         label: b.label,
         description: b.description,
         command: builtinCommandString(b),
-        defaultEnabled: b.config.enabled
+        defaultEnabled: b.config.enabled,
+        requiresGitInit: !!b.requiresOwnGitRepo && !!workspaceFolder && !isGitRepository(workspaceFolder)
       })),
       customTools,
       agents: getAgents(),

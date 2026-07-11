@@ -47,6 +47,13 @@ export class JarvisMcpClient {
   private transport: Transport | null = null;
   public connected = false;
   public lastError: string | null = null;
+  /**
+   * Dernière sortie stderr du process stdio (ex: traceback Python d'un
+   * `mcp-server-git` qui crashe au démarrage). Sans ça, un échec de connexion
+   * ne remonte que "MCP error -32000: Connection closed" — vrai mais inutile
+   * pour diagnostiquer *pourquoi* le process est mort.
+   */
+  private stderrBuffer = '';
 
   constructor(
     public readonly serverName: string,
@@ -60,16 +67,27 @@ export class JarvisMcpClient {
     );
   }
 
+  private captureStderr(transport: Transport): void {
+    if (!(transport instanceof StdioClientTransport) || !transport.stderr) return;
+    transport.stderr.on('data', (chunk: Buffer) => {
+      this.stderrBuffer = (this.stderrBuffer + chunk.toString()).slice(-4000);
+    });
+  }
+
   public async connect(): Promise<void> {
     try {
       this.transport = await this.buildTransport();
+      this.captureStderr(this.transport);
       await this.client.connect(this.transport);
       this.connected = true;
       this.lastError = null;
     } catch (err) {
       this.connected = false;
-      this.lastError = err instanceof Error ? err.message : String(err);
-      throw err;
+      const baseMsg = err instanceof Error ? err.message : String(err);
+      const stderr = this.stderrBuffer.trim();
+      const msg = stderr ? `${baseMsg}\n${stderr}` : baseMsg;
+      this.lastError = msg;
+      throw new Error(msg);
     }
   }
 
@@ -92,7 +110,8 @@ export class JarvisMcpClient {
       return new StdioClientTransport({
         command: this.config.command,
         args: this.config.args ?? [],
-        env
+        env,
+        stderr: 'pipe'
       });
     }
     if (!this.config.url) {
