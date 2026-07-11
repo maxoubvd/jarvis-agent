@@ -74,8 +74,12 @@ Projet : Extension VS Code "Agentique" (Nom de code : Jarvis / Jarvis-Agent)
 | Provider | Type | Modèles Pré-configurés | API Key Requise |
 |----------|------|------------------------|-----------------|
 | Ollama | Local | qwen2.5-coder:7b, mistral-coder:7b, deepseek-coder:6.7b | ❌ Non |
+| LM Studio | Local | tout modèle chargé localement | ❌ Non |
 | OpenRouter | Cloud | deepseek-coder-v3, gpt-4o, claude-3-5-sonnet | ✅ Oui |
 | Mistral API | Cloud | mistral-large, codestral | ✅ Oui |
+| OpenAI / Anthropic / Gemini / SambaNova / HuggingFace | Cloud | via wrapper OpenAI-compatible générique | ✅ Oui |
+
+**Rôles par modèle** (Settings > Models > Roles) : `chat`, `edit`, `apply`, `autocomplete` — un modèle peut être taggé pour un usage spécifique (ex. un petit modèle local rapide dédié à l'autocomplete pendant qu'un gros modèle cloud reste le modèle de chat par défaut). Sans tag explicite, `chat` et `autocomplete` retombent tous les deux sur le modèle par défaut.
 
 
 ### 3.2. Streaming et Gestion des Tokens
@@ -122,33 +126,24 @@ Projet : Extension VS Code "Agentique" (Nom de code : Jarvis / Jarvis-Agent)
 
 ### 4.1. Outils Système (File System)
 
-**Outils MCP de base** : 
+**Outils intégrés réellement implémentés** (`src/backend/core/agent/tool-registry.ts`) :
 
-- read_file : Use this tool if you need to view the contents of an existing file.
-- create_new_file: Create a new file. Only use this when a file doesn't exist and should be created
-- run_terminal_command : Run a terminal command in the current directory. The shell is not stateful and will not remember any previous commands. When a command is run in the background ALWAYS suggest using shell commands to stop it; NEVER suggest using Ctrl+C. When suggesting subsequent shell commands ALWAYS format them in shell command blocks. Do NOT perform actions requiring special/admin privileges. IMPORTANT: To edit files, use Edit/MultiEdit tools instead of bash commands (sed, awk, etc). Choose terminal commands and scripts optimized for win32 and x64 and shell powershell.exe.
-- file_glob_search : Search for files recursively in the project using glob patterns. Supports ** for recursive directory search. Will not show many build, cache, secrets dirs/files (can use ls tool instead). Output may be truncated; use targeted patterns
-- view_diff : View the current diff of working changes
-- read_currently_open_file : Read the currently open file in the IDE. If the user seems to be referring to a file that you can't see, or is requesting an action on content that seems missing, try using this tool.
-- ls : List files and folders in a given directory
-- fetch_url_content : Can be used to view the contents of a website using a URL. Do NOT use this for files.
-- request_rule : Use this tool to retrieve additional 'rules' that contain more context/instructions based on their descriptions. Available rules: No rules available.
-- read_skill : Use this tool to read the content of a skill by its name. Skills contain detailed instructions for specific tasks. The skill name should match one of the available skills listed below:
-- search_web : Performs a web search, returning top results. Use this tool sparingly - only for questions that require specialized, external, and/or up-to-date knowledege. Common programming questions do not require web search.
-- edit_existing_file : Use this tool to edit an existing file. If you don't know the contents of the file, read it first. When addressing code modification requests, present a concise code snippet that emphasizes only the necessary changes and uses abbreviated placeholders for unmodified sections. For example: ```language /path/to/file // ... existing code ... {{ modified code here }} // ... existing code ... {{ another modification }} // ... rest of code ... ``` In existing files, you should always restate the function or class that the snippet belongs to: ```language /path/to/file // ... existing code ... function exampleFunction() { // ... existing code ... {{ modified code here }} // ... rest of function ... } // ... rest of code ... ``` Since users have access to their complete file, they prefer reading only the relevant modifications. It's perfectly acceptable to omit unmodified portions at the beginning, middle, or end of files using these "lazy" comments. Only provide the complete file when explicitly requested. Include a concise explanation of changes unless the user specifically asks for code only. This tool CANNOT be called in parallel with any other tools, including itself
-- single_find_and_replace : Performs exact string replacements in a file. IMPORTANT: - ALWAYS use the `read_file` tool just before making edits, to understand the file's up-to-date contents and context. The user can also edit the file while you are working with it. - This tool CANNOT be called in parallel with any other tools, including itself - When editing text from `read_file` tool output, ensure you preserve exact whitespace/indentation. - Only use emojis if the user explicitly requests it. Avoid adding emojis to files unless asked. - Use `replace_all` for replacing and renaming strings across the file. This parameter is useful if you want to rename a variable, for instance. WARNINGS: - When not using `replace_all`, the edit will FAIL if `old_string` is not unique in the file. Either provide a larger string with more surrounding context to make it unique or use `replace_all` to change every instance of `old_string`. - The edit will likely fail if you have not recently used the `read_file` tool to view up-to-date file contents.
-- grep_search : Performs a regular expression (regex) search over the repository using ripgrep. Will
-- Serveur MCP git : git add, git commit, git diff, git push, git branch, git checkout, git stash, git switch, git status, git cherry-pick, git delete, etc.
-- Memory (Knowledge Graph)
-  - create_entities : Create multiple new entities in the knowledge graph
-  - create_relations : Create multiple new relations between entities in the knowledge graph. Relations should be in active voice
-  - add_observations : Add new observations to existing entities in the knowledge graph
-  - delete_entities : Delete multiple entities and their associated relations from the knowledge graph
-  - delete_observations : Delete specific observations from entities in the knowledge graph
-  - delete_relations : Delete multiple relations from the knowledge graph
-  - read_graph : Read the entire knowledge graph
-  - search_nodes : Search for nodes in the knowledge graph based on a query
-  - open_nodes : Open specific nodes in the knowledge graph by their names
+- `read_file` : lit le contenu d'un fichier existant.
+- `create_new_file` : crée un nouveau fichier (écrase s'il existe déjà).
+- `edit_existing_file` : remplace une plage de lignes (1-indexée) d'un fichier existant.
+- `single_find_and_replace` : remplacement exact d'une chaîne unique (`replace_all` pour remplacer toutes les occurrences).
+- `read_currently_open_file` : lit le fichier actuellement ouvert dans l'éditeur VS Code.
+- `grep_search` : recherche regex récursive dans le workspace (filtrable par glob).
+- `ls` : liste le contenu d'un dossier.
+- `file_glob_search` : recherche de fichiers par pattern glob (`**` récursif).
+- `run_terminal_command` : exécute une commande shell (timeout configurable, HITL selon le mode).
+- `run_in_background` / `check_background_process` / `stop_background_process` : lance et supervise un process long (serveur de dev, watcher).
+- `view_diff` : renvoie le `git diff` courant sous forme de texte dans le chat.
+- `git_status` / `git_log` : lecture seule.
+- `search_web` : recherche web via l'API **Brave Search** (§4.2), avec un paramètre optionnel `sites` pour restreindre les domaines.
+- `update_todo_list` : remplace la checklist de tâches affichée au-dessus de la zone de saisie du chat (voir §5.3).
+
+Outils additionnels via **serveurs MCP** (Settings > MCP) : builtins (`git`, `filesystem`, `fetch` in-process, `memory`) + tout serveur externe configuré par l'utilisateur, exposés au même registre d'outils que les tools intégrés.
 
 **Sécurité Intégrée** :
 - **Vérification `.jarvisignore`** avant chaque opération
@@ -172,11 +167,11 @@ Projet : Extension VS Code "Agentique" (Nom de code : Jarvis / Jarvis-Agent)
 
 #### Web Search
 
-**Fonctionnalités** :
-- **Recherche internet** pour documentation, stacks overflow, etc.
-- **Sources configurables** : Google, Stack Overflow, MDN, documentation officielle
-- **Filtrage des résultats** : Exclusion des sites non pertinents
-- **Cache des recherches** : Éviter les requêtes dupliquées
+**Implémentation** (`src/backend/core/mcp/tools/webSearch.ts`) :
+- **Backend** : API **Brave Search** (`https://api.search.brave.com`), clé API à renseigner dans Settings > Web Search.
+- **Sources configurables** : préréglages cochables (StackOverflow, MDN, GitHub, devdocs.io) + domaines libres, appliqués par défaut via des opérateurs `site:` ; l'outil accepte aussi un paramètre `sites` explicite fourni par le modèle, qui prime toujours sur le réglage par défaut.
+- **Sans clé configurée** : l'outil répond que la recherche web n'est pas configurée plutôt que d'échouer silencieusement.
+- Pas de cache dédié pour l'instant (chaque appel du modèle déclenche une requête).
 
 ## 5. Personnalisation Avancée (Agents & Workflows)
 
@@ -193,20 +188,20 @@ Projet : Extension VS Code "Agentique" (Nom de code : Jarvis / Jarvis-Agent)
 
 #### Agents Spécialisés
 
-**Agents Prédéfinis** :
+**Agents Prédéfinis** — chacun a un system prompt dédié **et** un sous-ensemble d'outils réellement restreint (`SpecializedAgent.allowedToolPrefixes`, appliqué via `ToolRegistry.restrictTo` — les outils MCP/custom configurés par l'utilisateur restent toujours disponibles, seuls les outils intégrés sont filtrés) :
 
-| Agent | Description | Outils Utilisés | Cas d'Usage |
+| Agent | Description | Outils Autorisés | Cas d'Usage |
 |-------|-------------|----------------|-------------|
-| @QA-Agent | Agent de Qualité | Linter, Tests, Coverage | Revue de code, détection de bugs |
-| @Doc-Agent | Agent de Documentation | Markdown, Doxygen | Génération de docs, commentaires |
-| @Refactor-Agent | Agent de Refactoring | AST, Linter, Tests | Amélioration du code existant |
-| @Security-Agent | Agent de Sécurité | Scrubber, Audit | Détection de vulnérabilités |
-| @Perf-Agent | Agent de Performance | Profiling, Benchmark | Optimisation du code |
+| @QA-Agent | Agent de Qualité | lecture, terminal, git (lecture) — **pas d'édition** | Revue de code, exécution de tests, détection de bugs |
+| @Doc-Agent | Agent de Documentation | lecture, édition, `search_web` — pas de terminal | Génération de docs, commentaires, README |
+| @Refactor-Agent | Agent de Refactoring | lecture, édition, terminal, git (lecture) | Amélioration du code existant, revalidation par tests |
+| @Security-Agent | Agent de Sécurité | lecture, git (lecture) — **lecture seule, pas de terminal ni d'édition** | Audit en lecture seule, détection de vulnérabilités |
+| @Perf-Agent | Agent de Performance | lecture, terminal, git (lecture) — pas d'édition | Profilage/benchmark, rapport d'optimisations |
 
 **Système d'Appel d'Agents** :
 - **Mentions** : Utilisation de `@nom-agent` dans le chat pour activer un agent spécifique
 - **Auto-détection** : L'extension peut suggérer un agent basé sur le contexte
-- **Collaboration** : Plusieurs agents peuvent travailler ensemble sur une tâche
+- **Personnalisation** : les 5 agents prédéfinis peuvent être remplacés/étendus dans Settings > Agents, y compris leur liste d'outils autorisés (texte libre, séparé par virgules — vide = registre complet)
 
 ### 5.2. Règles & Contexte (RAG & AST)
 
@@ -224,12 +219,16 @@ Projet : Extension VS Code "Agentique" (Nom de code : Jarvis / Jarvis-Agent)
 
 #### Règles
 
-**Application des Règles** :
-- **Toujours appliquer les règles**
-- **Vérification en temps réel** : Analyse du code pendant l'écriture
-- **Feedback instantané** : Surlignage des violations dans l'éditeur
-- **Correction automatique** : Proposition de fixes pour les règles simples
-- **Rapport de conformité** : Génération d'un rapport après chaque modification
+**Application des Règles** (`services/rules.ts`) :
+- Règles définies dans Settings (onglet Rules), injectées dans le prompt système de chaque agent/chat.
+- **Règles par dossier** : chaque règle peut avoir un `scope` (glob, ex. `src/backend/**`) — une règle scopée ne s'applique que si le fichier actuellement ouvert dans l'éditeur matche le glob ; une règle sans `scope` s'applique toujours. Limite connue : les runs de `/workflow` n'ont pas de notion de « fichier actif », donc les règles scopées ne s'y appliquent pas.
+
+#### Fichier de règles projet (`JARVIS.md`)
+
+**Instructions projet versionnées**, façon `CLAUDE.md` :
+- Fichier markdown libre à la racine du workspace, lu automatiquement (avec cache invalidé par un file watcher) et injecté dans le prompt système de **tous** les agents/workflows/chat, avant les rules utilisateur.
+- Contrairement aux rules (config locale, `~/.jarvis/config.json`), `JARVIS.md` est **versionné avec le code** — partagé entre les membres d'une équipe.
+- Généré automatiquement par la commande `/init` (ou `Jarvis: Initialize Project` dans la palette) : initialise un dépôt git si besoin (confirmation explicite), analyse le projet (`package.json`, structure, points d'entrée) et écrit un `JARVIS.md` structuré (Project Overview, Build & Test Commands, Architecture, Conventions, Notes for Agents). Si le fichier existe déjà, une confirmation est demandée avant de le remplacer.
 
 #### Parsing AST (Tree-sitter)
 
@@ -247,6 +246,27 @@ Projet : Extension VS Code "Agentique" (Nom de code : Jarvis / Jarvis-Agent)
 - **Indexation automatique** : Les fichiers du projet sont indexés en arrière-plan
 - **Recherche sémantique** : Trouver des snippets de code similaires
 - **Augmentation de contexte** : Ajout des résultats pertinents au prompt
+
+### 5.3. Suivi visuel de tâche et ouverture automatique
+
+#### Checklist TODO (façon Claude Code `TodoWrite`)
+
+- Outil `update_todo_list` : le modèle remplace la liste complète des tâches (`{id, content, status: pending|in_progress|completed}`) à chaque appel. Sans effet de bord — jamais de friction HITL, même en mode strict.
+- Affichée en composant persistant au-dessus de la zone de saisie du chat (pas liée à un message précis, contrairement au log d'activité par tour) ; vidée sur `/new`, sinon conservée après la fin de la tâche pour rester consultable.
+- Pour `/workflow` (étapes connues à l'avance) : la checklist est **pré-remplie automatiquement** depuis les étapes du workflow avant même le début de la première étape, et mise à jour (`pending` → `in_progress` → `completed`) à chaque transition — visibilité gratuite sans attendre que le modèle appelle l'outil.
+
+#### Ouverture automatique du fichier édité
+
+- Après chaque édition réussie (`create_new_file`/`edit_existing_file`/`single_find_and_replace`), le fichier est amené au premier plan dans l'éditeur (onglet « preview », réutilisé à chaque édition suivante — pas d'empilement d'onglets), pour que les décorations inline (vert/rouge) soient immédiatement visibles.
+- Réglage `jarvis.autoOpen.mode` (Settings > Optimization ou VS Code settings) : `always` (défaut), `never`, ou `strict-hitl-only` (n'ouvre qu'en mode HITL strict, où l'utilisateur est déjà interrompu à chaque action).
+- La revue détaillée diff par hunk (accept/reject) reste gérée par le panneau de revue existant (`DiffReviewPanel`, CodeLens accept/reject) — l'auto-ouverture ne fait qu'amener le fichier à l'écran, elle ne remplace pas ce mécanisme.
+
+#### Autocomplete inline (Tab / ghost text)
+
+- `vscode.languages.registerInlineCompletionItemProvider`, un seul appel non-agentique par complétion (pas de boucle d'outils), avec debounce (~350ms) et annulation via `CancellationToken` à chaque nouvelle frappe.
+- Contexte volontairement réduit (≈60 lignes avant / 20 après le curseur, pas de RAG complet) pour rester compatible avec la latence attendue d'une complétion déclenchée à chaque pause de frappe.
+- Modèle utilisé : premier modèle taggé du rôle `autocomplete` (Settings > Models > Roles), sinon repli automatique sur le modèle par défaut du chat — aucune configuration de modèle dédiée n'est obligatoire.
+- **Désactivé par défaut** (réglage `jarvis.autocomplete.enabled`) : fonctionnalité qui appelle un modèle à chaque pause de frappe, à activer explicitement.
 
 ## 6. Sécurité, Fiabilité & Confidentialité (Sandboxing)
 
@@ -695,7 +715,7 @@ Découpage en Micro-Tâches:
 | 7 | Implémenter les onglets du dashboard | ⭐⭐⭐ | Moyenne | 5 |
 | 8 | Ajouter @file pour lire des fichiers | ⭐⭐⭐ | Moyenne | Phase 2 |
 | 9 | Implémenter @docs pour la documentation | ⭐⭐⭐ | Moyenne | Phase 2 |
-| 10 | Configurer le RAG local (Vectra) | ⭐⭐⭐⭐ | Élevée | Phase 2 |
+| 10 | Configurer le RAG local (index en mémoire + embeddings) | ⭐⭐⭐⭐ | Élevée | Phase 2 |
 | 11 | Implémenter l'indexation des fichiers | ⭐⭐⭐ | Moyenne | 10 |
 | 12 | Ajouter la recherche sémantique | ⭐⭐⭐⭐ | Élevée | 10 |
 | 13 | Implémenter l'auto-évaluation | ⭐⭐⭐ | Moyenne | 2 |
@@ -719,14 +739,14 @@ Découpage en Micro-Tâches:
 **Objectif** : **Optimiser** les performances et ajouter des **fonctionnalités avancées** pour les utilisateurs power users.
 
 **Livrables** :
-- [ ] **Tree-sitter** pour le parsing AST
-- [ ] **Context Pruning** avancé
-- [ ] **RAG local** complet avec embeddings
-- [ ] **Inline Diff** (Cmd+K)
-- [ ] **Système de plugins**
-- [ ] **Extensibilité** (Tools, Agents, Workflows)
-- [ ] **Intégration Web Search** avancée
-- [ ] **Micro-Tâches** automatiques
+- [x] **Tree-sitter** pour le parsing AST
+- [x] **Context Pruning** avancé
+- [x] **RAG local** complet avec embeddings (`@xenova/transformers`, index maison en mémoire)
+- [x] **Inline Diff** (Cmd+K)
+- [ ] **Système de plugins** — non fait tel quel ; couvert autrement par MCP externe + custom tools (`jarvis-tools/*.json`)
+- [x] **Extensibilité** (Tools, Agents, Workflows) — agents avec restriction d'outils par persona, règles par dossier
+- [x] **Intégration Web Search** avancée — Brave Search API, sources configurables (§4.2)
+- [x] **Micro-Tâches** automatiques (`TaskDecomposer`, workflow `dynamic`)
 
 **Tâches Détaillées** :
 
@@ -753,12 +773,27 @@ Découpage en Micro-Tâches:
 | 19 | Tests complets de toutes les fonctionnalités | ⭐⭐⭐⭐ | Élevée | Toutes |
 
 **Critères de Validation** :
-- [ ] Le Context Pruning réduit les tokens de 50%+ pour les petits modèles
-- [ ] Le RAG retourne des résultats précis
-- [ ] L'Inline Diff fonctionne avec Cmd+K
-- [ ] Les plugins peuvent être installés et utilisés
-- [ ] Les Micro-Tâches sont générées automatiquement
-- [ ] Les performances sont optimales (pas de lag dans l'UI)
+- [x] Le Context Pruning réduit les tokens de 50%+ pour les petits modèles
+- [x] Le RAG retourne des résultats précis
+- [x] L'Inline Diff fonctionne avec Cmd+K
+- [ ] Les plugins peuvent être installés et utilisés (non applicable — pas de système de plugins dédié)
+- [x] Les Micro-Tâches sont générées automatiquement
+- [x] Les performances sont optimales (pas de lag dans l'UI)
+
+### 9.6. Finalisation v1 (audit du 11/07/2026)
+
+**Objectif** : combler les derniers écarts avec la spec identifiés par un audit de code complet (`docs/audit-2026-07-11.md`) avant publication v1, et nettoyer le code mort accumulé au fil des itérations.
+
+**Livrables** :
+- [x] **Agents spécialisés** avec restriction d'outils réelle par persona (§5.1)
+- [x] **Ouverture automatique** du fichier édité par l'agent (§5.3)
+- [x] **`search_web` fonctionnel** via Brave Search API, sources configurables (§4.2)
+- [x] **`JARVIS.md`** — fichier d'instructions projet versionné + commande `/init` (§5.2)
+- [x] **Règles par dossier** (`RuleItem.scope`, §5.2)
+- [x] **Checklist TODO** persistante au-dessus du chat, pré-remplie pour les workflows (§5.3)
+- [x] **Autocomplete inline** (Tab / ghost text), désactivé par défaut (§5.3)
+- [x] Nettoyage : rôles de modèle morts retirés de l'UI, `setHitlMode` instantané, code mort supprimé (`onListSessions`), props `onNewChat`/`onResumeChat` de `ChatPanel` rendues fonctionnelles, icônes manquantes ajoutées, types `ProviderType`/`ChatPanel` synchronisés, dépendance `chart.js` retirée (jamais utilisée), références `Vectra` retirées de la doc (jamais installé)
+- Explicitement hors scope (reporté) : sous-agents/délégation parallèle, suivi de coût monétaire, checkpoints sur repo git « fantôme »
 
 
 ### 10 Ressources et Références
@@ -775,9 +810,8 @@ Découpage en Micro-Tâches:
 - [Ollama](https://ollama.ai/) - Modèles locaux
 - [OpenRouter](https://openrouter.ai/) - API de modèles cloud
 - [web-tree-sitter](https://github.com/Paulrberg/web-tree-sitter) - Tree-sitter pour le browser
-- [Vectra](https://github.com/GenisysAI/vectra) - Base vectorielle locale
+- [@xenova/transformers](https://github.com/xenova/transformers.js) - Embeddings locaux pour le RAG (index vectoriel maison en mémoire, pas de base externe)
 - [marked.js](https://marked.js.org/) - Parsing Markdown
-- [Chart.js](https://www.chartjs.org/) - Graphiques
 
 **Projets Inspirants** :
 - [Continue.dev](https://github.com/continuedev/continue) - Extension VS Code AI

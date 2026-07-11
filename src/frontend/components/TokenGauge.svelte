@@ -29,12 +29,13 @@
   }
 </script>
 
+{#if limit}
 <div class="gauge-wrapper">
   <button class="gauge-header" onclick={() => (showDetails = !showDetails)}>
     <span class="gauge-title">
       Context Size <Icon name={showDetails ? 'chevron-up' : 'chevron-down'} size={11} />
     </span>
-    <span>{used.toLocaleString()} / {limit ? limit.toLocaleString() : '—'} ({percentage}%)</span>
+    <span>{used.toLocaleString()} / {limit.toLocaleString()} ({percentage}%)</span>
   </button>
   <div class="gauge">
     <div class="meter {colorClass}" style="width: {percentage}%"></div>
@@ -50,11 +51,10 @@
     <div class="details">
       <p class="explain">
         Counts are estimates (~4 characters ≈ 1 token), accumulated over this whole discussion.
-        The limit is the model's context window — from your model settings, or a built-in default
-        for known model families. Past 80% a warning appears: the model may start losing earlier
-        context, and a request exceeding the limit usually fails with a provider error — local
-        runtimes like Ollama instead silently drop the oldest messages. Use /new to start a fresh
-        discussion and reset the counter.
+        The limit is the context window set for this model in Settings. Past 80% a warning
+        appears: the model may start losing earlier context, and a request exceeding the limit
+        usually fails with a provider error — local runtimes like Ollama instead silently drop
+        the oldest messages. Use /new to start a fresh discussion and reset the counter.
       </p>
       <div class="split">
         <span>Input: {inputTokens.toLocaleString()}</span>
@@ -87,6 +87,7 @@
     </div>
   {/if}
 </div>
+{/if}
 
 <style>
   .gauge-wrapper {

@@ -51,4 +51,10 @@ describe('prompts service', () => {
     expect(expandPrompt('/unknown', [review])).toBeNull();
     expect(expandPrompt('hello /review', [review])).toBeNull();
   });
+
+  it('never lets a custom prompt shadow /init', () => {
+    const fakeInit: PromptItem = { id: 'p6', name: 'init', content: 'je masque /init' };
+    expect(loadPrompts(config([fakeInit])).map(p => p.id)).toEqual([]);
+    expect(expandPrompt('/init', [fakeInit])).toBeNull();
+  });
 });

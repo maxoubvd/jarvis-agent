@@ -4,7 +4,7 @@ import { OpenRouterProvider } from '../models/providers/openrouter.js';
 import { LMStudioProvider } from '../models/providers/lmstudio.js';
 import { MistralProvider } from '../models/providers/mistral.js';
 import { OpenAICompatibleProvider } from '../models/providers/openai-compatible-provider.js';
-import { defaultContextLength, effectiveTemperature } from '../services/model-profiles.js';
+import { effectiveTemperature } from '../services/model-profiles.js';
 import {
   ConfigManager,
   getConfigManager,
@@ -107,13 +107,14 @@ export class ModelConfigManager {
   }
 
   /**
-   * Premier modèle activé portant le rôle demandé. Pour `chat`, retombe sur le
-   * modèle effectif (un modèle sans `roles` est considéré généraliste).
+   * Premier modèle activé portant le rôle demandé. Pour `chat`/`autocomplete`, retombe sur
+   * le modèle effectif (un modèle sans `roles` est considéré généraliste ; l'autocomplete a
+   * besoin d'un modèle par défaut même si aucun n'a été explicitement taggé `autocomplete`).
    */
   public getModelForRole(role: ModelRole): ModelItem | null {
     const explicit = this.enabledItems().find(m => m.roles?.includes(role));
     if (explicit) return explicit;
-    if (role === 'chat') {
+    if (role === 'chat' || role === 'autocomplete') {
       const effective = this.getEffectiveModel();
       return effective ? this.getModelItem(effective) ?? null : null;
     }
@@ -141,12 +142,12 @@ export class ModelConfigManager {
   }
 
   /**
-   * Longueur de contexte du modèle : config > défaut de la famille de modèle
-   * (voir `defaultContextLength`) > `null` si inconnue / aucun modèle.
+   * Longueur de contexte du modèle : uniquement celle explicitement réglée en config
+   * (Settings > Models). `null` si absente — la jauge de contexte reste alors masquée
+   * plutôt que d'afficher une estimation non garantie par l'utilisateur.
    */
   public getContextLength(modelName: string | null): number | null {
-    const item = this.getModelItem(modelName);
-    return item?.contextLength ?? defaultContextLength(item) ?? null;
+    return this.getModelItem(modelName)?.contextLength ?? null;
   }
 
   /** Change le modèle par défaut (persisté dans la config globale) et ré-instancie. */

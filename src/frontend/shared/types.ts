@@ -13,6 +13,13 @@ export interface ProcessStep {
   badges?: Badge[];
 }
 
+/** Item de la checklist TODO persistante (outil `update_todo_list` / synthèse de workflow). */
+export interface TodoItem {
+  id: string;
+  content: string;
+  status: 'pending' | 'in_progress' | 'completed';
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -56,6 +63,7 @@ export type ProviderType =
   | 'gemini'
   | 'anthropic'
   | 'sambanova'
+  | 'huggingface'
   | 'openai-compatible';
 
 export const PROVIDER_TYPES: ProviderType[] = [
@@ -67,6 +75,7 @@ export const PROVIDER_TYPES: ProviderType[] = [
   'gemini',
   'anthropic',
   'sambanova',
+  'huggingface',
   'openai-compatible'
 ];
 
@@ -79,6 +88,7 @@ export const DEFAULT_BASE_URL: Record<ProviderType, string> = {
   gemini: 'https://generativelanguage.googleapis.com/v1beta/openai',
   anthropic: 'https://api.anthropic.com/v1',
   sambanova: 'https://api.sambanova.ai/v1',
+  huggingface: 'https://api-inference.huggingface.co/v1',
   'openai-compatible': 'https://api.openai.com/v1'
 };
 
@@ -91,7 +101,8 @@ export const PROVIDER_KEY_PAGE: Partial<Record<ProviderType, { url: string; labe
   anthropic: { url: 'https://console.anthropic.com/settings/keys', label: 'Get API key' },
   sambanova: { url: 'https://cloud.sambanova.ai/apis', label: 'Get API key' },
   ollama: { url: 'https://ollama.com/download', label: 'Setup docs' },
-  lmstudio: { url: 'https://lmstudio.ai/docs/app', label: 'Setup docs' }
+  lmstudio: { url: 'https://lmstudio.ai/docs/app', label: 'Setup docs' },
+  huggingface: { url: 'https://huggingface.co/settings/tokens', label: 'Get API key' }
 };
 
 export type ModelRole = 'chat' | 'edit' | 'apply' | 'autocomplete' | 'embed' | 'rerank' | 'summarize';
@@ -183,6 +194,8 @@ export interface RuleItem {
   name: string;
   enabled: boolean;
   content: string;
+  /** Glob optionnel : la règle ne s'applique qu'au fichier actif matché. Absent = globale. */
+  scope?: string;
 }
 
 export interface OptimizationConfig {
@@ -196,6 +209,10 @@ export interface OptimizationConfig {
   showThinking?: boolean;
   /** Verbosité des réponses (défaut : `normal`). */
   verbosity?: 'concise' | 'normal' | 'detailed';
+  /** Ouverture automatique du fichier édité par l'agent. Défaut : `always`. */
+  autoOpenMode?: 'always' | 'never' | 'strict-hitl-only';
+  /** Autocomplete inline (Tab / ghost text). Désactivé par défaut. */
+  autocompleteEnabled?: boolean;
 }
 
 export interface WorkflowStep {
@@ -217,6 +234,8 @@ export interface SpecializedAgent {
   description: string;
   systemPrompt: string;
   keywords: string[];
+  /** Sous-ensemble d'outils autorisés (noms exacts). Vide/absent = registre complet. */
+  allowedToolPrefixes?: string[];
 }
 
 export interface DocSite {
@@ -252,6 +271,15 @@ export interface JarvisConfig {
   activeWorkspaceId?: string | null;
   optimization?: OptimizationConfig;
   firstName?: string;
+  webSearch?: WebSearchConfig;
+}
+
+/** Configuration de l'outil `search_web`. Un seul provider supporté pour l'instant. */
+export interface WebSearchConfig {
+  provider: 'brave';
+  apiKey?: string;
+  /** Domaines appliqués par défaut (`site:` OR) quand le modèle n'en précise pas. */
+  defaultSites?: string[];
 }
 
 /** Statut d'indexation d'un site de docs (message `docsStatus`). */

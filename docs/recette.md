@@ -176,13 +176,13 @@ Ce document liste l'intégralité des scénarios de test pour s'assurer du parfa
 ## 11. Structured Outputs (JSON Mode)
 
 ### 11.1 Boucle agent sans casse de parsing
-- [ ] **Prérequis** : Un petit modèle local (ex. Ollama `llama3:8b` ou `qwen2.5-coder:7b`).
-- [ ] **Action** : Lancez `/agent crée un composant React Button` (ou un mode Automatique déclenchant l'orchestrateur).
-- [ ] **Résultat attendu** : Les appels modèle de la boucle agent envoient `response_format: {type:'json_object'}` (OpenAI-compatible) ou `format:'json'` (Ollama). Le modèle renvoie systématiquement un JSON parsable ; **aucune erreur « Format inattendu »** n'interrompt la chaîne d'outils. `json-cleaner` reste un filet de sécurité.
+- [X] **Prérequis** : Un petit modèle local (ex. Ollama `llama3:8b` ou `qwen2.5-coder:7b`).
+- [X] **Action** : Lancez `/agent crée un composant React Button` (ou un mode Automatique déclenchant l'orchestrateur).
+- [X] **Résultat attendu** : Les appels modèle de la boucle agent envoient `response_format: {type:'json_object'}` (OpenAI-compatible) ou `format:'json'` (Ollama). Le modèle renvoie systématiquement un JSON parsable ; **aucune erreur « Format inattendu »** n'interrompt la chaîne d'outils. `json-cleaner` reste un filet de sécurité.
 
 ### 11.2 Fallback automatique si non supporté
-- [ ] **Action** : Utilisez un endpoint qui rejette `response_format` (certains serveurs OpenAI-compatible anciens).
-- [ ] **Résultat attendu** : Au premier refus (HTTP 400 mentionnant `response_format`/`json`), l'orchestrateur **désactive le mode JSON pour ce provider** (mémorisé), journalise « Mode JSON non supporté… repli sur le prompt » dans l'OutputChannel, et **rejoue l'itération sans l'option**. La boucle continue normalement, sans nouvel essai coûteux aux requêtes suivantes.
+- [X] **Action** : Utilisez un endpoint qui rejette `response_format` (certains serveurs OpenAI-compatible anciens).
+- [X] **Résultat attendu** : Au premier refus (HTTP 400 mentionnant `response_format`/`json`), l'orchestrateur **désactive le mode JSON pour ce provider** (mémorisé), journalise « Mode JSON non supporté… repli sur le prompt » dans l'OutputChannel, et **rejoue l'itération sans l'option**. La boucle continue normalement, sans nouvel essai coûteux aux requêtes suivantes.
 
 ---
 
@@ -199,6 +199,93 @@ Ce document liste l'intégralité des scénarios de test pour s'assurer du parfa
 ### 12.3 Persistance après redémarrage complet
 - [X] **Action** : Fermez entièrement VS Code puis rouvrez le même workspace.
 - [X] **Résultat attendu** : Jauge et historique sont toujours présents (le `workspaceState` survit au redémarrage). `/new` remet à zéro la jauge ET l'instantané persisté.
+
+---
+
+---
+
+## 13. Finalisation v1 (audit du 11/07/2026)
+
+Scénarios couvrant les 9 chantiers de finalisation issus de `docs/audit-2026-07-11.md`. À exécuter après un `npm run build` propre (backend + webview).
+
+### 13.1 Agents spécialisés — restriction d'outils réelle
+
+- [X] **Action** : Tapez `@Security-Agent audite ce fichier et corrige les failles que tu trouves` sur un fichier contenant un problème évident (ex: secret en dur).
+- [X] **Résultat attendu** : L'agent lit le code et liste les problèmes, mais **ne tente jamais** d'appeler `edit_existing_file`/`create_new_file`/`run_terminal_command` (il n'a pas ces outils — si le modèle essaie, l'orchestrateur renverra "Outil inconnu"). Il vous propose le correctif en texte plutôt que de l'appliquer.
+- [X] **Action** : Tapez `@QA-Agent lance les tests du projet et résume les échecs`.
+- [X] **Résultat attendu** : L'agent utilise `run_terminal_command`/`grep_search` sans éditer de fichier.
+- [X] **Action** : Dans Settings > Agents, dépliez un agent et vérifiez le champ "Allowed tools" — modifiez-le (ex: retirez `run_terminal_command` de QA-Agent), sauvegardez, puis redemandez une tâche à cet agent.
+- [X] **Résultat attendu** : La modification est prise en compte immédiatement (pas besoin de recharger la fenêtre).
+
+### 13.2 Ouverture automatique du fichier édité
+
+- [X] **Action** : Demandez à l'agent de modifier 2-3 fichiers différents dans une même tâche (ex: "renomme la fonction foo en bar dans ces 3 fichiers").
+- [X] **Résultat attendu** : Après chaque édition, le fichier concerné s'ouvre au premier plan dans l'éditeur (onglet en italique = "preview"), et les décorations vert/rouge sont visibles. Un seul onglet preview est réutilisé à chaque édition suivante (pas d'empilement de 3 onglets distincts).
+- [X] **Action** : Dans Settings > Optimization, passez "Auto-open edited files" à `never`, puis redemandez une édition.
+- [X] **Résultat attendu** : Le fichier n'est plus amené au premier plan automatiquement (vous devez toujours accepter/rejeter via le panneau de revue de diff dans le chat, qui reste inchangé).
+
+### 13.3 Recherche web (Brave Search API)
+
+- [ ] **Prérequis** : Obtenez une clé API gratuite sur [api.search.brave.com/app/keys](https://api.search.brave.com/app/keys), renseignez-la dans Settings > Web Search.
+- [ ] **Action** : Demandez "Cherche sur le web la dernière version stable de Svelte".
+- [ ] **Résultat attendu** : L'agent appelle `search_web` et obtient de vrais résultats (titres + liens + extraits), pas un message d'erreur.
+- [ ] **Action** : Sans clé API configurée (retirez-la), redemandez la même chose.
+- [ ] **Résultat attendu** : L'outil répond que la recherche web n'est pas configurée (pas de crash, pas d'erreur réseau visible).
+- [ ] **Action** : Dans Settings > Web Search, cochez "stackoverflow.com" comme source par défaut, puis redemandez une recherche sans préciser de site.
+- [ ] **Résultat attendu** : Les résultats sont restreints à StackOverflow (vérifiable dans les URLs retournées).
+
+### 13.4 `JARVIS.md` et commande `/init`
+
+- [X] **Action** : Sur un dossier qui n'est pas encore un dépôt git, tapez `/init` dans le chat.
+- [X] **Résultat attendu** : Une boîte de dialogue demande confirmation pour `git init` ; après acceptation, un dossier `.git` apparaît, puis l'agent analyse le projet et crée `JARVIS.md` à la racine avec les sections Project Overview / Build & Test Commands / Architecture / Conventions / Notes for Agents.
+- [X] **Action** : Relancez `/init` alors que `JARVIS.md` existe déjà.
+- [X] **Résultat attendu** : Une confirmation est demandée avant d'écraser le fichier existant ; en refusant, le fichier reste inchangé.
+- [X] **Action** : Éditez manuellement `JARVIS.md` pour y ajouter une instruction distinctive (ex: "Réponds toujours en commençant par 🚀"), puis posez une question dans le chat.
+- [X] **Résultat attendu** : L'agent respecte l'instruction — confirmant que `JARVIS.md` est bien injecté dans le prompt système (agents, workflows, et chat direct).
+- [X] **Test palette** : `Ctrl+Shift+P` → `Jarvis: Initialize Project (generate JARVIS.md)`.
+- [X] **Résultat attendu** : Ouvre la sidebar et déclenche `/init` comme ci-dessus.
+
+### 13.5 Règles par dossier
+
+- [X] **Action** : Dans Settings > Rules, créez une règle "Backend only" avec le contenu "Utilise toujours des imports relatifs avec suffixe .js" et un scope `src/backend/**`.
+- [X] **Action** : Ouvrez un fichier dans `src/backend/`, posez une question générale à l'agent (n'importe laquelle, pour vérifier l'injection du prompt).
+- [X] **Résultat attendu** : La règle s'applique (visible si vous demandez à l'agent de citer ses instructions, ou observable dans le style du code généré).
+- [X] **Action** : Ouvrez un fichier dans `src/frontend/` à la place, reposez une question.
+- [X] **Résultat attendu** : La règle scopée à `src/backend/**` ne s'applique plus.
+
+### 13.6 Checklist TODO visuelle
+
+- [X] **Action** : Lancez `/workflow dev-feature ajoute une fonction utilitaire de formatage de date`.
+- [X] **Résultat attendu** : **Avant même le début de la première étape**, une checklist "Tasks (0/4)" apparaît au-dessus de la zone de saisie avec les 4 étapes du workflow (Planifier/Coder/Tester/Commiter). Chaque étape passe à "in_progress" puis "completed" au fur et à mesure.
+- [X] **Action** : Une fois le workflow terminé, tapez `/new`.
+- [X] **Résultat attendu** : La checklist disparaît.
+- [X] **Action** : Lancez une tâche agentique simple (`/agent ...`) sur un modèle qui supporte bien les tool calls, en lui demandant explicitement de "découper la tâche en étapes avec la checklist".
+- [X] **Résultat attendu** : Le modèle peut appeler l'outil `update_todo_list` et la checklist apparaît/se met à jour sans jamais demander de confirmation HITL (même en mode strict).
+
+### 13.7 Autocomplete inline (Tab)
+
+- [X] **Prérequis** : Dans Settings > Optimization, activez "Inline autocomplete (Tab)" (désactivé par défaut).
+- [X] **Action** : Ouvrez un fichier de code, placez le curseur en fin de ligne incomplète (ex: `const total = `), attendez ~0.5s sans taper.
+- [X] **Résultat attendu** : Un texte fantôme (ghost text) grisé apparaît proposant une complétion ; `Tab` l'accepte, `Échap` ou continuer à taper l'annule.
+- [X] **Action** : Continuez à taper rapidement sans pause.
+- [X] **Résultat attendu** : Aucune requête n'est déclenchée tant que vous tapez (debounce) — pas de ghost text qui clignote à chaque frappe.
+- [X] **Action** : Désactivez le réglage, retestez.
+- [X] **Résultat attendu** : Plus aucune complétion ne se déclenche.
+- [X] **Optionnel** : Dans Settings > Models, taguez un modèle local rapide (ex. Ollama `qwen2.5-coder:7b`) avec le rôle `autocomplete`, puis retestez.
+- [X] **Résultat attendu** : Les complétions utilisent ce modèle plutôt que le modèle de chat par défaut.
+
+### 13.8 Nettoyage UI (non-régression)
+
+- [X] **Action** : Dans Settings > Models, dépliez un modèle et regardez les toggles de rôles.
+- [X] **Résultat attendu** : Seuls `chat`, `edit`, `apply`, `autocomplete` sont proposés (plus de `embed`/`rerank`/`summarize`).
+- [X] **Action** : Changez le mode HITL dans Settings (Optimization > HITL mode) sans cliquer sur "Save".
+- [X] **Résultat attendu** : Le changement est appliqué immédiatement (visible dans le comportement d'approbation d'une commande terminal suivante), pas seulement après sauvegarde.
+- [X] **Action** : Videz le chat (aucun message), observez l'état vide.
+- [X] **Résultat attendu** : Deux boutons "New chat" / "Resume past conversation" sont visibles et fonctionnels.
+- [X] **Action** : Passez en mode "Plan", laissez l'agent proposer un plan.
+- [X] **Résultat attendu** : Le bouton "Review" affiche une icône crayon correcte (plus de rond générique) ; de même pour le badge "Working..." (icône puce) et le bouton stop (icône carré).
+- [X] **Action** : Dans Settings > Models, sélectionnez le provider "huggingface".
+- [X] **Résultat attendu** : Le champ "API base URL" se pré-remplit correctement (plus de champ vide/`undefined`).
 
 ---
 

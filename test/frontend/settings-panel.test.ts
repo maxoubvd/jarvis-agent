@@ -89,6 +89,9 @@ async function openSettingsWithConfig(defaults: typeof DEFAULTS = DEFAULTS) {
   postToWebview({ type: 'status', text: 'Connected — model: GPT', models: ['GPT'], model: 'GPT', needsSetup: false });
   postToWebview({ type: 'settings', config: CONFIG, defaults, currentFolder: 'C:\\proj', needsSetup: false });
   await tick();
+  // La navigation est fermée par défaut à l'ouverture : on l'ouvre via le bouton menu.
+  screen.getByRole('button', { name: /Toggle navigation/ }).click();
+  await tick();
   // Naviguer vers Settings (sidebar inline, viewport large par défaut).
   const settingsTab = screen.getAllByRole('button', { name: /Settings/ }).at(-1)!;
   settingsTab.click();

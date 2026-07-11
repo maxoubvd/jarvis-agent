@@ -71,8 +71,7 @@
       model: effectiveModel,
       apiKey: apiKey.trim() || undefined,
       apiBase: apiBase.trim() || undefined,
-      roles: ['chat', 'edit', 'apply'],
-      contextLength: 32768
+      roles: ['chat', 'edit', 'apply']
     };
   }
 

@@ -8,7 +8,19 @@ export interface SpecializedAgent {
   systemPrompt: string;
   /** Mots-clés pour l'auto-détection d'agent. */
   keywords: string[];
+  /**
+   * Sous-ensemble d'outils autorisés (noms exacts ou préfixes, cf. ToolRegistry.restrictTo).
+   * Absent/vide = registre complet (comportement historique, notamment pour les agents
+   * custom définis en config qui ne renseignent pas ce champ). Ne restreint jamais les
+   * outils MCP/custom, seulement les outils builtin.
+   */
+  allowedToolPrefixes?: string[];
 }
+
+const READ_TOOLS = ['read_file', 'read_currently_open_file', 'grep_search', 'ls', 'file_glob_search'];
+const GIT_READ_TOOLS = ['git_status', 'git_log', 'view_diff'];
+const TERMINAL_TOOLS = ['run_terminal_command', 'run_in_background', 'check_background_process', 'stop_background_process'];
+const EDIT_TOOLS = ['create_new_file', 'edit_existing_file', 'single_find_and_replace'];
 
 const BASE_RULES =
   'Tu réponds en JSON selon le protocole d\'agent (outil ou final). ' +
@@ -24,7 +36,9 @@ export const SPECIALIZED_AGENTS: SpecializedAgent[] = [
       'Tu es @QA-Agent, l\'agent Qualité de Jarvis. Tu fais des revues de code rigoureuses : ' +
       'tu lis le code, exécutes les tests et le linter, identifies les bugs, les cas limites non gérés ' +
       'et les manques de couverture. Tu classes tes trouvailles par sévérité (Haute/Moyenne/Basse). ' + BASE_RULES,
-    keywords: ['bug', 'test', 'revue', 'review', 'qualité', 'coverage', 'lint']
+    keywords: ['bug', 'test', 'revue', 'review', 'qualité', 'coverage', 'lint'],
+    // Lit, lance les tests/le linter — ne modifie jamais de code.
+    allowedToolPrefixes: [...READ_TOOLS, ...TERMINAL_TOOLS, ...GIT_READ_TOOLS]
   },
   {
     id: 'doc',
@@ -34,7 +48,9 @@ export const SPECIALIZED_AGENTS: SpecializedAgent[] = [
     systemPrompt:
       'Tu es @Doc-Agent, l\'agent Documentation de Jarvis. Tu génères et améliores la documentation : ' +
       'README, docstrings/JSDoc, guides d\'utilisation. Tu documentes le POURQUOI, pas seulement le comment. ' + BASE_RULES,
-    keywords: ['document', 'readme', 'commentaire', 'jsdoc', 'doc']
+    keywords: ['document', 'readme', 'commentaire', 'jsdoc', 'doc'],
+    // Écrit la doc, peut vérifier la terminologie sur le web — pas de terminal.
+    allowedToolPrefixes: [...READ_TOOLS, ...EDIT_TOOLS, 'search_web']
   },
   {
     id: 'refactor',
@@ -45,7 +61,9 @@ export const SPECIALIZED_AGENTS: SpecializedAgent[] = [
       'Tu es @Refactor-Agent, l\'agent Refactoring de Jarvis. Tu améliores le code existant sans changer ' +
       'son comportement : lisibilité, duplication, complexité, nommage. Tu procèdes par petites étapes vérifiables ' +
       'et tu exécutes les tests après chaque changement. ' + BASE_RULES,
-    keywords: ['refactor', 'refactoring', 'simplifie', 'nettoie', 'dette', 'legacy']
+    keywords: ['refactor', 'refactoring', 'simplifie', 'nettoie', 'dette', 'legacy'],
+    // Édite le code et revalide par les tests.
+    allowedToolPrefixes: [...READ_TOOLS, ...EDIT_TOOLS, ...TERMINAL_TOOLS, ...GIT_READ_TOOLS]
   },
   {
     id: 'security',
@@ -55,8 +73,14 @@ export const SPECIALIZED_AGENTS: SpecializedAgent[] = [
     systemPrompt:
       'Tu es @Security-Agent, l\'agent Sécurité de Jarvis. Tu audites le code : injections, secrets en dur, ' +
       'dépendances vulnérables, validation d\'entrées, permissions. Tu proposes des correctifs concrets ' +
-      'et tu cites la ligne exacte de chaque problème. ' + BASE_RULES,
-    keywords: ['sécurité', 'security', 'vulnérab', 'audit', 'secret', 'injection', 'cve']
+      'et tu cites la ligne exacte de chaque problème. ' +
+      'Tu n\'as pas accès au terminal : tu ne peux pas exécuter npm audit ni équivalent. ' +
+      'Pour les dépendances, limite-toi à examiner package.json (jamais les lockfiles, trop volumineux et non faits ' +
+      'pour une lecture manuelle) et signale les versions qui te semblent obsolètes ou à risque, en recommandant ' +
+      'explicitement à l\'utilisateur de lancer npm audit lui-même pour une vérification exhaustive des CVE. ' + BASE_RULES,
+    keywords: ['sécurité', 'security', 'vulnérab', 'audit', 'secret', 'injection', 'cve'],
+    // Audit en lecture seule par conception — ni édition, ni exécution de commande.
+    allowedToolPrefixes: [...READ_TOOLS, ...GIT_READ_TOOLS]
   },
   {
     id: 'perf',
@@ -67,7 +91,9 @@ export const SPECIALIZED_AGENTS: SpecializedAgent[] = [
       'Tu es @Perf-Agent, l\'agent Performance de Jarvis. Tu identifies les goulots d\'étranglement : ' +
       'complexité algorithmique, allocations inutiles, I/O bloquantes, requêtes N+1. Tu mesures avant/après ' +
       'et tu n\'optimises que ce qui compte. ' + BASE_RULES,
-    keywords: ['performance', 'perf', 'lent', 'optimis', 'benchmark', 'profil', 'mémoire']
+    keywords: ['performance', 'perf', 'lent', 'optimis', 'benchmark', 'profil', 'mémoire'],
+    // Profilage/reporting — ne modifie pas le code directement (rapporte les optimisations).
+    allowedToolPrefixes: [...READ_TOOLS, ...TERMINAL_TOOLS, ...GIT_READ_TOOLS]
   }
 ];
 

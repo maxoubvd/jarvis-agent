@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Message, ApprovalRequest } from '../shared/types';
+  import type { Message, ApprovalRequest, TodoItem } from '../shared/types';
   import { marked } from 'marked';
   import Prism from 'prismjs';
   import 'prismjs/components/prism-markup';
@@ -23,6 +23,7 @@
   import { matchTrigger, filterCommands, type CommandItem } from '../shared/commands';
   import Icon from './Icon.svelte';
   import ApprovalCard from './ApprovalCard.svelte';
+  import TodoList from './TodoList.svelte';
   import vscode from '../lib/vscode-api';
 
   const BADGE_ICONS: Record<string, string> = {
@@ -56,11 +57,13 @@
     onWorkspaceChange?: (id: string | null) => void;
     onApprovalRespond?: (decision: 'allow' | 'allow-session' | 'deny', feedback?: string) => void;
     availableModels?: string[];
+    currentModel?: string;
     onModelChange?: (model: string) => void;
     onPlanProceed?: () => void;
     onNewChat?: () => void;
     onResumeChat?: () => void;
     firstName?: string;
+    todos?: TodoItem[];
   }
 
   let {
@@ -85,7 +88,8 @@
     onPlanProceed = () => {},
     onNewChat = () => {},
     onResumeChat = () => {},
-    firstName = ''
+    firstName = '',
+    todos = []
   }: Props = $props();
 
   let mode = $state('Automatic');
@@ -102,6 +106,8 @@
   });
 
   let inputText = $state('');
+  /** id du message plan pour lequel Proceed/Review a déjà été cliqué — masque les actions tant qu'un nouveau plan n'arrive pas. */
+  let dismissedPlanActionsId = $state<string | null>(null);
   let listEl: HTMLUListElement | undefined = $state();
   let textareaEl: HTMLTextAreaElement | undefined = $state();
 
@@ -486,12 +492,12 @@
                 <p class="pending"><span class="badge info wavelight"><Icon name="cpu" size={11} /> Working...</span></p>
               {/if}
 
-              {#if message.kind === 'plan' && message.id === messages[messages.length - 1].id}
+              {#if message.kind === 'plan' && message.id === messages[messages.length - 1].id && dismissedPlanActionsId !== message.id}
                 <div class="plan-actions">
-                  <button class="btn-primary" onclick={onPlanProceed} disabled={isSending}>
+                  <button class="btn-primary" onclick={() => { dismissedPlanActionsId = message.id; onPlanProceed(); }} disabled={isSending}>
                     <Icon name="check" size={14} /> Proceed
                   </button>
-                  <button class="btn-secondary" onclick={() => textareaEl?.focus()} disabled={isSending}>
+                  <button class="btn-secondary" onclick={() => { dismissedPlanActionsId = message.id; textareaEl?.focus(); }} disabled={isSending}>
                     <Icon name="edit" size={14} /> Review
                   </button>
                 </div>
@@ -508,6 +514,8 @@
   {#if approvalRequest}
     <ApprovalCard request={approvalRequest} onRespond={onApprovalRespond} />
   {/if}
+
+  <TodoList items={todos} />
 
   <div class="controls-row">
     <select class="mode-select" bind:value={mode}>
@@ -643,6 +651,29 @@
     background: var(--vscode-textCodeBlock-background, var(--vscode-editorWidget-background));
     padding: 0.05rem 0.3rem;
     border-radius: 0.25rem;
+  }
+
+  .empty-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+  }
+
+  .empty-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.7rem;
+    font-size: 0.78rem;
+    color: var(--vscode-foreground);
+    background: var(--vscode-button-secondaryBackground, var(--vscode-editorWidget-background));
+    border: 1px solid var(--vscode-widget-border, transparent);
+    border-radius: 0.3rem;
+    cursor: pointer;
+  }
+
+  .empty-action-btn:hover {
+    background: var(--vscode-button-secondaryHoverBackground, var(--vscode-list-hoverBackground));
   }
 
   .messages {

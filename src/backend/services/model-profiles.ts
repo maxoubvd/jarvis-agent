@@ -48,35 +48,6 @@ const PROFILES: ModelProfile[] = [
   }
 ];
 
-/**
- * Fenêtres de contexte par famille de modèle, utilisées uniquement quand
- * `ModelItem.contextLength` n'est pas défini dans jarvis-config.json (la config
- * gagne toujours). Valeurs volontairement conservatrices : la plus petite
- * variante courante de la famille (ex. codestral-22b local = 32k, alors que
- * codestral-2501 via l'API Mistral monte à 256k → à surcharger en config).
- * Indépendante de `PROFILES` : un défaut de contexte ne doit pas impliquer
- * une température ou un style de prompt.
- */
-const CONTEXT_LENGTH_DEFAULTS: Array<{ match: RegExp; tokens: number }> = [
-  // `devstral` avant les patterns mistral génériques (premier match gagne).
-  { match: /devstral/i, tokens: 128_000 },
-  { match: /codestral/i, tokens: 32_768 },
-  { match: /qwen[^a-z0-9]*(2\.5|3)?[^a-z0-9]*coder|coder[^a-z0-9]*qwen/i, tokens: 32_768 },
-  { match: /mistral[-_ ]?large/i, tokens: 128_000 },
-  { match: /mistral[-_ ]?small|ministral/i, tokens: 32_768 },
-  { match: /deepseek[^a-z0-9]*coder/i, tokens: 16_384 },
-  { match: /llama[-_ ]?3/i, tokens: 8_192 }
-];
-
-/** Fenêtre de contexte par défaut pour la famille du modèle, sinon `null`. */
-export function defaultContextLength(
-  item: Pick<ModelItem, 'model' | 'name'> | null | undefined
-): number | null {
-  if (!item) return null;
-  const haystack = `${item.model} ${item.name}`;
-  return CONTEXT_LENGTH_DEFAULTS.find(d => d.match.test(haystack))?.tokens ?? null;
-}
-
 /** Profil correspondant au modèle (id API ou nom d'affichage), sinon `null`. */
 export function resolveProfile(item: Pick<ModelItem, 'model' | 'name'> | null | undefined): ModelProfile | null {
   if (!item) return null;

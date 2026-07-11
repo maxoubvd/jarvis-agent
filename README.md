@@ -38,7 +38,15 @@ Jarvis n'écrit pas seulement du code, il l'exécute.
 <video src="docs/media/demo_tdd_loop.mp4" controls width="100%"></video>
 
 ### 4. Connecté à Tout (Standard MCP)
-Grâce au **Model Context Protocol (MCP)**, Jarvis peut utiliser des outils externes. Connectez-le à GitHub, à une base de données PostgreSQL, ou à Brave Search directement depuis l'onglet Settings.
+Grâce au **Model Context Protocol (MCP)**, Jarvis peut utiliser des outils externes. Connectez-le à GitHub, à une base de données PostgreSQL, ou à un serveur MCP tiers directement depuis l'onglet Settings. La **recherche web** intégrée (`search_web`) est propulsée par l'API **Brave Search**, avec des sources par défaut configurables (StackOverflow, MDN, GitHub, ou vos propres domaines).
+
+### 5. Agents Spécialisés & Projet
+- **5 agents dédiés** (`@QA-Agent`, `@Doc-Agent`, `@Refactor-Agent`, `@Security-Agent`, `@Perf-Agent`), chacun avec un accès aux outils réellement restreint à son rôle — `@Security-Agent` audite en lecture seule, `@QA-Agent` lance les tests sans jamais éditer de code.
+- **`JARVIS.md`** : tapez `/init` (ou `Jarvis: Initialize Project` dans la palette) pour que Jarvis initialise git si besoin, analyse votre projet et génère un fichier d'instructions versionné avec le code — partagé avec toute l'équipe, contrairement aux règles personnelles.
+- **Règles par dossier** : scopez une règle à un sous-dossier (`src/backend/**`) pour qu'elle ne s'applique qu'aux fichiers concernés.
+- **Checklist de tâches** persistante au-dessus du chat, pré-remplie automatiquement pour les `/workflow`.
+- **Ouverture automatique** du fichier édité, avec les décorations vert/rouge déjà en place.
+- **Autocomplete inline (Tab)** façon Copilot/Continue — désactivé par défaut, à activer dans Settings > Optimization.
 
 ---
 
@@ -66,7 +74,9 @@ Jarvis est **Agnostique**. Vous choisissez le cerveau de votre agent :
 
 ### Raccourcis Claviers
 - `Cmd+K Cmd+K` (Mac) ou `Ctrl+K Ctrl+K` (Win) : Édition inline d'une sélection de code.
+- `Tab` : Accepte une suggestion d'autocomplete inline (si activé dans Settings > Optimization).
 - `/new` : Démarre une nouvelle conversation (nettoie le contexte).
+- `/init` : Initialise git si besoin et génère `JARVIS.md` à partir d'une analyse du projet.
 - `/rollback` : Ouvre la liste des "Checkpoints" pour annuler complètement l'impact de Jarvis sur votre projet.
 
 ### Bouton "Kill Switch"
@@ -76,12 +86,15 @@ Si Jarvis s'emballe ou si l'exécution d'une commande tourne en boucle, utilisez
 
 ## ⚙️ Paramètres & Configuration Avancée
 
-Toute la configuration est stockée dans `~/.jarvis/config.json`.
+Toute la configuration est stockée dans `~/.jarvis/config.json` (+ un override optionnel par workspace dans `jarvis/jarvis-config.json`).
 Vous pouvez paramétrer Jarvis visuellement via l'onglet **Settings** :
 - Régler la verbosité (Concis / Détaillé).
 - Cacher ou afficher les pensées de l'agent.
 - Gérer le `jarvisignore` pour l'empêcher d'accéder à certains dossiers sensibles.
 - Configurer les profils des serveurs MCP.
+- Renseigner une clé API **Brave Search** et vos sources par défaut pour la recherche web.
+- Personnaliser les agents spécialisés (system prompt + outils autorisés) et les règles (globales ou scopées à un dossier).
+- Activer l'ouverture automatique du fichier édité (`always`/`never`/`strict-hitl-only`) et l'autocomplete inline (désactivé par défaut).
 
 ![Panneau des paramètres](docs/media/settings_panel.png)
 

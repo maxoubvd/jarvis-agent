@@ -114,6 +114,34 @@ describe('Agents spécialisés (spec §5.1)', () => {
     expect(suggestAgent('audit de sécurité des secrets')?.id).toBe('security');
     expect(suggestAgent('bonjour')).toBeNull();
   });
+
+  it('restricts each predefined agent to a coherent, non-empty tool subset', () => {
+    for (const agent of SPECIALIZED_AGENTS) {
+      expect(agent.allowedToolPrefixes?.length ?? 0).toBeGreaterThan(0);
+    }
+  });
+
+  it('never grants edit tools to QA-Agent or Security-Agent (read-only audit agents)', () => {
+    const editTools = ['create_new_file', 'edit_existing_file', 'single_find_and_replace'];
+    for (const id of ['qa', 'security']) {
+      const agent = SPECIALIZED_AGENTS.find(a => a.id === id)!;
+      for (const editTool of editTools) {
+        expect(agent.allowedToolPrefixes).not.toContain(editTool);
+      }
+    }
+  });
+
+  it('never grants terminal tools to Security-Agent (audit stays passive)', () => {
+    const agent = SPECIALIZED_AGENTS.find(a => a.id === 'security')!;
+    expect(agent.allowedToolPrefixes).not.toContain('run_terminal_command');
+  });
+
+  it('grants edit tools to Doc-Agent and Refactor-Agent', () => {
+    for (const id of ['doc', 'refactor']) {
+      const agent = SPECIALIZED_AGENTS.find(a => a.id === id)!;
+      expect(agent.allowedToolPrefixes).toContain('edit_existing_file');
+    }
+  });
 });
 
 describe('Workflows (spec §5.2)', () => {

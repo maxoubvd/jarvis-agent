@@ -9,6 +9,11 @@ import { executeTerminalCommand } from '../mcp/tools/terminal.js';
 import { backgroundProcesses } from '../../services/background-processes.js';
 import { gitStatus, gitDiff, gitLog } from '../mcp/tools/git.js';
 import { webSearch } from '../mcp/tools/webSearch.js';
+import { globToRegex } from '../utils/glob.js';
+import { sanitizeTodoItems } from './todo.js';
+
+/** @deprecated importer depuis `core/utils/glob.js` — ré-exporté ici pour compat arrière. */
+export { globToRegex };
 
 export interface ToolParameter {
   name: string;
@@ -25,6 +30,12 @@ export interface ToolDefinition {
   parameters: ToolParameter[];
   /** Type d'action HITL correspondant (terminal, write_file, read_file...). */
   hitlAction: string;
+  /**
+   * Provenance de l'outil : `restrictTo` ne filtre jamais les outils `mcp`/`custom`
+   * (l'utilisateur les a explicitement configurés), seuls les `builtin` (ou non taggés,
+   * pour compat arrière) sont soumis aux préfixes autorisés.
+   */
+  origin?: 'builtin' | 'custom' | 'mcp';
   execute(args: Record<string, unknown>, signal?: AbortSignal): Promise<string>;
 }
 
@@ -52,10 +63,14 @@ export class ToolRegistry {
     return cloned;
   }
 
-  /** Conserve uniquement les outils correspondants aux préfixes autorisés. */
+  /**
+   * Conserve uniquement les outils builtin correspondants aux préfixes autorisés.
+   * Les outils `mcp`/`custom` sont toujours conservés — l'utilisateur les a
+   * explicitement configurés, une restriction par persona ne doit pas les masquer.
+   */
   public restrictTo(allowedPrefixes: string[]): void {
-    const all = Array.from(this.tools.keys());
-    for (const name of all) {
+    for (const [name, tool] of this.tools) {
+      if (tool.origin === 'mcp' || tool.origin === 'custom') continue;
       const allowed = allowedPrefixes.some(prefix => name === prefix || name.startsWith(prefix));
       if (!allowed) {
         this.tools.delete(name);
@@ -94,6 +109,13 @@ function num(args: Record<string, unknown>, key: string, fallback: number): numb
 function bool(args: Record<string, unknown>, key: string): boolean {
   const v = args[key];
   return v === true || v === 'true';
+}
+
+function strArray(args: Record<string, unknown>, key: string): string[] | undefined {
+  const v = args[key];
+  if (!Array.isArray(v)) return undefined;
+  const list = v.filter((x): x is string => typeof x === 'string');
+  return list.length > 0 ? list : undefined;
 }
 
 /** Outils intégrés (spec §4.1), tous sandboxés via fileSystem/terminal. */
@@ -356,22 +378,52 @@ export function createBuiltinTools(): ToolDefinition[] {
       name: 'search_web',
       description: 'Recherche web pour documentation ou connaissances externes',
       parameters: [
-        { name: 'query', type: 'string', description: 'requête de recherche', required: true }
+        { name: 'query', type: 'string', description: 'requête de recherche', required: true },
+        {
+          name: 'sites',
+          type: 'array',
+          description: 'domaines à privilégier (ex: ["stackoverflow.com", "developer.mozilla.org"]), optionnel',
+          required: false,
+          jsonSchema: { type: 'array', items: { type: 'string' } }
+        }
       ],
       hitlAction: 'web_search',
-      execute: async args => webSearch(str(args, 'query'))
+      execute: async args => webSearch(str(args, 'query'), { sites: strArray(args, 'sites') })
+    },
+    {
+      name: 'update_todo_list',
+      description:
+        'Met à jour la checklist de tâches affichée à l\'utilisateur au-dessus du chat. ' +
+        'Remplace la liste complète à chaque appel (pas de fusion) — renvoie tous les items à chaque fois, ' +
+        'y compris ceux déjà marqués "completed". Utilise-le pour les tâches à plusieurs étapes : ' +
+        'appelle-le à nouveau à chaque changement de statut (passe une tâche à "in_progress" juste avant ' +
+        'de la commencer, puis à "completed" juste après l\'avoir terminée) pour que la progression soit visible en direct.',
+      parameters: [
+        {
+          name: 'items',
+          type: 'array',
+          description: 'liste complète des tâches: [{id, content, status: "pending"|"in_progress"|"completed"}]',
+          required: true,
+          jsonSchema: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                content: { type: 'string' },
+                status: { type: 'string', enum: ['pending', 'in_progress', 'completed'] }
+              },
+              required: ['content']
+            }
+          }
+        }
+      ],
+      hitlAction: 'update_todo_list',
+      execute: async args => {
+        const items = sanitizeTodoItems(args.items);
+        return `Checklist mise à jour (${items.length} tâche(s)).`;
+      }
     }
   ];
 }
 
-export function globToRegex(pattern: string): RegExp {
-  const regexStr = pattern
-    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-    .replace(/\?/g, '[^/]')
-    .replace(/\*\*\//g, '###GLOBSTARSLASH###')
-    .replace(/\*\*/g, '###GLOBSTAR###')
-    .replace(/\*/g, '[^/]*')
-    .replace(/###GLOBSTARSLASH###/g, '(?:.*/)?')
-    .replace(/###GLOBSTAR###/g, '.*');
-  return new RegExp(`^${regexStr}$`, 'i');
-}

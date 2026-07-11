@@ -133,6 +133,8 @@ export interface RuleItem {
   name: string;
   enabled: boolean;
   content: string;
+  /** Glob optionnel (ex: `src/backend/**`) : la règle ne s'applique qu'au fichier actif matché. Absent = globale. */
+  scope?: string;
 }
 
 export interface OptimizationConfig {
@@ -147,6 +149,17 @@ export interface OptimizationConfig {
   showThinking?: boolean;
   /** Verbosité des réponses (défaut : `normal` = aucune consigne ajoutée). */
   verbosity?: 'concise' | 'normal' | 'detailed';
+  /**
+   * Ouverture automatique du fichier édité par l'agent (onglet preview, réutilisé à
+   * chaque édition). `strict-hitl-only` : n'ouvre qu'en mode HITL strict. Défaut : `always`.
+   */
+  autoOpenMode?: 'always' | 'never' | 'strict-hitl-only';
+  /**
+   * Autocomplete inline (Tab / ghost text) — appelle un modèle à chaque pause de frappe.
+   * Désactivé par défaut : coût/latence non négligeables pour une fonctionnalité toujours
+   * déclenchée automatiquement, à activer explicitement une fois validée par l'usage.
+   */
+  autocompleteEnabled?: boolean;
 }
 
 /** Site de documentation externe mis en cache et indexé (section Docs). */
@@ -199,6 +212,15 @@ export interface JarvisConfig {
   activeWorkspaceId?: string | null;
   optimization?: OptimizationConfig;
   firstName?: string;
+  webSearch?: WebSearchConfig;
+}
+
+/** Configuration de l'outil `search_web` (§4.2). Un seul provider supporté pour l'instant. */
+export interface WebSearchConfig {
+  provider: 'brave';
+  apiKey?: string;
+  /** Domaines appliqués par défaut (`site:` OR) quand le modèle n'en précise pas. */
+  defaultSites?: string[];
 }
 
 export const EMPTY_CONFIG: JarvisConfig = {

@@ -66,26 +66,22 @@ describe('ModelConfigManager (model-centric schema)', () => {
     expect(mgr.getModelForRole('embed')).toBeNull();
   });
 
-  it('returns the contextLength: config > family default > null', () => {
+  it('falls back to the effective chat model for autocomplete when nothing is explicitly tagged', () => {
+    const mgr = new ModelConfigManager(fakeConfigManager([chatModel]));
+    expect(mgr.getModelForRole('autocomplete')?.name).toBe('GPT-OSS 120B');
+  });
+
+  it('returns the contextLength only when explicitly set in config, else null', () => {
     const mgr = new ModelConfigManager(fakeConfigManager([chatModel]));
     expect(mgr.getContextLength('GPT-OSS 120B')).toBe(32768);
     expect(mgr.getContextLength('unknown')).toBeNull();
     expect(mgr.getContextLength(null)).toBeNull();
-    // Famille inconnue sans contextLength en config → null.
+    // Pas de contextLength en config, même pour une famille de modèle connue → null
+    // (pas d'estimation affichée tant que l'utilisateur ne l'a pas réglée lui-même).
     const noCtx = new ModelConfigManager(
-      fakeConfigManager([{ name: 'x', provider: 'ollama', model: 'x' }])
+      fakeConfigManager([{ name: 'Codestral', provider: 'mistral', model: 'codestral-latest' }])
     );
-    expect(noCtx.getContextLength('x')).toBeNull();
-    // Famille connue sans contextLength en config → défaut du profil.
-    const family = new ModelConfigManager(
-      fakeConfigManager([
-        { name: 'Codestral', provider: 'mistral', model: 'codestral-latest' },
-        { name: 'Codestral 256k', provider: 'mistral', model: 'codestral-2501', contextLength: 256_000 }
-      ])
-    );
-    expect(family.getContextLength('Codestral')).toBe(32_768);
-    // La config gagne toujours sur le défaut de famille.
-    expect(family.getContextLength('Codestral 256k')).toBe(256_000);
+    expect(noCtx.getContextLength('Codestral')).toBeNull();
   });
 
   it('classifies cloud vs local by model name or provider type', () => {

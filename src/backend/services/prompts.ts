@@ -1,7 +1,7 @@
 import type { JarvisConfig, PromptItem } from '../config/config-manager.js';
 
 /** Commandes slash du chat qui ne peuvent pas être masquées par un prompt. */
-export const RESERVED_SLASH_COMMANDS = new Set(['tdd', 'workflow', 'agent', 'new', 'resume']);
+export const RESERVED_SLASH_COMMANDS = new Set(['tdd', 'workflow', 'agent', 'new', 'resume', 'init']);
 
 /** Nom canonique d'un prompt : sans `/` initial, insensible à la casse. */
 export function normalizePromptName(name: string): string {

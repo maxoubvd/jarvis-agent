@@ -5,6 +5,7 @@ import { extractJson } from '../utils/json-cleaner.js';
 import { ToolRegistry, ToolDefinition } from './tool-registry.js';
 import { ChangeTracker } from '../../services/change-tracker.js';
 import { operationLogger } from '../../services/logger.js';
+import { sanitizeTodoItems, type TodoItem } from './todo.js';
 
 export interface GateResult {
   granted: boolean;
@@ -33,6 +34,8 @@ export interface AgentEvents {
   onThinkingChunk?(text: string): void;
   /** Chunk de texte final en streaming. */
   onFinalChunk?(text: string): void;
+  /** La checklist TODO a été remplacée (outil `update_todo_list`, ou synthèse d'un workflow). */
+  onTodoUpdate?(items: TodoItem[]): void;
 }
 
 export interface AgentStep {
@@ -82,6 +85,8 @@ export interface OrchestratorOptions {
   workspaceFolder?: string;
   /** Signal d'annulation pour arrêter la génération en cours. */
   abortSignal?: AbortSignal;
+  /** Notifié après l'enregistrement réussi d'une édition de fichier (auto-ouverture UI). */
+  onFileEdited?: (filePath: string) => void;
 }
 
 /** Réponse structurée attendue du modèle (JSON Mode, spec §8.2). */
@@ -100,6 +105,12 @@ export interface AgentPromptOptions {
   personaExtra?: string;
   /** Prompt resserré + few-shot supplémentaire (petits modèles locaux type Qwen 7B). */
   compact?: boolean;
+  /**
+   * Mode Plan : retire les règles qui poussent le modèle à agir avec ses outils
+   * (elles contredisent l'instruction de la persona de ne rien écrire sur disque)
+   * et les remplace par des règles adaptées à la production d'un plan en lecture seule.
+   */
+  planOnly?: boolean;
 }
 
 export function buildAgentSystemPrompt(
@@ -147,12 +158,23 @@ export function buildAgentSystemPrompt(
     '',
     'RÈGLES:',
     '- Une seule action par réponse.',
-    '- AGIS avec tes outils, ne décris pas : pour créer/modifier un fichier utilise create_new_file/edit_existing_file, pour exécuter une commande utilise run_terminal_command. Ne donne JAMAIS de script ou de commande à copier-coller à l\'utilisateur quand un outil peut le faire.',
+    ...(options.planOnly
+      ? [
+          '- Tu NE DOIS RIEN créer ni modifier sur disque et ne dois exécuter aucune commande : utilise uniquement tes outils de lecture (read_file, grep_search, ls, file_glob_search...) pour explorer le projet.',
+          '- Une fois ton exploration terminée, réponds avec `final` contenant le plan d\'implémentation complet en Markdown. Ne t\'arrête jamais sur une action d\'écriture : ces outils ne te sont pas fournis dans ce mode.',
+          '- Juste avant (ou avec) cette réponse finale, appelle UNE SEULE FOIS update_todo_list avec les étapes d\'implémentation du plan (toutes en "pending") : c\'est cette checklist qui sera suivie en direct plus tard, quand le plan sera exécuté. Ne l\'appelle pas pendant l\'exploration.'
+        ]
+      : [
+          '- AGIS avec tes outils, ne décris pas : pour créer/modifier un fichier utilise create_new_file/edit_existing_file, pour exécuter une commande utilise run_terminal_command. Ne donne JAMAIS de script ou de commande à copier-coller à l\'utilisateur quand un outil peut le faire.',
+          '- Pour un processus long (serveur de dev, watcher), utilise run_in_background puis check_background_process.',
+          '- Ne réécris JAMAIS le contenu complet d\'un fichier dans ta réponse finale. Contente-toi de confirmer succinctement tes modifications.',
+          '- Si tu suis une checklist avec update_todo_list (la tienne, ou celle héritée d\'un plan validé), tiens-la à jour en direct : rappelle l\'outil ' +
+            'à chaque changement de statut (une tâche passe à "in_progress" quand tu la commences, "completed" ' +
+            'dès qu\'elle est finie) plutôt que de la poser une seule fois puis de l\'oublier.'
+        ]),
     '- Décompose les tâches complexes en micro-tâches (une étape atomique à la fois).',
     '- Vérifie le résultat de chaque outil avant de continuer.',
-    '- Si un outil échoue, analyse l\'erreur et adapte ta stratégie.',
-    '- Pour un processus long (serveur de dev, watcher), utilise run_in_background puis check_background_process.',
-    '- Ne réécris JAMAIS le contenu complet d\'un fichier dans ta réponse finale. Contente-toi de confirmer succinctement tes modifications.'
+    '- Si un outil échoue, analyse l\'erreur et adapte ta stratégie.'
   ].join('\n');
 }
 
@@ -446,6 +468,10 @@ export class AgentOrchestrator {
         steps.push({ thought: thoughtText, tool: toolName, args, result, success });
         events.onToolResult?.(toolName, result, success, args);
 
+        if (success && toolName === 'update_todo_list') {
+          events.onTodoUpdate?.(sanitizeTodoItems(args.items));
+        }
+
         messages.push({
           role: isNativeTool ? 'tool' : 'user',
           content: isNativeTool ? scrub(result) : scrub(`Résultat de l'outil ${toolName}:\n${result}\n\nContinue (JSON ou appel d'outil natif uniquement).`),
@@ -522,6 +548,7 @@ export class AgentOrchestrator {
       try {
         const afterContent = await fs.promises.readFile(filePath, 'utf8');
         this.options.changeTracker.record(filePath, beforeContent, afterContent);
+        this.options.onFileEdited?.(filePath);
       } catch {
         // Lecture possiblement en échec si le fichier a été supprimé — on ignore.
       }

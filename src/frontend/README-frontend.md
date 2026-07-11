@@ -1,127 +1,71 @@
 # Jarvis Agent - Frontend
 
-Ce README décrit l'architecture frontend actuelle de l'extension Jarvis Agent et les composants en place.
+Ce README décrit l'architecture frontend de l'extension Jarvis Agent : la webview affichée dans la sidebar VS Code (Svelte 5, runes mode, buildée par Vite → `dist/webview/assets/`).
 
 ## Objectif
 
-Le frontend est responsable de l'affichage de la webview et de l'interface utilisateur de base pour Jarvis Agent.
+Le frontend affiche le chat agentique, les paramètres, les checkpoints et les analytics. Il communique avec le backend (extension host) uniquement via `postMessage`/`window.addEventListener('message', ...)` — pas d'accès direct au système de fichiers ni à l'API VS Code (isolé par le sandbox de la webview).
 
-## Structure actuelle
+## Structure
 
-### `src/frontend/index.html`
+### `src/frontend/index.html` / `main.ts`
 
-- Point d'entrée HTML pour la webview.
-- Contient un élément `div#app` pour monter l'application Svelte.
-- Charge le script `main.ts`.
-
-### `src/frontend/main.ts`
-
-- Bootstrap de l'application Svelte.
-- Monte `App.svelte` sur `document.getElementById('app')`.
+Point d'entrée : monte `App.svelte` sur `#app`.
 
 ### `src/frontend/App.svelte`
 
-- Composant principal de l'application.
-- Affiche un message de bienvenue.
-- Contient des styles de base utilisant les variables VS Code :
-  - `--vscode-editor-foreground`
-  - `--vscode-editor-background`
-  - `--vscode-font-family`
-  - `--vscode-descriptionForeground`
+Composant racine — orchestre tout l'état de l'application (`$state`) et le switch des messages reçus du backend (`onWindowMessage`). Compose :
+- `Sidebar` — navigation par onglets (chat/checkpoints/analytics/settings).
+- `ChatPanel` — panneau de discussion principal.
+- `TokenGauge` — jauge de tokens (statut bar + panneau détaillé, historique des 5 dernières requêtes).
+- `CheckpointPanel` — liste des checkpoints git-stash + rollback.
+- `AnalyticsPanel` — statistiques (barres CSS pures, pas de librairie de graphiques).
+- `SettingsPanel` — tous les réglages (voir `components/settings/`).
+- `DiffReviewPanel` — revue des fichiers modifiés par l'agent (accept/reject par hunk).
+- `WelcomeScreen` — onboarding au premier lancement (aucun modèle configuré).
 
-### Composants existants
+### `src/frontend/components/`
 
-#### `src/frontend/components/ChatPanel.svelte`
+- `ChatPanel.svelte` — rendu markdown (`marked`), coloration syntaxique (`prismjs`), blocs `<thinking>` repliables, `TodoList` (checklist persistante au-dessus de la zone de saisie), autocomplétion des commandes `/` et mentions `@`, sélecteur de mode (Automatic/Fast/Plan) et de modèle.
+- `TodoList.svelte` — checklist de tâches (`update_todo_list` / synthèse de workflow), repliable, statuts pending/in_progress/completed.
+- `ApprovalCard.svelte` — carte d'approbation HITL affichée dans le chat (allow / allow-session / deny + feedback).
+- `Icon.svelte` — icônes SVG trait 16×16 dessinées à la main (pas de dépendance d'icônes externe) ; `PATHS` est la table nom → chemin SVG.
+- `Toggle.svelte` — interrupteur « lightswitch » réutilisé dans tous les settings.
+- `SettingsPanel.svelte` — orchestre les sections ci-dessous, gère la sérialisation vers `JarvisConfig` et l'état "dirty"/save.
 
-- Composant de chat de base.
-- Affiche un titre et une zone de messages.
-- Sert de base pour l'interface conversationnelle.
+### `src/frontend/components/settings/`
 
-#### `src/frontend/components/TokenGauge.svelte`
+Une section par domaine de configuration, toutes suivant le même pattern (`items`/`config` + `onChange` callback) :
+- `ModelsSection.svelte` — providers/modèles, clés API, rôles (`chat`/`edit`/`apply`/`autocomplete`).
+- `AgentsSection.svelte` — agents spécialisés (system prompt + outils autorisés).
+- `WorkflowsSection.svelte` — workflows prédéfinis/personnalisés.
+- `PromptsSection.svelte` — bibliothèque de prompts `/nom`.
+- `McpSection.svelte` / `ToolsSection.svelte` — serveurs MCP (builtins + externes) et politiques par outil.
+- `WebSearchSection.svelte` — clé API Brave Search + sources par défaut.
+- `DocsSection.svelte` — sites de documentation indexés (`@docs:`).
+- `WorkspacesSection.svelte` — profils de workspace (instructions façon CLAUDE.md, alternative UI à `JARVIS.md`).
 
-- Composant d'indicateur de tokens.
-- Affiche un pourcentage de tokens utilisés.
-- Utilise le style VS Code pour les couleurs et l'apparence.
+### `src/frontend/shared/`
 
-#### `src/frontend/components/Sidebar.svelte`
+- `types.ts` — **miroir manuel** des types de config backend (`src/backend/config/config-manager.ts`) : `JarvisConfig`, `ModelItem`, `RuleItem`, `SpecializedAgent`, `TodoItem`, `WebSearchConfig`, etc. À garder synchronisé à la main à chaque champ de config ajouté côté backend.
+- `commands.ts` — registre des commandes `/` et mentions `@` proposées par l'autocomplétion du chat (`SLASH_COMMANDS`, `AT_MENTIONS`, `matchTrigger`, `filterCommands`).
+- `constants.ts` — `APP_NAME` et constantes globales.
+- `utils.ts` — utilitaires partagés.
 
-- Composant de barre latérale.
-- Contient un titre et une section de contenu.
-- Structure de base pour l'ajout de contrôle ou de navigation.
+### `src/frontend/lib/vscode-api.ts`
 
-#### `src/frontend/components/ThinkingBlock.svelte`
-
-- Bloc d'affichage de la pensée en cours.
-- Peut être utilisé pour afficher un état de traitement.
-
-#### `src/frontend/components/Dashboard/Analytics.svelte`
-
-- Composant dashboard de statistiques.
-- Affiche un titre et un message de statut.
-
-#### `src/frontend/components/Dashboard/TokenStats.svelte`
-
-- Composant pour afficher l'utilisation de tokens.
-- Structure simple pour les stats.
-
-#### `src/frontend/components/Dashboard/Performance.svelte`
-
-- Composant pour afficher un taux de succès.
-- Structure simple pour les métriques.
-
-### Bibliothèques et utilitaires
-
-#### `src/frontend/lib/utils.ts`
-
-- Contient une fonction utilitaire `formatDate`.
-- Utilitaire minimal prêt à être étendu.
-
-#### `src/frontend/shared/constants.ts`
-
-- Définit `APP_NAME`.
-- Peut accueillir d'autres constantes globales.
-
-#### `src/frontend/shared/types.ts`
-
-- Définit l'interface `Message`.
-- Interface de base pour le chat et les messages.
-
-#### `src/frontend/shared/utils.ts`
-
-- Contient une fonction `clamp`.
-- Utilitaire réutilisable pour les valeurs numériques.
-
-## Ce qui fonctionne actuellement
-
-- L'application Svelte démarre avec un message de bienvenue.
-- La structure des composants est présente.
-- Les composants de base sont prêts à être intégrés à une UI complète.
-- Les styles de base utilisent les variables natives de VS Code.
-
-## Ce qui manque encore
-
-- Connexion entre le frontend et le backend.
-- Gestion réelle des messages de chat et de l'état de l'application.
-- Interaction avec les outils MCP et le système de modèles.
-- Interface d'entrée utilisateur pour envoyer des prompts.
-- Dashboard opérationnel et graphiques réels.
-- Intégration complète de Tailwind CSS dans les composants.
+Wrapper autour de `acquireVsCodeApi()` (posté une seule fois, réutilisé partout) — `postMessage`, `getState`/`setState` pour la persistance d'état webview.
 
 ## Comment démarrer
 
-1. Installer les dépendances :
-   ```bash
-   npm install
-   ```
-2. Lancer le build webview :
-   ```bash
-   npm run build:webview
-   ```
-3. Ouvrir l'extension dans VS Code et vérifier la webview via le débogage.
+1. Installer les dépendances : `npm install`
+2. Build webview : `npm run build:webview` (ou `npm run watch:webview` pour le hot-reload en dev)
+3. `F5` dans VS Code pour ouvrir l'Extension Development Host et voir la webview réelle.
+4. Tests frontend : `npx vitest run test/frontend/` — montent `App.svelte` via `@testing-library/svelte` (`happy-dom`) et simulent les messages backend→webview avec `window.dispatchEvent(new MessageEvent('message', { data }))` (voir `test/frontend/approval-diff-review.test.ts`, `test/frontend/todo-list.test.ts`).
 
 ## Notes techniques
 
-- Le frontend est construit avec Svelte 4.
-- Le build est piloté par Vite.
-- Le frontend cible une webview VS Code et utilise des variables CSS natives.
-- Le frontend est prêt à recevoir de la logique de chat et des données backend.
+- Svelte **5** en mode runes (`$state`, `$derived`, `$effect`, `$props()`) — pas de Svelte 4 legacy syntax.
+- Build piloté par Vite → `dist/webview/assets/app.js` + `app.css`, chargés par l'extension host via `localResourceRoots` avec un nonce CSP strict.
+- Styles pilotés par les variables CSS natives de VS Code (`--vscode-*`) pour la compatibilité thème clair/sombre.
+- Aucune dépendance de state management externe : tout passe par les runes Svelte 5 dans `App.svelte`, descendu en props aux enfants.

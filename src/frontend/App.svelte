@@ -21,7 +21,8 @@
     DocsSiteStatus,
     McpServerStatus,
     ApprovalRequest,
-    PendingFileChange
+    PendingFileChange,
+    TodoItem
   } from './shared/types';
   import type { CommandItem } from './shared/commands';
   import vscode from './lib/vscode-api';
@@ -40,7 +41,7 @@
   // est la largeur du panneau — c'est notre breakpoint « conteneur ».
   let innerWidth = $state(600);
   const isNarrow = $derived(innerWidth < 500);
-  let sidebarOpen = $state(true);
+  let sidebarOpen = $state(false);
 
   // État UI léger persisté côté webview (survit au reload de la fenêtre).
   const persistedUi = (vscode?.getState() as { activeTab?: Tab } | undefined) ?? {};
@@ -91,6 +92,7 @@
   let docsSuggestions = $state<string[]>([]);
   let approvalRequest = $state<ApprovalRequest | null>(null);
   let pendingChanges = $state<PendingFileChange[]>([]);
+  let todos = $state<TodoItem[]>([]);
 
   function pushMessage(role: Message['role'], content: string, kind?: Message['kind'], badges?: Badge[]) {
     messages = [
@@ -195,6 +197,7 @@
       startLine?: number;
       endLine?: number;
       docs?: string[];
+      items?: TodoItem[];
     };
 
     switch (msg.type) {
@@ -327,6 +330,9 @@
         break;
       case 'chatDone':
         isSending = false;
+        if (todos.length > 0 && todos.every(t => t.status === 'completed')) {
+          todos = [];
+        }
         break;
       case 'chatError':
         pushMessage('assistant', `Error: ${msg.error ?? 'unknown'}`, 'text', [
@@ -400,6 +406,9 @@
         break;
       case 'analytics':
         analyticsStats = msg.stats ?? null;
+        break;
+      case 'todoUpdate':
+        todos = msg.items ?? [];
         break;
     }
   }
@@ -497,6 +506,18 @@
     vscode?.postMessage({ type: 'requestGitInit', id });
   }
 
+  function handleSetHitlMode(mode: string) {
+    vscode?.postMessage({ type: 'setHitlMode', mode });
+  }
+
+  function handleNewChat() {
+    handleSend('/new');
+  }
+
+  function handleResumeChat() {
+    handleSend('/resume');
+  }
+
   function handleQueryFiles(query: string) {
     vscode?.postMessage({ type: 'queryFiles', query });
   }
@@ -589,7 +610,7 @@
         <button
           class="menu-btn"
           title="New Conversation (/new)"
-          onclick={() => { handleTabChange('chat'); handleSend('/new'); }}
+          onclick={() => { handleTabChange('chat'); handleNewChat(); }}
           disabled={isSending}
         >
           <Icon name="add" />
@@ -597,7 +618,7 @@
         <button
           class="menu-btn"
           title="Past Conversations (/resume)"
-          onclick={() => { handleTabChange('chat'); handleSend('/resume'); }}
+          onclick={() => { handleTabChange('chat'); handleResumeChat(); }}
           disabled={isSending}
         >
           <Icon name="history" />
@@ -646,6 +667,7 @@
           {approvalRequest}
           {availableModels}
           {currentModel}
+          {todos}
           firstName={settings?.firstName}
           onSend={handleSend}
           onQueryFiles={handleQueryFiles}
@@ -654,8 +676,8 @@
           onApprovalRespond={handleApprovalRespond}
           onModelChange={handleModelChange}
           onPlanProceed={handlePlanProceed}
-          onNewChat={() => handleSend('/new')}
-          onResumeChat={() => vscode?.postMessage({ type: 'chatMessage', text: '/resume', mode: 'Automatic' })}
+          onNewChat={handleNewChat}
+          onResumeChat={handleResumeChat}
         />
         <TokenGauge
           used={tokensUsed}
@@ -679,6 +701,7 @@
           onOpenConfig={handleOpenConfig}
           onOpenGuide={handleOpenGuide}
           onRequestGitInit={handleRequestGitInit}
+          onSetHitlMode={handleSetHitlMode}
         />
       {:else if activeTab === 'checkpoints'}
         <CheckpointPanel

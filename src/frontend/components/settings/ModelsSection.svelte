@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { ModelItem, ModelRole, ProviderType } from '../../shared/types';
-  import { MODEL_ROLES, DEFAULT_BASE_URL, PROVIDER_KEY_PAGE } from '../../shared/types';
+  import { DEFAULT_BASE_URL, PROVIDER_KEY_PAGE } from '../../shared/types';
   import Icon from '../Icon.svelte';
   import Toggle from '../Toggle.svelte';
 
@@ -31,6 +31,12 @@
     { value: 'huggingface', label: 'huggingface' },
     { value: 'openai-compatible', label: 'autre (openai-compatible)' }
   ];
+
+  /**
+   * Rôles réellement consommés par le backend (`embed`/`rerank`/`summarize` n'ont
+   * aucun consommateur — cf. audit 2026-07-11 §1 — et ne sont donc pas exposés ici).
+   */
+  const VISIBLE_MODEL_ROLES: ModelRole[] = ['chat', 'edit', 'apply', 'autocomplete'];
 
   const MODEL_PLACEHOLDER: Partial<Record<ProviderType, string>> = {
     mistral: 'codestral-latest',
@@ -63,8 +69,7 @@
         name: '',
         provider: 'mistral',
         model: '',
-        roles: ['chat', 'edit', 'apply'],
-        contextLength: 32768
+        roles: ['chat', 'edit', 'apply']
       }
     ]);
   }
@@ -121,8 +126,8 @@
   </div>
 
   <p class="j-hint">
-    Each model carries its own provider and API key. The token gauge uses the context length of
-    the selected default model.
+    Each model carries its own provider and API key. Context length is optional — the token gauge
+    only appears once it's set (or a known built-in default matches the model).
   </p>
 
   {#if items.length === 0}
@@ -235,7 +240,7 @@
         <div class="j-field">
           <span>Roles</span>
           <div class="j-row">
-            {#each MODEL_ROLES as role (role)}
+            {#each VISIBLE_MODEL_ROLES as role (role)}
               <Toggle
                 checked={(model.roles ?? []).includes(role)}
                 label={role}
@@ -247,12 +252,12 @@
 
         <div class="j-row">
           <label class="j-field">
-            <span>Context length</span>
+            <span>Context length (optional)</span>
             <input
               class="j-input num"
               type="number"
               min="1"
-              placeholder="32768"
+              placeholder="e.g. 32768"
               value={model.contextLength ?? ''}
               oninput={e => patch(index, { contextLength: parseOptionalNumber((e.target as HTMLInputElement).value) })}
             />

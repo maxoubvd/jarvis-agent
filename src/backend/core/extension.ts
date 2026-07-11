@@ -13,6 +13,7 @@ import { AutoTDDLoop } from '../services/tdd-loop.js';
 import { detectAgentMention, suggestAgent, getAgents } from '../services/agents.js';
 import { WorkflowRunner, getWorkflows } from '../services/workflows.js';
 import { loadRules, renderRules } from '../services/rules.js';
+import { loadJarvisMd, renderJarvisMd } from '../services/jarvis-md.js';
 import { loadPrompts, expandPrompt, normalizePromptName } from '../services/prompts.js';
 import { getActiveWorkspace, renderWorkspaceInstructions } from '../services/workspaces.js';
 import { WorkspaceIndexer } from '../services/context/indexer.js';
@@ -24,6 +25,7 @@ import { operationLogger } from '../services/logger.js';
 import { SecretScrubber } from './utils/scrubber.js';
 import { SandboxManager } from './utils/sandbox.js';
 import { AgentOrchestrator, buildAgentSystemPrompt, AgentEvents } from './agent/orchestrator.js';
+import type { TodoItem } from './agent/todo.js';
 import { ToolRegistry, createBuiltinTools } from './agent/tool-registry.js';
 import { ChangeTracker } from '../services/change-tracker.js';
 import { isBuiltinShadowed, type ActiveMcpTools } from './agent/builtin-dedup.js';
@@ -46,6 +48,13 @@ const BASE_SYSTEM_PROMPT =
   'Tu es Jarvis, un assistant de code agentique intégré à VS Code. ' +
   'Réponds de manière concise et technique. Utilise le Markdown pour formater ton code.\n' +
   'RÈGLE CRITIQUE : Ne t\'enferme jamais dans une boucle. Si tu te surprends à répéter la même action, la même commande ou écrire le même fichier plusieurs fois, ARRÊTE-TOI IMMÉDIATEMENT, considère la tâche comme terminée (ou bloquée) et donne ta réponse finale.';
+
+/** Persona de la commande /init : génère JARVIS.md à partir d'une analyse du projet. */
+const INIT_SYSTEM_PROMPT =
+  'Tu es Jarvis en mode /init. Ta seule tâche est d\'analyser ce projet (package.json ou équivalent, ' +
+  'structure de dossiers via ls/file_glob_search, points d\'entrée, conventions de code visibles) puis ' +
+  'de créer le fichier JARVIS.md à la racine du workspace via tes outils de fichier. ' +
+  'Ne modifie aucun autre fichier. Reste concis, factuel et actionnable — pas de remplissage générique.';
 
 /** Clé workspaceState : instantané de la jauge de tokens (persistance de session). */
 const TOKEN_STATE_KEY = 'jarvis.tokenState';
@@ -112,10 +121,49 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     return value ?? fallback;
   }
 
+  /** Contenu rendu de JARVIS.md, rafraîchi en tâche de fond par le watcher (cf. `ensureJarvisMdWatcher`). */
+  private jarvisMdText = '';
+  private jarvisMdWatcherRegistered = false;
+
+  /** Enregistre (une fois) le watcher qui invalide/recharge JARVIS.md, et déclenche la première lecture. */
+  private ensureJarvisMdWatcher(): void {
+    if (this.jarvisMdWatcherRegistered) return;
+    this.jarvisMdWatcherRegistered = true;
+    void this.refreshJarvisMd();
+    if (!vscode.workspace.workspaceFolders?.length) return;
+    const watcher = vscode.workspace.createFileSystemWatcher('**/JARVIS.md');
+    const refresh = () => { void this.refreshJarvisMd(); };
+    watcher.onDidChange(refresh);
+    watcher.onDidCreate(refresh);
+    watcher.onDidDelete(refresh);
+    this.context.subscriptions.push(watcher);
+  }
+
+  private async refreshJarvisMd(): Promise<void> {
+    try {
+      const content = await loadJarvisMd(p => readFileTool(p));
+      this.jarvisMdText = renderJarvisMd(content);
+    } catch {
+      this.jarvisMdText = '';
+    }
+  }
+
+  /** Instructions projet JARVIS.md (racine du workspace), vide si absent. */
+  private getJarvisMdText(): string {
+    this.ensureJarvisMdWatcher();
+    return this.jarvisMdText;
+  }
+
+  /** Chemin relatif du fichier actif dans l'éditeur, pour les rules scopées à un dossier (§6). */
+  private getActiveFilePath(): string | null {
+    const uri = vscode.window.activeTextEditor?.document.uri;
+    return uri ? vscode.workspace.asRelativePath(uri, false) : null;
+  }
+
   /** Bloc de rules utilisateur (onglet Settings), vide si aucune. */
   private getRulesText(): string {
     try {
-      return renderRules(loadRules(getConfigManager().getConfig()));
+      return renderRules(loadRules(getConfigManager().getConfig(), this.getActiveFilePath()));
     } catch {
       return '';
     }
@@ -142,9 +190,14 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  /** Rules + instructions du workspace actif + verbosité, pour les prompts système. */
+  /** JARVIS.md + rules + instructions du workspace actif + verbosité, pour les prompts système. */
   private getPromptExtras(): string {
-    return [this.getRulesText(), this.getWorkspaceInstructionsText(), this.getVerbosityInstruction()]
+    return [
+      this.getJarvisMdText(),
+      this.getRulesText(),
+      this.getWorkspaceInstructionsText(),
+      this.getVerbosityInstruction()
+    ]
       .filter(Boolean)
       .join('\n\n');
   }
@@ -274,8 +327,7 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
         }
         break;
       case 'planProceed':
-        // Lancer l'exécution du plan validé en mode automatique
-        await this.onChatMessage(webview, "Le plan est validé. Procède à son implémentation étape par étape.", 'Automatic');
+        await this.onPlanProceed(webview);
         break;
       case 'listCheckpoints':
         await this.onListCheckpoints(webview);
@@ -612,6 +664,9 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
   }
 
   private onWebviewReady(webview: vscode.Webview): void {
+    // Amorce la lecture de JARVIS.md tôt pour qu'elle soit prête avant le premier message.
+    this.ensureJarvisMdWatcher();
+
     // Délègue les confirmations HITL à la carte d'approbation dans le chat.
     // Retour `null` impossible ici (webview prêt) → jamais de dialogue natif.
     this.hitl.setPromptHandler(
@@ -751,24 +806,36 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
    * "git init" est une action visible/irréversible, donc jamais silencieuse),
    * puis `git init`, activation persistée, reconnexion.
    */
-  private async onRequestGitInit(webview: vscode.Webview): Promise<void> {
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-    if (!workspaceFolder) return;
+  /**
+   * Confirme puis exécute `git init` dans `workspaceFolder` si ce n'est pas déjà un dépôt.
+   * Action visible/irréversible : jamais silencieuse (dialogue modal). Retourne true si le
+   * dossier est (déjà ou désormais) un dépôt git, false si l'utilisateur a refusé ou en cas d'échec.
+   */
+  private async ensureGitInitialized(workspaceFolder: string): Promise<boolean> {
+    if (isGitRepository(workspaceFolder)) return true;
 
     const choice = await vscode.window.showWarningMessage(
-      `This folder isn't a Git repository. Enabling the Git MCP server will run "git init" in ${workspaceFolder}. Continue?`,
+      `This folder isn't a Git repository. This will run "git init" in ${workspaceFolder}. Continue?`,
       { modal: true },
       'OK'
     );
-    if (choice !== 'OK') return;
+    if (choice !== 'OK') return false;
 
     const result = await executeTerminalCommand('git init', { cwd: workspaceFolder });
     if (!result.success) {
       vscode.window.showErrorMessage(`Jarvis: git init failed — ${result.stderr || result.stdout}`);
       operationLogger.log('mcp', `git init échoué (${workspaceFolder}): ${result.stderr}`, 'error');
-      return;
+      return false;
     }
     operationLogger.log('mcp', `git init exécuté dans ${workspaceFolder}`, 'success');
+    return true;
+  }
+
+  private async onRequestGitInit(webview: vscode.Webview): Promise<void> {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (!workspaceFolder) return;
+
+    if (!(await this.ensureGitInitialized(workspaceFolder))) return;
 
     try {
       const config = getConfigManager().getGlobalConfig();
@@ -1044,16 +1111,62 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
 
   private async runPlanMode(webview: vscode.Webview, active: { provider: IModelProvider; providerName: string; model: string }, expanded: string): Promise<void> {
     operationLogger.log('chat', 'Mode Plan : Génération du implementation_plan.md');
-    const planSystemPrompt = "RÈGLE SPECIALE MODE PLAN: Tu es en mode Plan. Rédige et mets à jour le plan d'implémentation détaillé directement dans ta réponse en Markdown. Ne crée AUCUN fichier physique sur le disque. Ton unique but est de répondre avec le plan complet formaté en Markdown.";
-    
+    const planSystemPrompt =
+      "RÈGLE SPECIALE MODE PLAN: Tu es en mode Plan. Explore le projet avec tes outils de lecture pour te documenter, " +
+      "pose éventuellement la checklist des étapes avec update_todo_list, puis rédige le plan d'implémentation détaillé " +
+      "directement dans ta réponse finale en Markdown. Ne crée ni ne modifie AUCUN fichier physique sur le disque et " +
+      "n'exécute aucune commande — ces outils ne te sont pas fournis dans ce mode. Ton unique but est de répondre avec " +
+      "le plan complet formaté en Markdown.";
+
     let finalPrompt = expanded;
     const lastAssistantMsg = [...this.history].reverse().find(m => m.role === 'assistant');
     if (lastAssistantMsg) {
       finalPrompt = `Voici le plan d'implémentation actuel :\n\n${lastAssistantMsg.content}\n\nConsigne de modification :\n${expanded}\n\nRefais le plan complètement en appliquant ces consignes.`;
     }
 
-    const planText = await this.runAgent(webview, active, finalPrompt, planSystemPrompt, undefined, { kind: 'plan' });
+    const planText = await this.runAgent(webview, active, finalPrompt, planSystemPrompt, undefined, {
+      kind: 'plan',
+      planOnly: true,
+      allowedToolPrefixes: [
+        'read_file', 'read_currently_open_file', 'grep_search', 'ls', 'file_glob_search',
+        'git_status', 'git_log', 'view_diff', 'search_web', 'update_todo_list'
+      ]
+    });
     if (planText) this.history.push({ role: 'assistant', content: planText });
+    this.getSessions()?.updateCurrent(this.history);
+  }
+
+  /**
+   * Exécute le plan validé. Passe directement par l'agent (avec ses outils) au lieu de
+   * `onChatMessage(..., 'Automatic')` : le routeur automatique ne voit que ce message isolé
+   * et le reclasse fréquemment en intention [PLAN], ce qui relançait `runPlanMode` (et donc
+   * régénérait le plan) au lieu d'implémenter.
+   */
+  private async onPlanProceed(webview: vscode.Webview): Promise<void> {
+    const text =
+      "Le plan est validé. Procède à son implémentation étape par étape, en suivant les étapes du plan " +
+      "ci-dessus. Utilise update_todo_list pour suivre ta progression en direct sur ces étapes.";
+    operationLogger.log('chat', `Message reçu [mode: Proceed] : ${text}`);
+
+    if (this.currentAbortController) {
+      this.currentAbortController.abort();
+      this.currentAbortController = null;
+    }
+
+    const active = this.getActiveProvider();
+    if (!active) {
+      this.post(webview, {
+        type: 'chatError',
+        error: 'No model configured. Open Settings to add a provider and API key.',
+        needsSetup: true
+      });
+      return;
+    }
+
+    const recentHistory = this.history.slice(-10);
+    const finalText = await this.runAgent(webview, active, text, undefined, recentHistory);
+    this.history.push({ role: 'user', content: this.maybeScrub(text, active.providerName) });
+    if (finalText) this.history.push({ role: 'assistant', content: finalText });
     this.getSessions()?.updateCurrent(this.history);
   }
 
@@ -1110,7 +1223,7 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     }
 
     // Prompts enregistrés : `/nom args` → contenu du prompt + args
-    // (les commandes réservées /tdd, /workflow, /agent ne sont jamais masquées).
+    // (les commandes réservées /tdd, /workflow, /agent, /init ne sont jamais masquées).
     if (rawText.startsWith('/')) {
       const expandedPrompt = expandPrompt(rawText, this.getConfiguredPrompts());
       if (expandedPrompt !== null) rawText = expandedPrompt;
@@ -1123,6 +1236,12 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     });
 
 
+
+    // Initialisation projet : git init si besoin + génération de JARVIS.md
+    if (rawText.startsWith('/init')) {
+      await this.runInit(webview, active);
+      return;
+    }
 
     // Boucle Auto-TDD (spec §3.3)
     if (rawText.startsWith('/tdd ')) {
@@ -1150,7 +1269,9 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
         readFile: p => readFileTool(p),
         searchDocs: q => this.searchAllDocs(q)
       });
-      await this.runAgent(webview, active, task, mention.agent.systemPrompt);
+      await this.runAgent(webview, active, task, mention.agent.systemPrompt, undefined, {
+        allowedToolPrefixes: mention.agent.allowedToolPrefixes
+      });
       return;
     }
 
@@ -1248,12 +1369,8 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     this.persistTokenState();
     this.postTokens(webview);
     this.post(webview, { type: 'sessionStarted' });
+    this.post(webview, { type: 'todoUpdate', items: [] });
     operationLogger.log('session', 'Nouvelle session de discussion démarrée');
-  }
-
-  private onListSessions(webview: vscode.Webview): void {
-    const store = this.getSessions();
-    this.post(webview, { type: 'sessions', sessions: store?.list() ?? [] });
   }
 
   private async onResumeCommand(webview: vscode.Webview, arg?: string): Promise<void> {
@@ -1400,9 +1517,11 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
   /** Politique par outil (Settings > Tools) — `{}` si config illisible. */
   private getToolPolicies(): Record<string, ToolPolicy> {
     try {
-      return getConfigManager().getConfig().toolPolicies ?? {};
+      // update_todo_list n'a aucun effet de bord (juste un affichage) : jamais de friction HITL,
+      // sauf si l'utilisateur l'a explicitement reconfiguré dans Settings.
+      return { update_todo_list: 'auto', ...getConfigManager().getConfig().toolPolicies };
     } catch {
-      return {};
+      return { update_todo_list: 'auto' };
     }
   }
 
@@ -1424,23 +1543,26 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     for (const tool of createBuiltinTools()) {
       if (policies[tool.name] === 'excluded') continue;
       if (isBuiltinShadowed(tool.name, activeMcpTools)) continue;
+      tool.origin = 'builtin';
       registry.register(tool);
     }
-    
+
     // Outils personnalisés depuis jarvis-tools/ (spec §5.1)
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     if (workspaceFolder) {
       for (const tool of await loadCustomTools(workspaceFolder)) {
         if (policies[tool.name] === 'excluded') continue;
+        tool.origin = 'custom';
         registry.register(tool);
         operationLogger.log('tools', `Outil personnalisé chargé: ${tool.name}`);
       }
     }
-    
+
     // Tools des serveurs MCP configurés (onglet Settings)
     const mcp = this.getMcpManager();
     if (mcp) {
       for (const tool of mcp.toToolDefinitions()) {
+        tool.origin = 'mcp';
         registry.register(tool);
       }
     }
@@ -1499,26 +1621,42 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
         }
       },
       onFinal: text => this.post(webview, { type: 'agentFinalChunk', chunk: text }),
-      onFinalChunk: chunk => this.post(webview, { type: 'agentFinalChunk', chunk })
+      onFinalChunk: chunk => this.post(webview, { type: 'agentFinalChunk', chunk }),
+      onTodoUpdate: items => this.post(webview, { type: 'todoUpdate', items })
     };
   }
 
   private buildOrchestrator(
     active: { provider: IModelProvider; providerName: string },
     registry: ToolRegistry,
-    persona?: string
+    persona?: string,
+    promptOptions?: import('./agent/orchestrator.js').AgentPromptOptions
   ): AgentOrchestrator {
     const maxIterations = this.getOpt(this.getOptimization().agentMaxIterations, 'agent.maxIterations', 100);
     return new AgentOrchestrator(active.provider, registry, {
       maxIterations,
       hitl: this.hitl,
       scrub: text => this.maybeScrub(text, active.providerName),
-      systemPrompt: buildAgentSystemPrompt(registry, persona, this.getPromptExtras() || undefined),
+      systemPrompt: buildAgentSystemPrompt(registry, persona, this.getPromptExtras() || undefined, promptOptions),
       changeTracker: this.changeTracker,
       toolPolicies: this.getToolPolicies(),
       workspaceFolder: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
-      abortSignal: this.currentAbortController?.signal
+      abortSignal: this.currentAbortController?.signal,
+      onFileEdited: filePath => this.maybeAutoOpen(filePath)
     });
+  }
+
+  /**
+   * Ouvre le fichier édité dans l'onglet "preview" (réutilisé à chaque édition suivante,
+   * pas d'empilement d'onglets) pour que l'utilisateur voie tout de suite les décorations
+   * inline. Contrôlable via `jarvis.autoOpen.mode` (config ou réglage VS Code).
+   */
+  private maybeAutoOpen(filePath: string): void {
+    const mode = this.getOpt(this.getOptimization().autoOpenMode, 'autoOpen.mode', 'always');
+    if (mode === 'never') return;
+    if (mode === 'strict-hitl-only' && this.hitl.getMode() !== 'strict') return;
+    vscode.window.showTextDocument(vscode.Uri.file(filePath), { preview: true, preserveFocus: false })
+      .then(undefined, () => { /* fichier peut-être déjà fermé/supprimé — ignorer */ });
   }
 
   /** Boucle agentique complète (spec §4). */
@@ -1528,7 +1666,7 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     task: string,
     persona?: string,
     history?: ChatMessage[],
-    options: { kind?: import('../../frontend/shared/types.js').MessageKind, isSmallModel?: boolean } = {}
+    options: { kind?: import('../../frontend/shared/types.js').MessageKind, isSmallModel?: boolean, allowedToolPrefixes?: string[], planOnly?: boolean } = {}
   ): Promise<string | void> {
     this.post(webview, { type: 'chatStart' });
     this.currentAbortController = new AbortController();
@@ -1550,15 +1688,19 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
       if (options.isSmallModel) {
         operationLogger.log('agent', 'Petit modèle détecté : restriction des outils aux fichiers essentiels.');
         registry.restrictTo([
-          'create_new_file', 
-          'edit_existing_file', 
-          'single_find_and_replace', 
+          'create_new_file',
+          'edit_existing_file',
+          'single_find_and_replace',
           'read_file',
           'run_terminal_command'
         ]);
       }
 
-      const orchestrator = this.buildOrchestrator(active, registry, persona);
+      if (options.allowedToolPrefixes?.length) {
+        registry.restrictTo(options.allowedToolPrefixes);
+      }
+
+      const orchestrator = this.buildOrchestrator(active, registry, persona, options.planOnly ? { planOnly: true } : undefined);
 
       // Checkpoint avant action agentique (spec §6.2)
       await this.getCheckpoints().createCheckpoint('action', task.slice(0, 40)).catch(err => this.reportCheckpointFailure(err));
@@ -1608,6 +1750,58 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     this.post(webview, { type: 'chatDone' });
 
     return result.finalText;
+  }
+
+  /**
+   * Commande /init : initialise git si nécessaire, analyse le projet et génère JARVIS.md
+   * (façon `claude init`). Nécessite Phase 4 (getJarvisMdText/refreshJarvisMd) déjà en place
+   * pour que le fichier généré soit immédiatement pris en compte par les prompts suivants.
+   */
+  private async runInit(
+    webview: vscode.Webview,
+    active: { provider: IModelProvider; providerName: string; model: string }
+  ): Promise<void> {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (!workspaceFolder) {
+      this.post(webview, { type: 'chatError', error: 'Aucun dossier de travail ouvert. Ouvre un dossier avant de lancer /init.' });
+      return;
+    }
+
+    if (!(await this.ensureGitInitialized(workspaceFolder))) {
+      this.post(webview, { type: 'chatError', error: 'Initialisation annulée (git init requis).' });
+      return;
+    }
+
+    let existing = '';
+    try {
+      existing = await readFileTool('JARVIS.md');
+    } catch {
+      // Absent — comportement normal, pas d'erreur à remonter.
+    }
+    if (existing.trim()) {
+      const choice = await vscode.window.showWarningMessage(
+        'JARVIS.md existe déjà. Le régénérer va remplacer son contenu actuel. Continuer ?',
+        { modal: true },
+        'OK'
+      );
+      if (choice !== 'OK') {
+        this.post(webview, { type: 'chatError', error: 'Initialisation annulée : JARVIS.md conservé.' });
+        return;
+      }
+    }
+
+    const task =
+      'Analyse ce projet (package.json ou équivalent, structure de dossiers, points d\'entrée, conventions) ' +
+      'puis crée/remplace le fichier JARVIS.md à la racine du workspace avec les sections suivantes : ' +
+      '"## Project Overview" (un paragraphe résumant le projet), ' +
+      '"## Build & Test Commands" (les commandes exactes détectées), ' +
+      '"## Architecture" (dossiers/modules clés et leur rôle), ' +
+      '"## Conventions" (style de code, imports, nommage observés), ' +
+      '"## Notes for Agents" (points spécifiques utiles à un agent de code sur ce projet). ' +
+      'Reste concis et actionnable — pas de remplissage générique.';
+
+    await this.runAgent(webview, active, task, INIT_SYSTEM_PROMPT);
+    void this.refreshJarvisMd();
   }
 
   /** Boucle Auto-TDD (spec §3.3). */
@@ -1711,11 +1905,33 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
       await this.getCheckpoints().createCheckpoint('workflow', `${workflowId}-${task.slice(0, 30)}`).catch(err => this.reportCheckpointFailure(err));
     }, this.getConfiguredWorkflows());
 
+    // Étapes connues à l'avance (hors workflow `dynamic`) → checklist TODO pré-remplie
+    // avant même le début de la première étape (spec §5 — visibilité gratuite sur /workflow).
+    const workflowDef = this.getConfiguredWorkflows().find(w => w.id === workflowId);
+    const todos: TodoItem[] = (workflowDef?.steps ?? []).map((s, i) => ({
+      id: `step-${i}`,
+      content: s.name,
+      status: 'pending'
+    }));
+    if (todos.length > 0) this.post(webview, { type: 'todoUpdate', items: todos });
+
     const started = Date.now();
     const result = await runner.run(workflowId, task, {
       ...this.agentEvents(webview),
-      onStepStart: (step, index, total) =>
-        this.post(webview, { type: 'workflowStep', step, index, total })
+      onStepStart: (step, index, total) => {
+        this.post(webview, { type: 'workflowStep', step, index, total });
+        if (todos[index - 1]) {
+          todos[index - 1].status = 'in_progress';
+          this.post(webview, { type: 'todoUpdate', items: todos });
+        }
+      },
+      onStepDone: (step, stepResult) => {
+        const item = todos.find(t => t.content === step);
+        if (item) {
+          item.status = stepResult.success ? 'completed' : 'pending';
+          this.post(webview, { type: 'todoUpdate', items: todos });
+        }
+      }
     });
 
     this.getAnalytics()?.trackAction({
@@ -1881,6 +2097,18 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     } else {
       vscode.commands.executeCommand('jarvis.sidebarView.focus');
     }
+  }
+
+  /** Déclenche /init depuis la palette de commandes (`jarvis.init`). */
+  public async triggerInit(): Promise<void> {
+    this.focus();
+    if (!this._view?.webview) {
+      vscode.window.showInformationMessage('Jarvis: open the sidebar, then run /init from the chat.');
+      return;
+    }
+    const webview = this._view.webview;
+    this.post(webview, { type: 'injectUserMessage', text: '/init' });
+    await this.onChatMessage(webview, '/init', 'Automatic');
   }
 
   public getIndexer(): WorkspaceIndexer {
@@ -2151,6 +2379,10 @@ export class JarvisExtension {
   public showRollbackPanel(): void {
     this.sidebarProvider.focus();
     vscode.window.showInformationMessage('Jarvis: open the Checkpoints tab in the sidebar.');
+  }
+
+  public runInit(): Promise<void> {
+    return this.sidebarProvider.triggerInit();
   }
 
   public async listCheckpoints(): Promise<void> {

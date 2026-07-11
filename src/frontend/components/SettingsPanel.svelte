@@ -14,12 +14,14 @@
     DocSite,
     DocsSiteStatus,
     WorkspaceProfile,
-    SettingsDefaults
+    SettingsDefaults,
+    WebSearchConfig
   } from '../shared/types';
   import Icon from './Icon.svelte';
   import Toggle from './Toggle.svelte';
   import ModelsSection from './settings/ModelsSection.svelte';
   import McpSection, { type McpEntry } from './settings/McpSection.svelte';
+  import WebSearchSection from './settings/WebSearchSection.svelte';
   import PromptsSection from './settings/PromptsSection.svelte';
   import AgentsSection from './settings/AgentsSection.svelte';
   import WorkflowsSection from './settings/WorkflowsSection.svelte';
@@ -39,6 +41,7 @@
     onOpenConfig?: () => void;
     onOpenGuide?: () => void;
     onRequestGitInit?: (id: string) => void;
+    onSetHitlMode?: (mode: string) => void;
   }
 
   let {
@@ -53,7 +56,8 @@
     onReindex = () => {},
     onOpenConfig = () => {},
     onOpenGuide = () => {},
-    onRequestGitInit = () => {}
+    onRequestGitInit = () => {},
+    onSetHitlMode = () => {}
   }: Props = $props();
 
   let firstName = $state('');
@@ -71,6 +75,7 @@
   let toolPolicies = $state<Record<string, ToolPolicy>>({});
   let docs = $state<DocSite[]>([]);
   let workspaces = $state<WorkspaceProfile[]>([]);
+  let webSearch = $state<WebSearchConfig>({ provider: 'brave' });
   let dirty = $state(false);
   let confirmingReset = $state(false);
 
@@ -100,6 +105,7 @@
     });
     rules = structuredClone($state.snapshot(incoming.rules ?? []));
     prompts = structuredClone($state.snapshot(incoming.prompts ?? [])) as PromptItem[];
+    webSearch = structuredClone($state.snapshot(incoming.webSearch ?? { provider: 'brave' }));
     // Pré-remplit avec les défauts codés en dur quand la config est vide
     // (même sémantique que getAgents/getWorkflows : config non vide gagne).
     // $state.snapshot est obligatoire des deux côtés : structuredClone ne sait
@@ -246,7 +252,10 @@
       workspaces: workspaces.length > 0 ? ($state.snapshot(workspaces) as WorkspaceProfile[]) : undefined,
       // Non édité ici — préservé pour ne pas réinitialiser le workspace actif.
       activeWorkspaceId: settings?.activeWorkspaceId,
-      optimization
+      optimization,
+      webSearch: webSearch.apiKey || (webSearch.defaultSites?.length ?? 0) > 0
+        ? ($state.snapshot(webSearch) as WebSearchConfig)
+        : undefined
     };
     // Dé-proxifie en profondeur (rules, optimization… sont des proxies $state) :
     // postMessage utilise le clonage structuré, qui plante sur un Proxy — la
@@ -335,6 +344,12 @@
     onDefaultChange={name => { defaultModel = name; markDirty(); }}
   />
 
+  <!-- Web Search (search_web tool backend) -->
+  <WebSearchSection
+    config={webSearch}
+    onChange={next => { webSearch = next; markDirty(); }}
+  />
+
   <!-- Tools & MCP servers (politiques d'outils incluses) -->
   <McpSection
     builtins={defaults?.builtinMcp ?? []}
@@ -389,6 +404,16 @@
             oninput={markDirty}
             placeholder="e.g. Always write tests for new code. Use French for comments."
           ></textarea>
+          <label class="field">
+            <span>Scope (glob, optional)</span>
+            <input
+              class="provider-name"
+              placeholder="e.g. src/backend/** — leave empty to apply everywhere"
+              value={rule.scope ?? ''}
+              oninput={e => { rule.scope = (e.target as HTMLInputElement).value || undefined; markDirty(); }}
+            />
+            <span class="j-hint">Only applied when the active editor file matches this glob. Empty = global.</span>
+          </label>
           <div class="j-row j-end">
             <button class="primary" onclick={() => (expandedRules[rule.id] = false)}>
               <Icon name="check" size={13} /> Validate
@@ -451,13 +476,41 @@
 
     <label class="field">
       <span>HITL mode</span>
-      <select bind:value={optimization.hitlMode} onchange={markDirty}>
+      <select
+        bind:value={optimization.hitlMode}
+        onchange={e => {
+          markDirty();
+          const mode = (e.target as HTMLSelectElement).value;
+          if (mode) onSetHitlMode(mode);
+        }}
+      >
         <option value={undefined}>— default —</option>
         <option value="strict">strict</option>
         <option value="moderate">moderate</option>
         <option value="free">free</option>
       </select>
+      <span class="j-hint">Applied instantly — a safety setting shouldn't wait on Save.</span>
     </label>
+
+    <label class="field">
+      <span>Auto-open edited files</span>
+      <select bind:value={optimization.autoOpenMode} onchange={markDirty}>
+        <option value={undefined}>— always (default) —</option>
+        <option value="always">always</option>
+        <option value="never">never</option>
+        <option value="strict-hitl-only">only in strict HITL mode</option>
+      </select>
+      <span class="j-hint">Brings the edited file to the preview tab right after the agent writes it.</span>
+    </label>
+
+    <Toggle
+      checked={optimization.autocompleteEnabled ?? false}
+      label="Inline autocomplete (Tab)"
+      onchange={on => { optimization.autocompleteEnabled = on; markDirty(); }}
+    />
+    <span class="j-hint">
+      Ghost-text suggestions while typing (ollama/lmstudio recommended — a request is sent on every pause). Off by default.
+    </span>
 
     <Toggle
       checked={optimization.showThinking ?? true}

@@ -25,7 +25,6 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
     "@xenova/transformers": "^2.0.1",
-    "chart.js": "^4.4.0",
     "ignore": "^5.3.0",
     "marked": "^12.0.0",
     "prismjs": "^1.29.0",
@@ -69,7 +68,8 @@
     "onCommand:jarvis.startChat",
     "onCommand:jarvis.rollback",
     "onCommand:jarvis.listCheckpoints",
-    "onCommand:jarvis.exportAnalytics"
+    "onCommand:jarvis.exportAnalytics",
+    "onCommand:jarvis.init"
   ],
   "contributes": {
     "viewsContainers": {
@@ -134,6 +134,10 @@
       {
         "command": "jarvis.inlineEdit",
         "title": "Jarvis: Inline Edit (Cmd+K)"
+      },
+      {
+        "command": "jarvis.init",
+        "title": "Jarvis: Initialize Project (generate JARVIS.md)"
       }
     ],
     "keybindings": [
@@ -169,6 +173,21 @@
             "free"
           ],
           "description": "Mode de validation Human-in-the-Loop"
+        },
+        "jarvis.autoOpen.mode": {
+          "type": "string",
+          "default": "always",
+          "enum": [
+            "always",
+            "never",
+            "strict-hitl-only"
+          ],
+          "description": "Ouverture automatique du fichier édité par l'agent (onglet preview)"
+        },
+        "jarvis.autocomplete.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Autocomplete inline (Tab / ghost text) — appelle un modèle à chaque pause de frappe"
         },
         "jarvis.agent.maxIterations": {
           "type": "number",

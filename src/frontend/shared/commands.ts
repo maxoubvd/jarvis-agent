@@ -21,7 +21,8 @@ export const SLASH_COMMANDS: CommandItem[] = [
   { trigger: '/', insert: '/agent ', label: '/agent', detail: 'Agentic mode on a task' },
   { trigger: '/', insert: '/tdd ', label: '/tdd', detail: 'Auto-TDD loop' },
   { trigger: '/', insert: '/workflow ', label: '/workflow', detail: 'Run a predefined workflow' },
-  { trigger: '/', insert: '/rollback', label: '/rollback', detail: 'Annuler les modifications depuis le dernier message' }
+  { trigger: '/', insert: '/rollback', label: '/rollback', detail: 'Annuler les modifications depuis le dernier message' },
+  { trigger: '/', insert: '/init', label: '/init', detail: 'Initialize project (git init + generate JARVIS.md)' }
 ];
 
 export const AT_MENTIONS: CommandItem[] = [

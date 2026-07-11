@@ -29,7 +29,7 @@ vi.mock('../../src/backend/core/mcp/tools/fileSystem.js', () => ({
 }));
 
 import * as vscode from 'vscode';
-import { createBuiltinTools, type ToolDefinition } from '../../src/backend/core/agent/tool-registry.js';
+import { createBuiltinTools, ToolRegistry, type ToolDefinition } from '../../src/backend/core/agent/tool-registry.js';
 
 function tool(name: string): ToolDefinition {
   const found = createBuiltinTools().find(t => t.name === name);
@@ -92,6 +92,41 @@ describe('grep_search', () => {
   it('rejects invalid regexes and reports empty results', async () => {
     await expect(tool('grep_search').execute({ pattern: '([' })).rejects.toThrow(/Regex invalide/);
     expect(await tool('grep_search').execute({ pattern: 'nothing' })).toBe('(aucune correspondance)');
+  });
+});
+
+describe('ToolRegistry.restrictTo', () => {
+  function fakeTool(name: string, origin?: 'builtin' | 'custom' | 'mcp'): ToolDefinition {
+    return { name, description: '', parameters: [], hitlAction: 'read_file', origin, execute: async () => '' };
+  }
+
+  it('removes non-matching builtin tools but keeps allowed ones', () => {
+    const registry = new ToolRegistry();
+    registry.register(fakeTool('read_file', 'builtin'));
+    registry.register(fakeTool('edit_existing_file', 'builtin'));
+    registry.restrictTo(['read_file']);
+    expect(registry.get('read_file')).toBeDefined();
+    expect(registry.get('edit_existing_file')).toBeUndefined();
+  });
+
+  it('never removes mcp or custom tools regardless of the prefix list', () => {
+    const registry = new ToolRegistry();
+    registry.register(fakeTool('read_file', 'builtin'));
+    registry.register(fakeTool('mcp__playwright__run_tests', 'mcp'));
+    registry.register(fakeTool('my_custom_tool', 'custom'));
+    registry.restrictTo(['read_file']);
+    expect(registry.get('mcp__playwright__run_tests')).toBeDefined();
+    expect(registry.get('my_custom_tool')).toBeDefined();
+    expect(registry.get('read_file')).toBeDefined();
+  });
+
+  it('treats tools without an origin as builtin (back-compat)', () => {
+    const registry = new ToolRegistry();
+    registry.register(fakeTool('read_file'));
+    registry.register(fakeTool('edit_existing_file'));
+    registry.restrictTo(['read_file']);
+    expect(registry.get('read_file')).toBeDefined();
+    expect(registry.get('edit_existing_file')).toBeUndefined();
   });
 });
 

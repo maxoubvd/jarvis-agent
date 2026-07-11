@@ -1,4 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { AgentOrchestrator, buildAgentSystemPrompt } from '../../src/backend/core/agent/orchestrator.js';
 import { ToolRegistry, ToolDefinition } from '../../src/backend/core/agent/tool-registry.js';
 import { ChatMessage, IModelProvider } from '../../src/backend/models/abstract.js';
@@ -189,5 +192,50 @@ describe('AgentOrchestrator', () => {
     expect(result.steps[0].success).toBe(false);
     expect(result.steps[0].result).toContain('boom');
     expect(result.success).toBe(true);
+  });
+
+  it('invokes onFileEdited after a tracked file edit succeeds', async () => {
+    const tmpFile = path.join(os.tmpdir(), `jarvis-orchestrator-test-${Date.now()}.txt`);
+    fs.writeFileSync(tmpFile, 'before');
+    try {
+      const registry = new ToolRegistry();
+      registry.register({
+        name: 'edit_existing_file',
+        description: 'édite un fichier',
+        parameters: [],
+        hitlAction: 'edit_existing_file',
+        execute: async () => {
+          fs.writeFileSync(tmpFile, 'after');
+          return 'ok';
+        }
+      });
+      const provider = fakeProvider([
+        JSON.stringify({ action: { tool: 'edit_existing_file', args: { path: tmpFile } } }),
+        JSON.stringify({ final: 'done' })
+      ]);
+      const changeTracker = { record: vi.fn() } as unknown as import('../../src/backend/services/change-tracker.js').ChangeTracker;
+      const onFileEdited = vi.fn();
+      const orchestrator = new AgentOrchestrator(provider, registry, { changeTracker, onFileEdited });
+      await orchestrator.run('test');
+
+      expect(changeTracker.record).toHaveBeenCalledWith(tmpFile, 'before', 'after');
+      expect(onFileEdited).toHaveBeenCalledWith(tmpFile);
+    } finally {
+      fs.unlinkSync(tmpFile);
+    }
+  });
+
+  it('does not call onFileEdited when there is no changeTracker', async () => {
+    const registry = new ToolRegistry();
+    registry.register(echoTool());
+    const provider = fakeProvider([
+      JSON.stringify({ action: { tool: 'echo', args: { text: 'x' } } }),
+      JSON.stringify({ final: 'ok' })
+    ]);
+    const onFileEdited = vi.fn();
+    const orchestrator = new AgentOrchestrator(provider, registry, { onFileEdited });
+    await orchestrator.run('test');
+
+    expect(onFileEdited).not.toHaveBeenCalled();
   });
 });

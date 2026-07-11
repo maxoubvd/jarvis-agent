@@ -53,6 +53,15 @@
   function parseKeywords(text: string): string[] {
     return text.split(',').map(k => k.trim()).filter(Boolean);
   }
+
+  function toolsText(agent: SpecializedAgent): string {
+    return (agent.allowedToolPrefixes ?? []).join(', ');
+  }
+
+  function parseTools(text: string): string[] | undefined {
+    const list = text.split(',').map(t => t.trim()).filter(Boolean);
+    return list.length > 0 ? list : undefined;
+  }
 </script>
 
 <div class="group j-group">
@@ -131,6 +140,15 @@
             class="j-input"
             value={keywordsText(agent)}
             oninput={e => patch(index, { keywords: parseKeywords((e.target as HTMLInputElement).value) })}
+          />
+        </label>
+        <label class="j-field">
+          <span>Allowed tools (comma-separated tool names, empty = all tools)</span>
+          <input
+            class="j-input"
+            placeholder="e.g. read_file, grep_search, run_terminal_command"
+            value={toolsText(agent)}
+            oninput={e => patch(index, { allowedToolPrefixes: parseTools((e.target as HTMLInputElement).value) })}
           />
         </label>
         <div class="j-row j-end">
