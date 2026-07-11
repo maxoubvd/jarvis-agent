@@ -82,18 +82,18 @@ Ce document liste l'intégralité des scénarios de test pour s'assurer du parfa
 - [X] **Résultat attendu** : Avant d'exécuter la commande dans le terminal, une interface d'approbation s'affiche. Le bouton "Allow" doit être cliqué pour que la commande s'exécute.
 
 ### 5.2 Mode Moderate
-- [ ] **Action** : Passez en mode `moderate`. Demandez un `ls -la`.
-- [ ] **Résultat attendu** : La commande inoffensive `ls` s'exécute silencieusement et Jarvis vous donne le résultat.
-- [ ] **Action** : Demandez "Supprime le fichier toto.txt avec rm".
-- [ ] **Résultat attendu** : La commande destructive bloque l'exécution et vous demande une approbation formelle via la Webview ou une notification.
+- [X] **Action** : Passez en mode `moderate`. Demandez un `ls -la`.
+- [X] **Résultat attendu** : La commande inoffensive `ls` s'exécute silencieusement et Jarvis vous donne le résultat.
+- [X] **Action** : Demandez "Supprime le fichier toto.txt avec rm".
+- [X] **Résultat attendu** : La commande destructive bloque l'exécution et vous demande une approbation formelle via la Webview ou une notification.
 
 ---
 
 ## 6. Auto-TDD Loop
 
 ### 6.1 Lancement d'une boucle TDD
-- [ ] **Action** : Dans le chat, tapez la commande `/tdd écris-moi une fonction fibonacci dans fib.ts`.
-- [ ] **Résultat attendu** : 
+- [X] **Action** : Dans le chat, tapez la commande `/tdd écris-moi une fonction fibonacci dans fib.ts`.
+- [X] **Résultat attendu** : 
   1. L'agent crée le test unitaire pour Fibonacci (dans un fichier `.test.ts` ou `.spec.ts`).
   2. L'agent lance les tests en tâche de fond (la commande `npm test` configurée dans `jarvis.tdd.testCommand` échouera car l'implémentation manque).
   3. Il observe l'échec.
@@ -106,8 +106,8 @@ Ce document liste l'intégralité des scénarios de test pour s'assurer du parfa
 ## 7. Fonctionnalités Utilitaires
 
 ### 7.1 Jauge de Tokens (Statut Bar)
-- [ ] **Action** : Discutez et utilisez le contexte.
-- [ ] **Résultat attendu** : En bas à droite de l'éditeur VS Code, la barre de statut `$(hubot) Jarvis X%` s'incrémente. Le survol avec la souris indique les tokens In/Out. Au-delà d'un seuil critique (80%), elle passe en orange/rouge.
+- [X] **Action** : Discutez et utilisez le contexte.
+- [X] **Résultat attendu** : En bas à droite de l'éditeur VS Code, la barre de statut `$(hubot) Jarvis X%` s'incrémente. Le survol avec la souris indique les tokens In/Out. Au-delà d'un seuil critique (80%), elle passe en orange/rouge.
 
 ### 7.2 Checkpoints et Rollback
 - [ ] **Action** : Effectuez plusieurs requêtes qui modifient le projet. Puis utilisez la commande `Jarvis: List Checkpoints` ou `/rollback`.

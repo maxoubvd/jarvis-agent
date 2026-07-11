@@ -32,12 +32,15 @@ export interface ApprovalPromptDecision {
 export type ApprovalPromptHandler = (request: ApprovalPromptRequest) => Promise<ApprovalPromptDecision | null>;
 
 const DANGEROUS_PATTERNS = [
-  'rm -rf', 'rm -r', 'del /f', 'rmdir /s',
+  'del /f', 'rmdir /s',
   'git push', 'git reset --hard', 'git clean',
   'npm install --global', 'npm install -g',
   'chmod 777', 'sudo ',
   'DROP TABLE', 'DELETE FROM', 'TRUNCATE'
 ];
+
+/** Correspond à `rm` en tant que commande isolée (ex. "rm x", "cd a && rm -rf b"), pas une sous-chaîne de "confirm"/"germ"/"term". */
+const RM_COMMAND_PATTERN = /(^|[\s;&|])rm(\s|$)/;
 
 const SAFE_PATTERNS = [
   'ls', 'dir', 'pwd', 'echo', 'cat ', 'type ',
@@ -123,6 +126,7 @@ export class HITLManager {
     if (actionType === 'delete_file') return true;
     if (actionType === 'terminal') {
       const command = String(params.command ?? '').toLowerCase();
+      if (RM_COMMAND_PATTERN.test(command)) return true;
       return DANGEROUS_PATTERNS.some(p => command.includes(p.toLowerCase()));
     }
     if (actionType === 'write_file' || actionType === 'edit_file' || actionType === 'edit_existing_file' || actionType === 'create_new_file') {
