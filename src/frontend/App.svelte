@@ -676,8 +676,6 @@
           onApprovalRespond={handleApprovalRespond}
           onModelChange={handleModelChange}
           onPlanProceed={handlePlanProceed}
-          onNewChat={handleNewChat}
-          onResumeChat={handleResumeChat}
         />
         <TokenGauge
           used={tokensUsed}

@@ -792,8 +792,15 @@ Découpage en Micro-Tâches:
 - [x] **Règles par dossier** (`RuleItem.scope`, §5.2)
 - [x] **Checklist TODO** persistante au-dessus du chat, pré-remplie pour les workflows (§5.3)
 - [x] **Autocomplete inline** (Tab / ghost text), désactivé par défaut (§5.3)
-- [x] Nettoyage : rôles de modèle morts retirés de l'UI, `setHitlMode` instantané, code mort supprimé (`onListSessions`), props `onNewChat`/`onResumeChat` de `ChatPanel` rendues fonctionnelles, icônes manquantes ajoutées, types `ProviderType`/`ChatPanel` synchronisés, dépendance `chart.js` retirée (jamais utilisée), références `Vectra` retirées de la doc (jamais installé)
+- [x] Nettoyage : rôles de modèle morts retirés de l'UI, `setHitlMode` instantané, code mort supprimé (`onListSessions`), icônes manquantes ajoutées, types `ProviderType`/`ChatPanel` synchronisés, dépendance `chart.js` retirée (jamais utilisée), références `Vectra` retirées de la doc (jamais installé)
+- [~] Props `onNewChat`/`onResumeChat` de `ChatPanel` : marquées "rendues fonctionnelles" à tort — jamais réellement câblées dans le template. Corrigé le 11/07/2026 (suite) en les **supprimant** plutôt qu'en les câblant : les vrais boutons "New chat"/"Resume" vivent déjà dans le header d'`App.svelte`, un doublon dans l'état vide du chat n'était pas souhaité.
 - Explicitement hors scope (reporté) : sous-agents/délégation parallèle, suivi de coût monétaire, checkpoints sur repo git « fantôme »
+
+**9.6.1. Passe de vérification code + préparation publication (11/07/2026, suite)** — voir l'addendum de `docs/audit-2026-07-11.md` et `CHANGELOG.md` pour le détail :
+- [x] Build + lint + suite de tests complète vérifiés (42 fichiers, 322 tests) — 5 erreurs ESLint réelles corrigées ; props mortes `onNewChat`/`onResumeChat` de `ChatPanel` (+ CSS `.empty-actions` orpheline) supprimées plutôt que câblées, à la demande explicite de l'utilisateur
+- [x] Blocage `vsce package` corrigé (`engines.vscode` vs `@types/vscode`), dépendances mortes/mal classées nettoyées (`uuid`, `marked`/`prismjs`), migration `vsce` → `@vscode/vsce` (0 vulnérabilité restante)
+- [x] `.vscodeignore`, icône Marketplace PNG, métadonnées `package.json` (repository/bugs/homepage/keywords/icon), `CHANGELOG.md`, `SECURITY.md` ajoutés
+- [ ] Captures d'écran/vidéos de démonstration (`docs/media/`) — reste à faire manuellement, voir la liste de tâches de publication
 
 
 ### 10 Ressources et Références

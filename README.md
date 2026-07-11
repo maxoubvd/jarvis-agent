@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="docs/media/logo_jarvis.png" alt="Jarvis Agent Logo" width="150"/>
+  <img src="media/jarvis-icon.png" alt="Jarvis Agent Logo" width="128"/>
   <h1>Jarvis Agent</h1>
   <p><strong>Votre ingénieur logiciel autonome, directement dans VS Code.</strong></p>
 </div>
@@ -8,8 +8,7 @@
 
 **Jarvis Agent** est une extension de nouvelle génération pour Visual Studio Code. Que vous souhaitiez automatiser la création de composants, débugger un système complexe, ou explorer une immense base de code, Jarvis s'intègre parfaitement à votre environnement local pour vous assister.
 
-![Aperçu de l'interface](docs/media/overview_chat_interface.png)
-*(Aperçu de l'interface de discussion de Jarvis)*
+> 📸 Captures d'écran et vidéos de démonstration à venir dans `docs/media/` (voir `CONTRIBUTING.md`).
 
 ---
 
@@ -17,8 +16,6 @@
 
 ### 1. Édition en Ligne (Cmd+K)
 Sélectionnez n'importe quel bloc de code, appuyez sur `Cmd+K Cmd+K` (ou `Ctrl+K Ctrl+K` sur Windows/Linux), et donnez une instruction à Jarvis (ex: *"Ajoute une gestion d'erreur robuste à cette fonction"*).
-
-<video src="docs/media/demo_cmd_k.mp4" controls width="100%"></video>
 
 L'IA écrit le code en direct, et les **CodeLens (`✓ Accept` / `✗ Reject`)** vous permettent d'approuver ou de refuser la modification ligne par ligne.
 
@@ -28,14 +25,10 @@ Jarvis ne souffre pas de la limite de tokens typique des autres IAs :
 - **RAG Sémantique (`@docs`)** : Recherchez dans vos documentations et votre projet entier par concept, pas seulement par mots-clés.
 - **AST Pruning** : Jarvis analyse la structure syntaxique (avec `tree-sitter`) pour ne lire que les fonctions importantes d'un fichier géant sans saturer le contexte.
 
-![RAG et Pruning AST](docs/media/rag_context_pruning.png)
-
 ### 3. Exécution Autonome (Terminal & TDD)
 Jarvis n'écrit pas seulement du code, il l'exécute.
 - **Workflow TDD** : Tapez `/tdd écris-moi une fonction fibonacci` et Jarvis écrira le test, tentera de l'exécuter, verra l'erreur, écrira l'implémentation et vérifiera que le test passe.
 - **Terminal Intégré** : L'agent peut lancer `npm install`, `git commit` ou `cargo build`. **Human-in-the-Loop (HITL)** : en mode strict, il vous demande d'abord la permission.
-
-<video src="docs/media/demo_tdd_loop.mp4" controls width="100%"></video>
 
 ### 4. Connecté à Tout (Standard MCP)
 Grâce au **Model Context Protocol (MCP)**, Jarvis peut utiliser des outils externes. Connectez-le à GitHub, à une base de données PostgreSQL, ou à un serveur MCP tiers directement depuis l'onglet Settings. La **recherche web** intégrée (`search_web`) est propulsée par l'API **Brave Search**, avec des sources par défaut configurables (StackOverflow, MDN, GitHub, ou vos propres domaines).
@@ -55,8 +48,6 @@ Grâce au **Model Context Protocol (MCP)**, Jarvis peut utiliser des outils exte
 1. Installez **Jarvis Agent** depuis le Marketplace VS Code.
 2. Appuyez sur l'icône de Jarvis dans la barre latérale gauche (ou command `Jarvis: Start Chat`).
 3. **L'écran de Bienvenue** vous guidera pour configurer votre premier modèle !
-
-![Ecran de Bienvenue](docs/media/onboarding_welcome.png)
 
 ### Compatibilité des Fournisseurs
 Jarvis est **Agnostique**. Vous choisissez le cerveau de votre agent :
@@ -96,14 +87,13 @@ Vous pouvez paramétrer Jarvis visuellement via l'onglet **Settings** :
 - Personnaliser les agents spécialisés (system prompt + outils autorisés) et les règles (globales ou scopées à un dossier).
 - Activer l'ouverture automatique du fichier édité (`always`/`never`/`strict-hitl-only`) et l'autocomplete inline (désactivé par défaut).
 
-![Panneau des paramètres](docs/media/settings_panel.png)
-
 ---
 
 ## 🤝 Contribution & Support
 Jarvis est un projet communautaire pensé par des développeurs, pour des développeurs.
-- Des idées, des bugs ? Ouvrez une [Issue sur GitHub](#).
-- Vous voulez contribuer ? Les Pull Requests sont les bienvenues !
+- Des idées, des bugs ? Ouvrez une [Issue sur GitHub](https://github.com/maxoubvd/extension-VS-code/issues).
+- Vous voulez contribuer ? Les Pull Requests sont les bienvenues ! Voir [CONTRIBUTING.md](CONTRIBUTING.md).
+- Historique des changements : voir [CHANGELOG.md](CHANGELOG.md).
 
 <div align="center">
   <p>Créé pour la communauté VS Code.</p>

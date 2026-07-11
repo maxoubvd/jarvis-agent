@@ -338,7 +338,7 @@ export class AgentOrchestrator {
           if (asAny.name && asAny.arguments !== undefined) {
              let parsedArgs = asAny.arguments;
              if (typeof parsedArgs === 'string') {
-               try { parsedArgs = JSON.parse(parsedArgs); } catch {}
+               try { parsedArgs = JSON.parse(parsedArgs); } catch { /* keep raw string arg */ }
              }
              action = {
                thought: parsed.surroundingText || raw,
@@ -395,7 +395,7 @@ export class AgentOrchestrator {
       if (isNativeTool && nativeToolCalls) {
         for (const tc of nativeToolCalls) {
           let tcArgs = {};
-          try { tcArgs = JSON.parse(tc.function.arguments || '{}'); } catch {}
+          try { tcArgs = JSON.parse(tc.function.arguments || '{}'); } catch { /* fall back to empty args */ }
           toolsToExecute.push({ toolName: tc.function.name, args: tcArgs, id: tc.id });
         }
       } else {

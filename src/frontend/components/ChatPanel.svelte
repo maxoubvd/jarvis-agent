@@ -60,8 +60,6 @@
     currentModel?: string;
     onModelChange?: (model: string) => void;
     onPlanProceed?: () => void;
-    onNewChat?: () => void;
-    onResumeChat?: () => void;
     firstName?: string;
     todos?: TodoItem[];
   }
@@ -86,8 +84,6 @@
     currentModel = '',
     onModelChange = () => {},
     onPlanProceed = () => {},
-    onNewChat = () => {},
-    onResumeChat = () => {},
     firstName = '',
     todos = []
   }: Props = $props();
@@ -651,29 +647,6 @@
     background: var(--vscode-textCodeBlock-background, var(--vscode-editorWidget-background));
     padding: 0.05rem 0.3rem;
     border-radius: 0.25rem;
-  }
-
-  .empty-actions {
-    display: flex;
-    gap: 0.5rem;
-    margin-top: 1rem;
-  }
-
-  .empty-action-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    padding: 0.35rem 0.7rem;
-    font-size: 0.78rem;
-    color: var(--vscode-foreground);
-    background: var(--vscode-button-secondaryBackground, var(--vscode-editorWidget-background));
-    border: 1px solid var(--vscode-widget-border, transparent);
-    border-radius: 0.3rem;
-    cursor: pointer;
-  }
-
-  .empty-action-btn:hover {
-    background: var(--vscode-button-secondaryHoverBackground, var(--vscode-list-hoverBackground));
   }
 
   .messages {

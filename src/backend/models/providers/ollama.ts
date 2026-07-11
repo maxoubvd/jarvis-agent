@@ -103,7 +103,7 @@ export class OllamaProvider implements IModelProvider {
       const decoder = new TextDecoder();
       let buffer = '';
 
-      let accumulatedToolCalls: NativeToolCall[] = [];
+      const accumulatedToolCalls: NativeToolCall[] = [];
 
       for (;;) {
         const { done, value } = await reader.read();

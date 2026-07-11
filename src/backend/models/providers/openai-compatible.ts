@@ -122,7 +122,7 @@ export async function openaiCompatibleStream(
     const decoder = new TextDecoder();
     let buffer = '';
 
-    let accumulatedToolCalls: NativeToolCall[] = [];
+    const accumulatedToolCalls: NativeToolCall[] = [];
     let usage: ProviderUsage | undefined;
 
     for (;;) {

@@ -1679,7 +1679,7 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
 
     let result;
     const started = Date.now();
-    let inputTokens = estimateTokens(task);
+    const inputTokens = estimateTokens(task);
 
     try {
       const baseRegistry = await this.getToolRegistry();

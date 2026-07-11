@@ -17,4 +17,4 @@ Examples of unacceptable behavior include:
 * Publishing others' private information, such as a physical or email address, without their explicit permission
 
 ## Enforcement
-Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the community leaders responsible for enforcement. All complaints will be reviewed and investigated promptly and fairly.
+Instances of abusive, harassing, or otherwise unacceptable behavior may be reported by opening a private report via [GitHub's report abuse form](https://github.com/contact/report-abuse) on this repository, or by contacting the maintainer directly (see the profile linked from the repository). All complaints will be reviewed and investigated promptly and fairly.

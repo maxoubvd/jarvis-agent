@@ -1,13 +1,38 @@
 {
   "name": "jarvis-agent",
   "displayName": "Jarvis Agent",
-  "publisher": "your-publisher-name",
-  "description": "Extension VS Code Agentique - Votre ingénieur logiciel autonome",
+  "publisher": "maxoubvd",
+  "description": "Extension VS Code Agentique - Votre ingénieur logiciel autonome. Chat agentique multi-provider (Ollama, OpenRouter, OpenAI, Anthropic...), édition inline (Cmd+K), Auto-TDD, RAG local, agents spécialisés, checkpoints Git.",
   "version": "0.0.1",
   "type": "module",
   "main": "./dist/extension.js",
+  "icon": "media/jarvis-icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/maxoubvd/extension-VS-code.git"
+  },
+  "bugs": {
+    "url": "https://github.com/maxoubvd/extension-VS-code/issues"
+  },
+  "homepage": "https://github.com/maxoubvd/extension-VS-code#readme",
+  "keywords": [
+    "ai",
+    "agent",
+    "chat",
+    "copilot",
+    "ollama",
+    "openrouter",
+    "llm",
+    "autocomplete",
+    "rag",
+    "mcp"
+  ],
+  "galleryBanner": {
+    "color": "#1E1B2E",
+    "theme": "dark"
+  },
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.90.0"
   },
   "license": "MIT",
   "scripts": {
@@ -26,9 +51,6 @@
     "@modelcontextprotocol/sdk": "^1.0.0",
     "@xenova/transformers": "^2.0.1",
     "ignore": "^5.3.0",
-    "marked": "^12.0.0",
-    "prismjs": "^1.29.0",
-    "uuid": "^14.0.1",
     "web-tree-sitter": "^0.20.0"
   },
   "devDependencies": {
@@ -40,6 +62,8 @@
     "@types/node": "^20.0.0",
     "@types/prismjs": "^1.26.6",
     "@types/vscode": "^1.90.0",
+    "marked": "^12.0.0",
+    "prismjs": "^1.29.0",
     "@typescript-eslint/eslint-plugin": "^7.18.0",
     "@typescript-eslint/parser": "^7.18.0",
     "autoprefixer": "^10.5.2",
@@ -57,19 +81,13 @@
     "typescript": "^5.5.0",
     "vite": "^6.4.3",
     "vitest": "^4.1.9",
-    "vsce": "^1.25.1"
+    "@vscode/vsce": "^3.9.2"
   },
   "categories": [
     "Other"
   ],
   "activationEvents": [
-    "onStartupFinished",
-    "onView:jarvis.sidebarView",
-    "onCommand:jarvis.startChat",
-    "onCommand:jarvis.rollback",
-    "onCommand:jarvis.listCheckpoints",
-    "onCommand:jarvis.exportAnalytics",
-    "onCommand:jarvis.init"
+    "onStartupFinished"
   ],
   "contributes": {
     "viewsContainers": {

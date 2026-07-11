@@ -25,7 +25,11 @@ First off, thank you for considering contributing to Jarvis Agent! It's people l
 - Push your branch to your fork.
 - Open a Pull Request against the `main` branch.
 - Fill out the Pull Request template completely.
+- Add a line to `CHANGELOG.md` under `[Unreleased]` describing your change.
 - Wait for a maintainer to review your code.
+
+### 4. Screenshots & Demo Media
+`docs/media/` currently only contains a placeholder (`.gitkeep`) — the screenshots and demo clips referenced conceptually in `README.md` still need to be captured from a real Extension Development Host session (chat panel, Cmd+K inline edit, settings panel, onboarding screen). If you add one, reference it from `README.md` with a relative path (`docs/media/your-file.png`) and keep videos short (<15s, <10MB) so the repo stays lightweight.
 
 ## 🐛 Reporting Bugs
 If you find a bug, please use the **Bug Report** issue template and provide as much detail as possible, including VS Code version, OS, and any error logs from the Output panel.
