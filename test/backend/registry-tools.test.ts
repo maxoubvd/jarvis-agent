@@ -60,7 +60,7 @@ describe('single_find_and_replace', () => {
     ).rejects.toThrow(/not found/);
     await expect(
       tool('single_find_and_replace').execute({ path: 'a.ts', old_string: 'foo', new_string: 'x' })
-    ).rejects.toThrow(/2 fois/);
+    ).rejects.toThrow(/2 times/);
   });
 
   it('replace_all replaces every occurrence', async () => {
@@ -90,8 +90,8 @@ describe('grep_search', () => {
   });
 
   it('rejects invalid regexes and reports empty results', async () => {
-    await expect(tool('grep_search').execute({ pattern: '([' })).rejects.toThrow(/Regex invalide/);
-    expect(await tool('grep_search').execute({ pattern: 'nothing' })).toBe('(aucune correspondance)');
+    await expect(tool('grep_search').execute({ pattern: '([' })).rejects.toThrow(/Invalid regex/);
+    expect(await tool('grep_search').execute({ pattern: 'nothing' })).toBe('(no matches)');
   });
 });
 
@@ -142,6 +142,6 @@ describe('read_currently_open_file', () => {
 
   it('reports when no editor is open', async () => {
     (vscode.window as { activeTextEditor: unknown }).activeTextEditor = undefined;
-    expect(await tool('read_currently_open_file').execute({})).toContain('aucun fichier ouvert');
+    expect(await tool('read_currently_open_file').execute({})).toContain('no file open in the editor');
   });
 });

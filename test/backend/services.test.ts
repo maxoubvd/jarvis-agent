@@ -191,7 +191,7 @@ describe('Workflows (spec §5.2)', () => {
     const runner = new WorkflowRunner({ run: async () => ({}) } as never);
     const result = await runner.run('inconnu', 'x');
     expect(result.success).toBe(false);
-    expect(result.error).toContain('Workflow inconnu');
+    expect(result.error).toContain('Unknown workflow');
   });
 
   it('creates a checkpoint before running', async () => {

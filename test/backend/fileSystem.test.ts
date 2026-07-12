@@ -23,7 +23,7 @@ describe('FileSystem Tools', () => {
     it('should block path traversal', () => {
       expect(() =>
         assertPathWithinWorkspace('/test-workspace', '/etc/passwd')
-      ).toThrow('Access outside workspace forbidden');
+      ).toThrow('Access outside workspace is forbidden');
     });
   });
 

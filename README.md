@@ -1,15 +1,5 @@
 <div align="center">
-  <style>
-    .jarvis-logo {
-      border-radius: 16px;
-      transition: all 0.3s ease;
-    }
-    .jarvis-logo:hover {
-      transform: scale(1.05);
-      box-shadow: 0 0 20px rgba(0,0,0,0.2);
-    }
-  </style>
-  <img class="jarvis-logo" src="media/jarvis-icon.png" alt="Jarvis Agent Logo" width="128"/>
+  <img src="media/jarvis-icon.png" alt="Jarvis Agent Logo" width="128"/>
   <h1>Jarvis Agent</h1>
   <p><strong>Your autonomous software engineer, right inside VS Code.</strong></p>
 </div>
@@ -55,7 +45,7 @@ Thanks to the **Model Context Protocol (MCP)**, Jarvis can use external tools. C
 - **Folder-scoped rules**: scope a rule to a subfolder (`src/backend/**`) so it only applies to the relevant files.
 - **Persistent task checklist** above the chat, auto-filled for `/workflow` runs.
 - **Auto-open** of the file being edited, with green/red decorations already in place.
-- **Inline autocomplete (Tab)** Copilot/Continue-style — disabled by default, enable it in Settings > Optimization.
+- **Inline autocomplete (Tab)** — ghost-text suggestions as you type; disabled by default, enable it in Settings > Optimization.
 
 ---
 
@@ -68,7 +58,7 @@ Thanks to the **Model Context Protocol (MCP)**, Jarvis can use external tools. C
 ### Provider Compatibility
 Jarvis is **agnostic**. You choose the brain behind your agent:
 - **Local (Free & Private)**: Connect **Ollama** or **LM Studio** in one click. We recommend recent models like `qwen2.5-coder:7b` or `llama3:8b`.
-- **Cloud (Ultra Performant)**: Use the APIs of **OpenRouter**, **OpenAI**, **Anthropic**, or **HuggingFace** to take advantage of GPT-4o or Claude 3.5 Sonnet. For excellent performance completely free with no latency, we recommend **Mistral AI** models directly from the Mistral provider. Create a free API key [here](https://console.mistral.ai/).
+- **Cloud (Ultra Performant)**: Connect **OpenRouter**, **Mistral AI**, or any OpenAI-compatible API to use state-of-the-art models. For excellent performance completely free with no latency, we recommend **Mistral AI** models directly from the Mistral provider. Create a free API key [here](https://console.mistral.ai/).
 
 ---
 
@@ -86,8 +76,8 @@ Jarvis is **agnostic**. You choose the brain behind your agent:
 - `/init`: Initializes git if needed and generates `JARVIS.md` from a project analysis.
 - `/rollback`: Opens the "Checkpoints" list to fully undo Jarvis's impact on your project.
 
-### **"Kill Switch"** Button
-If Jarvis goes off the rails or a command execution loops forever, use the stop button (Square) in the chat panel to stop the agent immediately and cut the network connection.
+### Stop Button
+If a task is taking longer than expected or a command is stuck, use the stop button (Square) in the chat panel to interrupt the agent and cancel the current request.
 
 ---
 

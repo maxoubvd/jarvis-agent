@@ -1,6 +1,7 @@
 .vscode/**
 .github/**
 .claude/**
+patches/**
 src/**
 test/**
 docs/**
@@ -8,6 +9,7 @@ jarvis/**
 **/*.test.ts
 **/*.map
 .eslintrc.cjs
+.jarvisignore
 .continuerc.json
 .env
 .env.example
@@ -15,6 +17,8 @@ jarvis/**
 .gitattributes
 basic.test.ts
 copy-static.js
+build-extension.mjs
+strip-vendor-assets.mjs
 postcss.config.js
 svelte.config.js
 tailwind.config.js
@@ -26,3 +30,27 @@ CODE_OF_CONDUCT.md
 CLAUDE.md
 media/jarvis-icon-source.svg
 **/.DS_Store
+
+# Extension host is bundled by esbuild (build-extension.mjs) into a single
+# dist/extension.js — everything pure-JS gets inlined there. Only packages with
+# native binaries or runtime-relative asset loading (that can't be bundled) need
+# to ship as real node_modules files, so allowlist just those.
+# IMPORTANT: patterns must use `/**` — a single `*` does not cross directory
+# separators, so `node_modules/*` matches nothing nested and ships the whole tree
+# (incl. onnxruntime-node's unsigned native .dll/.node binaries, which the
+# Marketplace upload scanner flags as "suspicious content").
+node_modules/**
+!node_modules/@xenova/**
+!node_modules/onnxruntime-web/**
+!node_modules/onnxruntime-common/**
+!node_modules/web-tree-sitter/**
+# onnxruntime-node is never loaded at runtime: @xenova/transformers is patched
+# (patches/@xenova+transformers+2.0.1.patch) to always use the WASM backend, whose
+# Node entry (onnxruntime-web/dist/ort.node.min.mjs) only imports onnxruntime-common.
+# NOTE: vsce does not apply per-subpath excludes for packages it has already decided
+# to include in full -- .cache/ and @xenova/transformers/dist/ are instead physically
+# removed by strip-vendor-assets.mjs, run as part of the `package` script.
+
+# README-only demo video: the Marketplace strips <video> tags anyway, no reason
+# to ship 10+ MB in the vsix. (media/Jarvis Avatar Animation.mp4 stays: used by the webview.)
+media/user_guide_jarvis.mp4

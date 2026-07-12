@@ -1,9 +1,28 @@
 import Parser from 'web-tree-sitter';
 import * as path from 'path';
+import * as fsSync from 'fs';
 import { fileURLToPath } from 'url';
 
 // ESM compilation (Node16): `__dirname` doesn't exist natively, it must be derived from `import.meta.url`.
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+/**
+ * Walks up from `startDir` until a `media/` directory is found. Avoids hardcoding a
+ * fixed relative depth, which would otherwise need to differ between running against
+ * unbundled source (tests, `src/backend/services/context/`) and the esbuild-bundled
+ * production output (`dist/extension.js`, one level above the package root).
+ */
+function findMediaDir(startDir: string): string {
+  let dir = startDir;
+  for (let i = 0; i < 8; i++) {
+    const candidate = path.join(dir, 'media');
+    if (fsSync.existsSync(candidate)) return candidate;
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  throw new Error(`Could not locate media/ directory from ${startDir}`);
+}
 
 export type PruneLevel = 'none' | 'function' | 'class' | 'module';
 
@@ -46,8 +65,7 @@ async function ensureParser(extension: string): Promise<Parser | null> {
 
     let lang = languageCache.get(grammarFile);
     if (!lang) {
-      // From dist/backend/services/context/pruner.js: 4 levels up to reach the package root.
-      const langWasmPath = path.join(__dirname, '..', '..', '..', '..', 'media', grammarFile);
+      const langWasmPath = path.join(findMediaDir(__dirname), grammarFile);
       lang = await Parser.Language.load(langWasmPath);
       languageCache.set(grammarFile, lang);
     }

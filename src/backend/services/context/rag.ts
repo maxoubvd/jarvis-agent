@@ -1,4 +1,14 @@
-import { pipeline, FeatureExtractionPipeline } from '@xenova/transformers';
+import { pipeline, FeatureExtractionPipeline, env } from '@xenova/transformers';
+import { createRequire } from 'module';
+import * as path from 'path';
+import { pathToFileURL } from 'url';
+
+// @xenova/transformers defaults `wasmPaths` to a raw filesystem path (fine on POSIX, but
+// Node's ESM loader rejects a bare Windows path like `C:\...` -- it parses the drive letter
+// as a URL scheme and throws ERR_UNSUPPORTED_ESM_URL_SCHEME). Point it at onnxruntime-web's
+// own `dist/` (where its .wasm files actually live) via a proper `file://` URL instead.
+const onnxRuntimeWebDir = path.dirname(createRequire(import.meta.url).resolve('onnxruntime-web'));
+env.backends.onnx.wasm.wasmPaths = pathToFileURL(onnxRuntimeWebDir + path.sep).href;
 
 export interface RagChunk {
   path: string;
