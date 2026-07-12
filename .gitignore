@@ -12,5 +12,5 @@ yarn-error.log*
 # Internal testing and AI config
 .claude/
 .continuerc.json
-CLAUDE.md
+.CLAUDE.md
 jarvis/
