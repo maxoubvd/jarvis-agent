@@ -1,6 +1,6 @@
 {
   "name": "jarvis-agent",
-  "displayName": "Jarvis Agent",
+  "displayName": "Jarvis Code Agent",
   "publisher": "MaximeBendavid",
   "description": "Agentic VS Code extension - Your autonomous software engineer. Multi-provider agentic chat (Ollama, OpenRouter, OpenAI, Anthropic...), inline editing (Cmd+K), Auto-TDD, local RAG, specialized agents, Git checkpoints.",
   "version": "1.0.0",
