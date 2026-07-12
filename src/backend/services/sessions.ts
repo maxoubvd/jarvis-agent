@@ -5,16 +5,16 @@ import * as crypto from 'crypto';
 import type { ChatMessage } from '../models/abstract.js';
 
 /**
- * Sessions de discussion persistées (`/new`, `/resume`) : les 5 dernières
- * discussions sont conservées dans `.vscode/jarvis-sessions.json` (même
- * pattern qu'analytics.ts). La session courante (index 0) est un miroir de
- * l'historique du chat, réécrite après chaque échange complet.
- * Pas d'import vscode : le chemin du fichier est injecté (testable).
+ * Persisted chat sessions (`/new`, `/resume`): the 5 most recent
+ * conversations are stored in `.vscode/jarvis-sessions.json` (same
+ * pattern as analytics.ts). The current session (index 0) is a mirror of
+ * the chat history, rewritten after each complete exchange.
+ * No vscode import: the file path is injected (testable).
  */
 
 export interface DiscussionSession {
   id: string;
-  /** Premier message utilisateur, tronqué — affiché dans le picker de /resume. */
+  /** First user message, truncated — shown in the /resume picker. */
   title: string;
   createdAt: string;
   updatedAt: string;
@@ -30,15 +30,15 @@ export interface SessionSummary {
 
 interface SessionsFile {
   version: '1.0';
-  /** Index 0 = session courante, puis de la plus récente à la plus ancienne. */
+  /** Index 0 = current session, then most-recent to oldest. */
   sessions: DiscussionSession[];
 }
 
 export const MAX_SESSIONS = 5;
 const TITLE_MAX_CHARS = 60;
-/** Borne la taille du JSON : chaque message est tronqué à la sauvegarde. */
+/** Caps the JSON size: each message is truncated on save. */
 const MAX_MESSAGE_CHARS = 8_000;
-/** Borne le contexte injecté au /resume (~1k tokens). */
+/** Caps the context injected at /resume (~1k tokens). */
 const MAX_CONTEXT_CHARS = 4_000;
 
 function newSession(title = ''): DiscussionSession {
@@ -62,7 +62,7 @@ export class SessionStore {
         }
       }
     } catch {
-      // JSON corrompu/illisible → store neuf
+      // corrupted/unreadable JSON — start fresh
     }
     return { version: '1.0', sessions: [newSession()] };
   }
@@ -72,7 +72,7 @@ export class SessionStore {
       await fs.mkdir(path.dirname(this.filePath), { recursive: true });
       await fs.writeFile(this.filePath, JSON.stringify(this.data, null, 2), 'utf-8');
     } catch {
-      // Non-fatal — la persistance ne doit jamais casser le chat
+      // Non-fatal — persistence must never break the chat
     }
   }
 
@@ -80,7 +80,7 @@ export class SessionStore {
     return this.data.sessions[0];
   }
 
-  /** Réécrit la session courante depuis l'historique du chat, puis persiste. */
+  /** Rewrites the current session from the chat history, then persists. */
   public updateCurrent(messages: ChatMessage[]): void {
     const current = this.getCurrent();
     current.messages = messages.map(m => ({
@@ -95,7 +95,7 @@ export class SessionStore {
     void this.save();
   }
 
-  /** Démarre une nouvelle session courante (réutilise la courante si vide). */
+  /** Starts a new current session (reuses the current one if empty). */
   public startNew(title?: string): DiscussionSession {
     const current = this.getCurrent();
     if (current.messages.length === 0) {
@@ -109,7 +109,7 @@ export class SessionStore {
     return session;
   }
 
-  /** Discussions précédentes non vides (hors courante), plus récentes d'abord. */
+  /** Previous non-empty conversations (excluding current), most recent first. */
   public list(): SessionSummary[] {
     return this.data.sessions
       .slice(1)
@@ -128,9 +128,9 @@ export class SessionStore {
 }
 
 /**
- * Condense une discussion passée en UN message system injecté dans l'historique
- * au /resume : un seul slot dans la fenêtre agent (slice(-10)), pas de problème
- * d'alternance de rôles, taille bornée (la fin du transcript est conservée).
+ * Condenses a past conversation into ONE system message injected into the history
+ * at /resume: a single slot in the agent window (slice(-10)), no role-alternation
+ * issue, bounded size (the end of the transcript is kept).
  */
 export function buildResumeContext(session: DiscussionSession): ChatMessage {
   const turns = session.messages

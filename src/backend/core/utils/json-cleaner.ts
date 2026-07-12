@@ -1,18 +1,18 @@
 /**
- * Nettoyeur JSON multi-étapes (spec §8.2 — "Validation des Réponses JSON").
- * Les petits modèles locaux ne respectent pas toujours le format JSON strict :
- * balises <thinking>, fences Markdown, virgules traînantes, texte autour, etc.
+ * Multi-step JSON cleaner (spec §8.2 — "JSON Response Validation").
+ * Small local models don't always respect strict JSON format:
+ * <thinking> tags, Markdown fences, trailing commas, surrounding text, etc.
  */
 
 export interface JsonExtractionResult<T = unknown> {
   ok: boolean;
   value?: T;
-  /** Texte hors JSON (ex: chaîne de pensée) récupéré pendant le nettoyage. */
+  /** Non-JSON surrounding text (e.g. chain-of-thought) recovered during cleanup. */
   surroundingText?: string;
   error?: string;
 }
 
-/** Retire les blocs <thinking>...</thinking> et les renvoie séparément. */
+/** Strips <thinking>...</thinking> blocks and returns them separately. */
 export function stripThinking(raw: string): { text: string; thinking: string } {
   let thinking = '';
   const text = raw.replace(/<thinking>([\s\S]*?)<\/thinking>/gi, (_m, inner: string) => {
@@ -22,13 +22,13 @@ export function stripThinking(raw: string): { text: string; thinking: string } {
   return { text: text.trim(), thinking };
 }
 
-/** Retire les fences Markdown ```json ... ``` autour d'un bloc. */
+/** Strips Markdown ```json ... ``` fences around a block. */
 function stripCodeFences(raw: string): string {
   const fenceMatch = raw.match(/```(?:json|javascript|js)?\s*\n?([\s\S]*?)```/);
   return fenceMatch ? fenceMatch[1].trim() : raw;
 }
 
-/** Trouve la première structure {...} ou [...] équilibrée dans le texte. */
+/** Finds the first balanced {...} or [...] structure in the text. */
 export function findBalancedJson(text: string): string | null {
   for (let i = 0; i < text.length; i++) {
     const open = text[i];
@@ -65,7 +65,7 @@ export function findBalancedJson(text: string): string | null {
   return null;
 }
 
-/** Corrections courantes : virgules traînantes, guillemets typographiques. */
+/** Common fixes: trailing commas, typographic quotes. */
 function repairCommonIssues(json: string): string {
   return json
     .replace(/[“”]/g, '"')
@@ -74,8 +74,8 @@ function repairCommonIssues(json: string): string {
 }
 
 /**
- * Extraction robuste : essaie le parse direct, puis fence Markdown,
- * puis structure équilibrée, puis réparations.
+ * Robust extraction: tries direct parse, then Markdown fence,
+ * then balanced structure, then repairs.
  */
 export function extractJson<T = unknown>(raw: string): JsonExtractionResult<T> {
   const { text, thinking } = stripThinking(raw);
@@ -101,7 +101,7 @@ export function extractJson<T = unknown>(raw: string): JsonExtractionResult<T> {
           return { ok: true, value, surroundingText: surrounding || undefined };
         }
       } catch {
-        // essai suivant
+        // next attempt
       }
     }
   }
@@ -109,6 +109,6 @@ export function extractJson<T = unknown>(raw: string): JsonExtractionResult<T> {
   return {
     ok: false,
     surroundingText: (text + (thinking ? `\n${thinking}` : '')).trim() || undefined,
-    error: 'Aucun JSON valide trouvé dans la réponse'
+    error: 'No valid JSON found in the response'
   };
 }

@@ -1,4 +1,4 @@
-/** Conversion d'un pattern glob simple (`*`, `**`, `?`) en RegExp ancrée, insensible à la casse. */
+/** Converts a simple glob pattern (`*`, `**`, `?`) into an anchored, case-insensitive RegExp. */
 export function globToRegex(pattern: string): RegExp {
   const regexStr = pattern
     .replace(/[.+^${}()|[\]\\]/g, '\\$&')

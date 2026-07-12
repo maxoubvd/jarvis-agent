@@ -2,12 +2,12 @@ import type { JarvisConfig, RuleItem } from '../config/config-manager.js';
 import { globToRegex } from '../core/utils/glob.js';
 
 /**
- * Rules utilisateur activées depuis la config (onglet Settings).
- * `activeFilePath` (chemin relatif au workspace) permet de filtrer les rules
- * scopées à un dossier (`scope`, glob) : une rule scopée ne s'applique que si le
- * fichier actif la matche ; une rule non scopée s'applique toujours. Sans
- * `activeFilePath` (pas de fichier actif — ex. run de workflow), seules les
- * rules non scopées s'appliquent.
+ * User rules enabled from the config (Settings tab).
+ * `activeFilePath` (path relative to the workspace) filters rules
+ * scoped to a folder (`scope`, glob): a scoped rule only applies if the
+ * active file matches it; an unscoped rule always applies. Without
+ * `activeFilePath` (no active file — e.g. workflow run), only
+ * unscoped rules apply.
  */
 export function loadRules(config: JarvisConfig, activeFilePath?: string | null): RuleItem[] {
   return (config.rules ?? []).filter(r => {
@@ -17,9 +17,9 @@ export function loadRules(config: JarvisConfig, activeFilePath?: string | null):
   });
 }
 
-/** Concatène les rules en un bloc injectable dans les prompts système. */
+/** Concatenates rules into a block injectable into system prompts. */
 export function renderRules(rules: RuleItem[]): string {
   if (rules.length === 0) return '';
   const body = rules.map(r => `- ${r.content.trim()}`).join('\n');
-  return `USER RULES (à toujours respecter):\n${body}`;
+  return `USER RULES (always follow these):\n${body}`;
 }

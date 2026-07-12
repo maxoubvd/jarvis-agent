@@ -6,11 +6,11 @@ export interface ApprovalResult {
   granted: boolean;
   reason: string;
   sessionAllowed?: boolean;
-  /** Instructions de l'utilisateur données lors d'un refus (renvoyées à l'agent). */
+  /** User instructions given on a denial (sent back to the agent). */
   feedback?: string;
 }
 
-/** Demande d'approbation affichée dans le chat (façon Claude Code / Antigravity). */
+/** Approval request displayed in the chat (Claude Code / Antigravity style). */
 export interface ApprovalPromptRequest {
   id: string;
   actionType: string;
@@ -21,13 +21,13 @@ export interface ApprovalPromptRequest {
 
 export interface ApprovalPromptDecision {
   decision: 'allow' | 'allow-session' | 'deny';
-  /** Optionnel avec `deny` : ce que l'agent doit faire à la place. */
+  /** Optional with `deny`: what the agent should do instead. */
   feedback?: string;
 }
 
 /**
- * Prompt d'approbation délégué (carte dans le webview). Retourner `null`
- * pour retomber sur la boîte de dialogue native VS Code.
+ * Delegated approval prompt (card in the webview). Return `null`
+ * to fall back to the native VS Code dialog.
  */
 export type ApprovalPromptHandler = (request: ApprovalPromptRequest) => Promise<ApprovalPromptDecision | null>;
 
@@ -39,7 +39,7 @@ const DANGEROUS_PATTERNS = [
   'DROP TABLE', 'DELETE FROM', 'TRUNCATE'
 ];
 
-/** Correspond à `rm` en tant que commande isolée (ex. "rm x", "cd a && rm -rf b"), pas une sous-chaîne de "confirm"/"germ"/"term". */
+/** Matches `rm` as a standalone command (e.g. "rm x", "cd a && rm -rf b"), not a substring of "confirm"/"germ"/"term". */
 const RM_COMMAND_PATTERN = /(^|[\s;&|])rm(\s|$)/;
 
 const SAFE_PATTERNS = [
@@ -59,7 +59,7 @@ export class HITLManager {
     this.mode = mode;
   }
 
-  /** Délègue les confirmations au chat du webview (null = dialogue natif). */
+  /** Delegates confirmations to the webview chat (null = native dialog). */
   public setPromptHandler(handler: ApprovalPromptHandler | null): void {
     this.promptHandler = handler;
   }
@@ -73,9 +73,9 @@ export class HITLManager {
   }
 
   /**
-   * Confirmation inconditionnelle (politique d'outil « ask first ») : demande
-   * toujours à l'utilisateur, même en mode free — seule une autorisation de
-   * session déjà accordée court-circuite le prompt.
+   * Unconditional confirmation ("ask first" tool policy): always asks the
+   * user, even in free mode — only an already-granted session allowance
+   * short-circuits the prompt.
    */
   public async askApproval(actionType: string, params: Record<string, unknown>): Promise<ApprovalResult> {
     const actionKey = this.getActionKey(actionType, params);
@@ -154,7 +154,7 @@ export class HITLManager {
       .map(([k, v]) => `${k}: ${v}`)
       .join('\n');
 
-    // Carte d'approbation dans le chat si un handler est branché.
+    // Approval card in the chat if a handler is wired up.
     if (this.promptHandler) {
       const decision = await this.promptHandler({
         id: `approval-${++this.promptCounter}`,

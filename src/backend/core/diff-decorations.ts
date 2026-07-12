@@ -2,11 +2,11 @@ import * as vscode from 'vscode';
 import type { ChangeTracker } from '../services/change-tracker.js';
 
 /**
- * Colore directement dans l'éditeur les modifications IA en attente de revue
- * (façon Cursor / Antigravity) : fond vert sur les lignes ajoutées, et rappel
- * rouge en « ghost text » des lignes supprimées (qui n'existent plus dans le
- * fichier déjà écrit sur disque). Se rafraîchit via {@link refresh} sur les
- * évolutions du ChangeTracker et les changements d'éditeur actif.
+ * Colors AI changes pending review directly in the editor (Cursor / Antigravity
+ * style): green background on added lines, and a red "ghost text" reminder
+ * for removed lines (which no longer exist in the file already written to
+ * disk). Refreshes via {@link refresh} on ChangeTracker updates and active
+ * editor changes.
  */
 export class DiffDecorationProvider {
   private readonly added: vscode.TextEditorDecorationType;
@@ -30,7 +30,7 @@ export class DiffDecorationProvider {
     this.removed.dispose();
   }
 
-  /** Ré-applique les décorations sur tous les éditeurs visibles. */
+  /** Re-applies decorations to all visible editors. */
   public refresh(): void {
     for (const editor of vscode.window.visibleTextEditors) this.apply(editor);
   }
@@ -58,16 +58,16 @@ export class DiffDecorationProvider {
     const removedDecos: vscode.DecorationOptions[] = [];
 
     for (const hunk of view.hunks) {
-      // Lignes ajoutées : présentes dans le document (contenu « après »).
-      // `afterStart` est 1-indexé → première ligne 0-indexée = afterStart - 1.
+      // Added lines: present in the document ("after" content).
+      // `afterStart` is 1-indexed → first 0-indexed line = afterStart - 1.
       const start = Math.max(0, hunk.afterStart - 1);
       for (let i = 0; i < hunk.afterLines.length; i++) {
         const line = start + i;
         if (line < lineCount) addedRanges.push(new vscode.Range(line, 0, line, 0));
       }
 
-      // Lignes supprimées : absentes du document → rappel en rouge (ghost text)
-      // ancré sur la ligne du hunk.
+      // Removed lines: absent from the document → red reminder (ghost text)
+      // anchored on the hunk's line.
       if (hunk.beforeLines.length > 0) {
         const anchor = Math.min(start, Math.max(0, lineCount - 1));
         const text = hunk.beforeLines.map(l => `− ${l}`).join('    ');

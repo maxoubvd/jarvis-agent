@@ -6,20 +6,20 @@ export interface JarvisInlineCompletionProviderOptions {
   getModel: () => IModelProvider | null;
   isEnabled: () => boolean;
   isSandboxed: (uri: vscode.Uri) => boolean;
-  /** Délai d'inactivité avant de déclencher une requête (défaut 350ms). */
+  /** Idle delay before triggering a request (default 350ms). */
   debounceMs?: number;
-  /** Lignes de contexte avant/après le curseur envoyées au modèle (défaut 60/20). */
+  /** Lines of context before/after the cursor sent to the model (default 60/20). */
   maxPrefixLines?: number;
   maxSuffixLines?: number;
 }
 
-/** Étiquette visuelle affichée juste après le ghost text — jamais insérée (rendue via decoration, pas via insertText). */
+/** Visual label shown right after the ghost text — never inserted (rendered via decoration, not insertText). */
 const SUGGESTION_LABEL = '  (Suggestion Jarvis)';
 
 /**
- * Fournit le ghost text (Tab) façon Continue.dev : un seul appel non-agentique
- * (`IModelProvider.sendPrompt`, pas `AgentOrchestrator`) pour rester rapide, avec
- * debounce + annulation via `CancellationToken` à chaque nouvelle frappe.
+ * Provides ghost text (Tab) Continue.dev-style: a single non-agentic call
+ * (`IModelProvider.sendPrompt`, not `AgentOrchestrator`) to stay fast, with
+ * debounce + cancellation via `CancellationToken` on every new keystroke.
  */
 export class JarvisInlineCompletionProvider implements vscode.InlineCompletionItemProvider, vscode.Disposable {
   private readonly decorationType: vscode.TextEditorDecorationType;
@@ -34,9 +34,9 @@ export class JarvisInlineCompletionProvider implements vscode.InlineCompletionIt
         fontStyle: 'italic'
       }
     });
-    // Aucun évènement "ghost text affiché/masqué" n'existe côté VS Code : on retire
-    // l'étiquette dès que le curseur/document/éditeur bouge, et on la (re)pose
-    // uniquement quand une nouvelle suggestion est effectivement rendue.
+    // No "ghost text shown/hidden" event exists on the VS Code side: we remove
+    // the label as soon as the cursor/document/editor moves, and (re)apply it
+    // only once a new suggestion is actually rendered.
     this.subscriptions = [
       vscode.window.onDidChangeTextEditorSelection(() => this.clearDecoration()),
       vscode.window.onDidChangeActiveTextEditor(() => this.clearDecoration()),
@@ -109,7 +109,7 @@ export class JarvisInlineCompletionProvider implements vscode.InlineCompletionIt
   }
 }
 
-/** Résout `true` (annulé) dès `token.onCancellationRequested`, sinon `false` après `ms`. */
+/** Resolves `true` (cancelled) as soon as `token.onCancellationRequested` fires, otherwise `false` after `ms`. */
 function debounce(ms: number, token: vscode.CancellationToken): Promise<boolean> {
   return new Promise(resolve => {
     const timer = setTimeout(() => resolve(false), ms);

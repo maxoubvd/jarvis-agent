@@ -1,14 +1,14 @@
 import type { JarvisConfig, PromptItem } from '../config/config-manager.js';
 
-/** Commandes slash du chat qui ne peuvent pas être masquées par un prompt. */
+/** Chat slash commands that cannot be shadowed by a prompt. */
 export const RESERVED_SLASH_COMMANDS = new Set(['tdd', 'workflow', 'agent', 'new', 'resume', 'init']);
 
-/** Nom canonique d'un prompt : sans `/` initial, insensible à la casse. */
+/** Canonical prompt name: no leading `/`, case-insensitive. */
 export function normalizePromptName(name: string): string {
   return name.trim().replace(/^\//, '').toLowerCase();
 }
 
-/** Prompts utilisables : nommés, non vides, et ne masquant pas une commande réservée. */
+/** Usable prompts: named, non-empty, and not shadowing a reserved command. */
 export function loadPrompts(config: JarvisConfig): PromptItem[] {
   return (config.prompts ?? []).filter(p => {
     const name = normalizePromptName(p.name ?? '');
@@ -17,9 +17,9 @@ export function loadPrompts(config: JarvisConfig): PromptItem[] {
 }
 
 /**
- * Développe `/nom args…` en `<contenu du prompt>\n\n<args>`.
- * Retourne `null` si le texte n'invoque aucun prompt enregistré (le routage
- * normal du chat s'applique alors).
+ * Expands `/name args…` into `<prompt content>\n\n<args>`.
+ * Returns `null` if the text does not invoke any registered prompt
+ * (normal chat routing applies in that case).
  */
 export function expandPrompt(text: string, prompts: PromptItem[]): string | null {
   const match = text.match(/^\/(\S+)\s*([\s\S]*)$/);

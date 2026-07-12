@@ -14,7 +14,7 @@
     onChange(next);
   }
 
-  /** Cartes dépliées, indexées par position (l'id est éditable). */
+  /** Expanded cards, indexed by position (the id is editable). */
   let expanded = $state<Record<number, boolean>>({});
 
   function addWorkflow() {
@@ -31,7 +31,7 @@
   }
 
   function removeWorkflow(index: number) {
-    // Les index changent après suppression — on replie tout pour rester cohérent.
+    // Indexes shift after deletion — collapse everything to stay consistent.
     expanded = {};
     update(items.filter((_, i) => i !== index));
   }
@@ -67,7 +67,7 @@
   }
 
   function resetToDefaults() {
-    // snapshot d'abord : structuredClone ne sait pas cloner un proxy $state.
+    // Snapshot first: structuredClone can't clone a $state proxy.
     update(structuredClone($state.snapshot(defaults)) as Workflow[]);
   }
 

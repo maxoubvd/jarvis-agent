@@ -1,302 +1,301 @@
-# Spécifications Fonctionnelles et Techniques
+# Functional and Technical Specification
 
-Projet : Extension VS Code "Agentique" (Nom de code : Jarvis / Jarvis-Agent)
+Project: "Agentic" VS Code Extension (Codename: Jarvis / Jarvis-Agent)
 
-## 1. Vision et Objectifs
+## 1. Vision and Goals
 
-**Description** : Une extension VS Code de pointe agissant comme un ingénieur logiciel autonome. Elle combine la rapidité et la confidentialité des modèles locaux (Ollama) avec la puissance des modèles cloud (OpenRouter), le tout orchestré par le Model Context Protocol (MCP).
+**Description**: A state-of-the-art VS Code extension acting as an autonomous software engineer. It combines the speed and privacy of local models (Ollama) with the power of cloud models (OpenRouter), all orchestrated by the Model Context Protocol (MCP).
 
-**Inspirations** : Continue.dev, Claude Code, Antigravity, Mistral Vibe, Codex.
+**Inspirations**: Continue.dev, Claude Code, Antigravity, Mistral Vibe, Codex.
 
-**Objectif Principal** : Réduire drastiquement le temps de création, de refactoring et de débogage de projets complets en offrant une interface fluide, un contexte parfait, et une automatisation poussée.
+**Main Goal**: Drastically reduce the time needed to create, refactor, and debug entire projects by offering a fluid interface, perfect context, and deep automation.
 
-**Philosophie** :
-- Contrôle total de l'utilisateur (transparence sur chaque action)
-- Thématique native VS Code (intégration seamless)
-- Sécurité "local-first" (données et traitement en local par défaut)
-- Automatisation avec retour d'expérience (apprentissage des préférences utilisateur)
+**Philosophy**:
+- Total user control (transparency on every action)
+- Native VS Code theming (seamless integration)
+- "Local-first" security (data and processing local by default)
+- Automation with feedback (learning user preferences)
 
-**Public Cible** : Développeurs full-stack, architectes logiciels, équipes DevOps, et toute personne cherchant à accélérer son workflow de développement.
+**Target Audience**: Full-stack developers, software architects, DevOps teams, and anyone looking to speed up their development workflow.
 
-## 2. Interface Utilisateur (Frontend / Webview)
+## 2. User Interface (Frontend / Webview)
 
-**Stack Technique** :
-- **Framework** : Svelte 4.x (pour sa réactivité et sa légèreté)
-- **Bundler** : Vite 5.x (build rapide et HMR)
-- **Styling** : Tailwind CSS 4.x (avec thème VS Code natif)
-- **State Management** : Svelte Stores (pour l'état global de l'extension)
+**Technical Stack**:
+- **Framework**: Svelte 4.x (for its reactivity and lightness)
+- **Bundler**: Vite 5.x (fast build and HMR)
+- **Styling**: Tailwind CSS 4.x (with native VS Code theme)
+- **State Management**: Svelte Stores (for the extension's global state)
 
-### 2.1 Composants Principaux
+### 2.1 Main Components
 
-#### Panneau Latéral (Sidebar)
-- **Chat Markdown** :
-  - Support complet du Markdown (via `marked.js` ou `svelte-markdown`)
-  - Syntax highlighting pour le code (via `prism.js` ou `shiki`)
-  - Copie de code en un clic
-  - Références aux fichiers/lines (liens cliquables pour ouvrir dans l'éditeur)
-- **Chaîne de pensée (<thinking>)** :
-  - Affichage conditionnel (option désactivable)
-  - Style visuel distinct (fond gris clair, police monospace)
-  - Animations de streaming pour les pensées en temps réel
-- **Système de Badges** :
-  - Badges de statut (✅ Succès, ❌ Échec, ⚠️ Avertissement)
-  - Badges de type (📄 Fichier, 🔧 Outil, 🧠 IA, ⏱️ Temps)
-  - Badges de priorité (Haute/Moyenne/Basse)
+#### Sidebar Panel
+- **Markdown Chat**:
+  - Full Markdown support (via `marked.js` or `svelte-markdown`)
+  - Syntax highlighting for code (via `prism.js` or `shiki`)
+  - One-click code copy
+  - File/line references (clickable links to open in the editor)
+- **Chain of thought (<thinking>)**:
+  - Conditional display (can be disabled)
+  - Distinct visual style (light gray background, monospace font)
+  - Streaming animations for real-time thoughts
+- **Badge System**:
+  - Status badges (✅ Success, ❌ Failure, ⚠️ Warning)
+  - Type badges (📄 File, 🔧 Tool, 🧠 AI, ⏱️ Time)
+  - Priority badges (High/Medium/Low)
 
-#### Indicateur de Jetons (Token Jauge)
-- **Affichage en temps réel** dans la barre de statut VS Code
-- **Détails** :
-  - Tokens utilisés dans la session courante
-  - Tokens restants avant la limite du modèle
-  - Répartition par type (input/output)
-  - Historique des 5 dernières requêtes
-- **Seuils visuels** :
-  - Vert : < 50% de la limite
-  - Orange : 50-80% de la limite
-  - Rouge : > 80% de la limite
+#### Token Gauge
+- **Real-time display** in the VS Code status bar
+- **Details**:
+  - Tokens used in the current session
+  - Tokens remaining before the model limit
+  - Breakdown by type (input/output)
+  - History of the last 5 requests
+- **Visual thresholds**:
+  - Green: < 50% of the limit
+  - Orange: 50-80% of the limit
+  - Red: > 80% of the limit
 
-## 3. Cœur IA et Routage (Backend)
+## 3. AI Core and Routing (Backend)
 
-**Stack Technique** :
-- **Runtime** : Node.js 20.x (LTS)
-- **Environnement** : Extension Host VS Code (processus séparé)
-- **API** : VS Code Extension API
-- **Gestion des dépendances** : npm/yarn/pnpm
+**Technical Stack**:
+- **Runtime**: Node.js 20.x (LTS)
+- **Environment**: VS Code Extension Host (separate process)
+- **API**: VS Code Extension API
+- **Dependency management**: npm/yarn/pnpm
 
-### 3.1. Configuration des Modèles
+### 3.1. Model Configuration
 
-**Support Multi-Providers** :
-- **Abstraction via interface `IModelProvider`** pour faciliter l'ajout de nouveaux providers
-- **Configuration dynamique** via `jarvis-config.json`
+**Multi-Provider Support**:
+- **Abstraction via the `IModelProvider` interface** to make adding new providers easier
+- **Dynamic configuration** via `jarvis-config.json`
 
-**Providers Supportés** :
+**Supported Providers**:
 
-| Provider | Type | Modèles Pré-configurés | API Key Requise |
+| Provider | Type | Pre-configured Models | API Key Required |
 |----------|------|------------------------|-----------------|
-| Ollama | Local | qwen2.5-coder:7b, mistral-coder:7b, deepseek-coder:6.7b | ❌ Non |
-| LM Studio | Local | tout modèle chargé localement | ❌ Non |
-| OpenRouter | Cloud | deepseek-coder-v3, gpt-4o, claude-3-5-sonnet | ✅ Oui |
-| Mistral API | Cloud | mistral-large, codestral | ✅ Oui |
-| OpenAI / Anthropic / Gemini / SambaNova / HuggingFace | Cloud | via wrapper OpenAI-compatible générique | ✅ Oui |
+| Ollama | Local | qwen2.5-coder:7b, mistral-coder:7b, deepseek-coder:6.7b | ❌ No |
+| LM Studio | Local | any locally loaded model | ❌ No |
+| OpenRouter | Cloud | deepseek-coder-v3, gpt-4o, claude-3-5-sonnet | ✅ Yes |
+| Mistral API | Cloud | mistral-large, codestral | ✅ Yes |
+| OpenAI / Anthropic / Gemini / SambaNova / HuggingFace | Cloud | via a generic OpenAI-compatible wrapper | ✅ Yes |
 
-**Rôles par modèle** (Settings > Models > Roles) : `chat`, `edit`, `apply`, `autocomplete` — un modèle peut être taggé pour un usage spécifique (ex. un petit modèle local rapide dédié à l'autocomplete pendant qu'un gros modèle cloud reste le modèle de chat par défaut). Sans tag explicite, `chat` et `autocomplete` retombent tous les deux sur le modèle par défaut.
+**Per-model roles** (Settings > Models > Roles): `chat`, `edit`, `apply`, `autocomplete` — a model can be tagged for a specific use (e.g. a small, fast local model dedicated to autocomplete while a big cloud model remains the default chat model). Without an explicit tag, both `chat` and `autocomplete` fall back to the default model.
 
 
-### 3.2. Streaming et Gestion des Tokens
+### 3.2. Streaming and Token Management
 
-**Fonctionnalités** :
-- **Streaming en temps réel** : Réception et affichage progressif des réponses
-- **Compteur de tokens bidirectionnel** : Comptage des tokens input (prompt + contexte) et output (réponse)
-- **Gestion des limites** : Avertissement quand approche de la limite du modèle
-- **Cache des réponses** : Mémorisation des dernières réponses pour éviter de re-compter
+**Features**:
+- **Real-time streaming**: progressive reception and display of responses
+- **Bidirectional token counter**: counts input tokens (prompt + context) and output tokens (response)
+- **Limit management**: warning when approaching the model's limit
+- **Response cache**: remembers the latest responses to avoid recounting
 
 ### 3.3. Auto-TDD Loop
 
-**Algorithme de la Boucle Auto-TDD** :
+**Auto-TDD Loop Algorithm**:
 ```
-1. RECEVOIR TÂCHE
+1. RECEIVE TASK
    ↓
-2. GÉNÉRER CODE (avec contexte pertinent)
+2. GENERATE CODE (with relevant context)
    ↓
-3. ÉCRIRE/ÉDITER FICHIER
+3. WRITE/EDIT FILE
    ↓
-4. EXÉCUTER TESTS (via npm test, jest, mocha, etc.)
+4. RUN TESTS (via npm test, jest, mocha, etc.)
    ↓
-5. ANALYSER RÉSULTATS
-   ├── SI TOUS LES TESTS PASSENT → ✅ TERMINER
-   └── SI ÉCHEC → 
-       ├── Analyser stderr/test output
-       ├── Identifier la cause de l'échec
-       ├── Générer une correction ciblée
-       └── RECOMMENCER À ÉTAPE 2 (max 5 tentatives)
+5. ANALYZE RESULTS
+   ├── IF ALL TESTS PASS → ✅ FINISH
+   └── IF FAILURE →
+       ├── Analyze stderr/test output
+       ├── Identify the cause of the failure
+       ├── Generate a targeted fix
+       └── GO BACK TO STEP 2 (max 5 attempts)
 ```
 
-**Gestion des Erreurs Courantes** :
-- **Tests qui ne passent pas** : Analyse du diff entre attendu et réel
-- **Erreurs de syntaxe** : Utilisation du linter (ESLint, TypeScript) pour des corrections rapides
-- **Dependencies manquantes** : Détection et suggestion d'installation via npm/yarn
-- **Timeout** : Augmentation progressive du timeout ou suggestion à l'utilisateur
+**Handling Common Errors**:
+- **Failing tests**: analyze the diff between expected and actual
+- **Syntax errors**: use the linter (ESLint, TypeScript) for quick fixes
+- **Missing dependencies**: detection and suggestion to install via npm/yarn
+- **Timeout**: progressive timeout increase or suggestion to the user
 
-## 4. Capacités Agentiques & MCP
+## 4. Agentic Capabilities & MCP
 
-**Intégration MCP** :
-- Utilisation du **Model Context Protocol (MCP)** pour standardiser les interactions entre l'IA et les outils
-- **Avantages** : Interopérabilité avec d'autres outils MCP, modularité, extensibilité
+**MCP Integration**:
+- Uses the **Model Context Protocol (MCP)** to standardize interactions between the AI and tools
+- **Benefits**: interoperability with other MCP tools, modularity, extensibility
 
 
-### 4.1. Outils Système (File System)
+### 4.1. System Tools (File System)
 
-**Outils intégrés réellement implémentés** (`src/backend/core/agent/tool-registry.ts`) :
+**Actually implemented built-in tools** (`src/backend/core/agent/tool-registry.ts`):
 
-- `read_file` : lit le contenu d'un fichier existant.
-- `create_new_file` : crée un nouveau fichier (écrase s'il existe déjà).
-- `edit_existing_file` : remplace une plage de lignes (1-indexée) d'un fichier existant.
-- `single_find_and_replace` : remplacement exact d'une chaîne unique (`replace_all` pour remplacer toutes les occurrences).
-- `read_currently_open_file` : lit le fichier actuellement ouvert dans l'éditeur VS Code.
-- `grep_search` : recherche regex récursive dans le workspace (filtrable par glob).
-- `ls` : liste le contenu d'un dossier.
-- `file_glob_search` : recherche de fichiers par pattern glob (`**` récursif).
-- `run_terminal_command` : exécute une commande shell (timeout configurable, HITL selon le mode).
-- `run_in_background` / `check_background_process` / `stop_background_process` : lance et supervise un process long (serveur de dev, watcher).
-- `view_diff` : renvoie le `git diff` courant sous forme de texte dans le chat.
-- `git_status` / `git_log` : lecture seule.
-- `search_web` : recherche web via l'API **Brave Search** (§4.2), avec un paramètre optionnel `sites` pour restreindre les domaines.
-- `update_todo_list` : remplace la checklist de tâches affichée au-dessus de la zone de saisie du chat (voir §5.3).
+- `read_file`: reads the content of an existing file.
+- `create_new_file`: creates a new file (overwrites it if it already exists).
+- `edit_existing_file`: replaces a (1-indexed) line range of an existing file.
+- `single_find_and_replace`: exact replacement of a single string (`replace_all` to replace every occurrence).
+- `read_currently_open_file`: reads the file currently open in the VS Code editor.
+- `grep_search`: recursive regex search across the workspace (filterable by glob).
+- `ls`: lists the contents of a folder.
+- `file_glob_search`: searches for files by glob pattern (recursive `**`).
+- `run_terminal_command`: runs a shell command (configurable timeout, HITL depending on the mode).
+- `run_in_background` / `check_background_process` / `stop_background_process`: launches and supervises a long-running process (dev server, watcher).
+- `view_diff`: returns the current `git diff` as text in the chat.
+- `git_status` / `git_log`: read-only.
+- `search_web`: web search via **DuckDuckGo** (§4.2, free, no API key), with an optional `sites` parameter to restrict domains.
+- `update_todo_list`: replaces the task checklist displayed above the chat input box (see §5.3).
 
-Outils additionnels via **serveurs MCP** (Settings > MCP) : builtins (`git`, `filesystem`, `fetch` in-process, `memory`) + tout serveur externe configuré par l'utilisateur, exposés au même registre d'outils que les tools intégrés.
+Additional tools via **MCP servers** (Settings > MCP): builtins (`git`, `filesystem`, in-process `fetch`, `memory`) + any external server configured by the user, exposed to the same tool registry as the built-in tools.
 
-**Sécurité Intégrée** :
-- **Vérification `.jarvisignore`** avant chaque opération
-- **Validation du sandboxing** (accès uniquement au workspace)
-- **Journalisation** de toutes les opérations
+**Built-in Security**:
+- **`.jarvisignore` check** before every operation
+- **Sandboxing validation** (access limited to the workspace)
+- **Logging** of all operations
 
-### 4.2. Environnement & Auto-Correction
+### 4.2. Environment & Auto-Correction
 
 #### Run Scripts & Terminal
 
-**Fonctionnalités** :
-- **Exécution de commandes shell** avec **approval obligatoire** (configurable via HITL)
-- **Capture du stdout/stderr** en temps réel
-- **Streaming de la sortie** dans le chat
-- **Timeout configurable** (défaut : 30 secondes)
+**Features**:
+- **Shell command execution** with **mandatory approval** (configurable via HITL)
+- **Real-time stdout/stderr capture**
+- **Output streaming** in the chat
+- **Configurable timeout** (default: 30 seconds)
 
-**Commandes Supportées** :
-- Commandes simples : `ls -la`, `git status`
-- Scripts npm : `npm test`, `npm run build`
-- Commandes composées : `git add . && git commit -m "message"`
+**Supported Commands**:
+- Simple commands: `ls -la`, `git status`
+- npm scripts: `npm test`, `npm run build`
+- Compound commands: `git add . && git commit -m "message"`
 
 #### Web Search
 
-**Implémentation** (`src/backend/core/mcp/tools/webSearch.ts`) :
-- **Backend** : API **Brave Search** (`https://api.search.brave.com`), clé API à renseigner dans Settings > Web Search.
-- **Sources configurables** : préréglages cochables (StackOverflow, MDN, GitHub, devdocs.io) + domaines libres, appliqués par défaut via des opérateurs `site:` ; l'outil accepte aussi un paramètre `sites` explicite fourni par le modèle, qui prime toujours sur le réglage par défaut.
-- **Sans clé configurée** : l'outil répond que la recherche web n'est pas configurée plutôt que d'échouer silencieusement.
-- Pas de cache dédié pour l'instant (chaque appel du modèle déclenche une requête).
+**Implementation** (`src/backend/core/mcp/tools/webSearch.ts`):
+- **Backend**: **DuckDuckGo**'s public HTML endpoint (`https://html.duckduckgo.com/html/`) — entirely free, no API key or account needed.
+- **Configurable sources**: checkable presets (StackOverflow, MDN, GitHub, devdocs.io) + free-form domains, applied by default via `site:` operators; the tool also accepts an explicit `sites` parameter provided by the model, which always takes priority over the default setting.
+- No dedicated cache for now (every model call triggers a request).
 
-## 5. Personnalisation Avancée (Agents & Workflows)
+## 5. Advanced Customization (Agents & Workflows)
 
-**Philosophie** : Permettre aux utilisateurs de **créer leurs propres agents spécialisés**, **définir des workflows personnalisés**, et **appliquer des règles métier** pour garantir la cohérence du code.
+**Philosophy**: Allow users to **create their own specialized agents**, **define custom workflows**, and **apply business rules** to ensure code consistency.
 
-### 5.1. Création Modulaire
+### 5.1. Modular Creation
 
 #### Tools & Skills
 
-**Système de Tools Personnalisés** :
-- **Définition via JSON** : Création de nouveaux outils sans coder
-- **Intégration avec MCP** : Les outils personnalisés sont exposés comme des outils MCP
-- **Scripts locaux** : Possibilité d'exécuter des scripts Node.js/Shell
+**Custom Tools System**:
+- **JSON-based definition**: create new tools without coding
+- **MCP integration**: custom tools are exposed as MCP tools
+- **Local scripts**: ability to run Node.js/Shell scripts
 
-#### Agents Spécialisés
+#### Specialized Agents
 
-**Agents Prédéfinis** — chacun a un system prompt dédié **et** un sous-ensemble d'outils réellement restreint (`SpecializedAgent.allowedToolPrefixes`, appliqué via `ToolRegistry.restrictTo` — les outils MCP/custom configurés par l'utilisateur restent toujours disponibles, seuls les outils intégrés sont filtrés) :
+**Predefined Agents** — each has a dedicated system prompt **and** a genuinely restricted subset of tools (`SpecializedAgent.allowedToolPrefixes`, applied via `ToolRegistry.restrictTo` — MCP/custom tools configured by the user always remain available, only built-in tools are filtered):
 
-| Agent | Description | Outils Autorisés | Cas d'Usage |
+| Agent | Description | Allowed Tools | Use Case |
 |-------|-------------|----------------|-------------|
-| @QA-Agent | Agent de Qualité | lecture, terminal, git (lecture) — **pas d'édition** | Revue de code, exécution de tests, détection de bugs |
-| @Doc-Agent | Agent de Documentation | lecture, édition, `search_web` — pas de terminal | Génération de docs, commentaires, README |
-| @Refactor-Agent | Agent de Refactoring | lecture, édition, terminal, git (lecture) | Amélioration du code existant, revalidation par tests |
-| @Security-Agent | Agent de Sécurité | lecture, git (lecture) — **lecture seule, pas de terminal ni d'édition** | Audit en lecture seule, détection de vulnérabilités |
-| @Perf-Agent | Agent de Performance | lecture, terminal, git (lecture) — pas d'édition | Profilage/benchmark, rapport d'optimisations |
+| @QA-Agent | QA Agent | read, terminal, git (read) — **no editing** | Code review, running tests, bug detection |
+| @Doc-Agent | Documentation Agent | read, edit, `search_web` — no terminal | Doc generation, comments, README |
+| @Refactor-Agent | Refactoring Agent | read, edit, terminal, git (read) | Improving existing code, revalidation via tests |
+| @Security-Agent | Security Agent | read, git (read) — **read-only, no terminal or editing** | Read-only audit, vulnerability detection |
+| @Perf-Agent | Performance Agent | read, terminal, git (read) — no editing | Profiling/benchmarking, optimization reports |
 
-**Système d'Appel d'Agents** :
-- **Mentions** : Utilisation de `@nom-agent` dans le chat pour activer un agent spécifique
-- **Auto-détection** : L'extension peut suggérer un agent basé sur le contexte
-- **Personnalisation** : les 5 agents prédéfinis peuvent être remplacés/étendus dans Settings > Agents, y compris leur liste d'outils autorisés (texte libre, séparé par virgules — vide = registre complet)
+**Agent Invocation System**:
+- **Mentions**: use `@agent-name` in the chat to activate a specific agent
+- **Auto-detection**: the extension can suggest an agent based on context
+- **Customization**: the 5 predefined agents can be replaced/extended in Settings > Agents, including their list of allowed tools (free text, comma-separated — empty = full registry)
 
-### 5.2. Règles & Contexte (RAG & AST)
+### 5.2. Rules & Context (RAG & AST)
 
 #### Workflows
 
-**Séquences d'Actions Prédéfinies** :
+**Predefined Action Sequences**:
 
-| Workflow | Étapes | Description |
+| Workflow | Steps | Description |
 |----------|--------|-------------|
-| **Dev Feature** | Planifier → Coder → Tester → Commiter | Développement d'une nouvelle fonctionnalité |
-| **Bug Fix** | Analyser → Reproduire → Corriger → Tester | Résolution d'un bug |
-| **Code Review** | Lire Code → Exécuter Tests → Analyser Coverage → Suggérer Améliorations | Revue complète d'un PR |
-| **Refactor** | Analyser → Planifier → Appliquer Changements → Tester | Refactoring de code legacy |
-| **Setup Project** | Initialiser → Configurer → Installer Dépendances → Créer Structure | Création d'un nouveau projet |
+| **Dev Feature** | Plan → Code → Test → Commit | Developing a new feature |
+| **Bug Fix** | Analyze → Reproduce → Fix → Test | Resolving a bug |
+| **Code Review** | Read Code → Run Tests → Analyze Coverage → Suggest Improvements | Full review of a PR |
+| **Refactor** | Analyze → Plan → Apply Changes → Test | Refactoring legacy code |
+| **Setup Project** | Initialize → Configure → Install Dependencies → Create Structure | Creating a new project |
 
-#### Règles
+#### Rules
 
-**Application des Règles** (`services/rules.ts`) :
-- Règles définies dans Settings (onglet Rules), injectées dans le prompt système de chaque agent/chat.
-- **Règles par dossier** : chaque règle peut avoir un `scope` (glob, ex. `src/backend/**`) — une règle scopée ne s'applique que si le fichier actuellement ouvert dans l'éditeur matche le glob ; une règle sans `scope` s'applique toujours. Limite connue : les runs de `/workflow` n'ont pas de notion de « fichier actif », donc les règles scopées ne s'y appliquent pas.
+**Rule Application** (`services/rules.ts`):
+- Rules defined in Settings (Rules tab), injected into the system prompt of every agent/chat.
+- **Folder-scoped rules**: each rule can have a `scope` (glob, e.g. `src/backend/**`) — a scoped rule only applies if the file currently open in the editor matches the glob; a rule without a `scope` always applies. Known limitation: `/workflow` runs have no notion of an "active file", so scoped rules don't apply there.
 
-#### Fichier de règles projet (`JARVIS.md`)
+#### Project rules file (`JARVIS.md`)
 
-**Instructions projet versionnées**, façon `CLAUDE.md` :
-- Fichier markdown libre à la racine du workspace, lu automatiquement (avec cache invalidé par un file watcher) et injecté dans le prompt système de **tous** les agents/workflows/chat, avant les rules utilisateur.
-- Contrairement aux rules (config locale, `~/.jarvis/config.json`), `JARVIS.md` est **versionné avec le code** — partagé entre les membres d'une équipe.
-- Généré automatiquement par la commande `/init` (ou `Jarvis: Initialize Project` dans la palette) : initialise un dépôt git si besoin (confirmation explicite), analyse le projet (`package.json`, structure, points d'entrée) et écrit un `JARVIS.md` structuré (Project Overview, Build & Test Commands, Architecture, Conventions, Notes for Agents). Si le fichier existe déjà, une confirmation est demandée avant de le remplacer.
+**Versioned project instructions**, CLAUDE.md-style:
+- Free-form markdown file at the workspace root, read automatically (with a cache invalidated by a file watcher) and injected into the system prompt of **all** agents/workflows/chat, before the user rules.
+- Unlike rules (local config, `~/.jarvis/config.json`), `JARVIS.md` is **versioned with the code** — shared among team members.
+- Automatically generated by the `/init` command (or `Jarvis: Initialize Project` in the palette): initializes a git repo if needed (explicit confirmation), analyzes the project (`package.json`, structure, entry points), and writes a structured `JARVIS.md` (Project Overview, Build & Test Commands, Architecture, Conventions, Notes for Agents). If the file already exists, confirmation is requested before replacing it.
 
-#### Parsing AST (Tree-sitter)
+#### AST Parsing (Tree-sitter)
 
-**Intégration de Tree-sitter** :
-- **Parsing en temps réel** : Analyse syntaxique du code pendant l'édition
-- **Extraction de contexte intelligent** : Envoi uniquement des parties pertinentes du code à l'IA
-- **Navigation dans le code** : Saut rapide entre définitions et utilisations
+**Tree-sitter Integration**:
+- **Real-time parsing**: syntactic analysis of the code while editing
+- **Smart context extraction**: sending only the relevant parts of the code to the AI
+- **Code navigation**: quick jump between definitions and usages
 
-**Langages Supportés** :
+**Supported Languages**:
 - JavaScript, TypeScript, Python, Java, Go, Rust, C++, C#, PHP, Ruby
 
-#### Base Vectorielle Locale (RAG)
+#### Local Vector Store (RAG)
 
-**Implémentation du RAG** :
-- **Indexation automatique** : Les fichiers du projet sont indexés en arrière-plan
-- **Recherche sémantique** : Trouver des snippets de code similaires
-- **Augmentation de contexte** : Ajout des résultats pertinents au prompt
+**RAG Implementation**:
+- **Automatic indexing**: project files are indexed in the background
+- **Semantic search**: find similar code snippets
+- **Context augmentation**: relevant results added to the prompt
 
-### 5.3. Suivi visuel de tâche et ouverture automatique
+### 5.3. Visual Task Tracking and Auto-Open
 
-#### Checklist TODO (façon Claude Code `TodoWrite`)
+#### TODO Checklist (Claude Code `TodoWrite`-style)
 
-- Outil `update_todo_list` : le modèle remplace la liste complète des tâches (`{id, content, status: pending|in_progress|completed}`) à chaque appel. Sans effet de bord — jamais de friction HITL, même en mode strict.
-- Affichée en composant persistant au-dessus de la zone de saisie du chat (pas liée à un message précis, contrairement au log d'activité par tour) ; vidée sur `/new`, sinon conservée après la fin de la tâche pour rester consultable.
-- Pour `/workflow` (étapes connues à l'avance) : la checklist est **pré-remplie automatiquement** depuis les étapes du workflow avant même le début de la première étape, et mise à jour (`pending` → `in_progress` → `completed`) à chaque transition — visibilité gratuite sans attendre que le modèle appelle l'outil.
+- `update_todo_list` tool: the model replaces the entire task list (`{id, content, status: pending|in_progress|completed}`) on every call. No side effects — never any HITL friction, even in strict mode.
+- Displayed as a persistent component above the chat input box (not tied to a specific message, unlike the per-turn activity log); cleared on `/new`, otherwise kept after the task ends so it stays viewable.
+- For `/workflow` (steps known in advance): the checklist is **automatically pre-filled** from the workflow's steps even before the first step begins, and updated (`pending` → `in_progress` → `completed`) at each transition — visibility for free without waiting for the model to call the tool.
 
-#### Ouverture automatique du fichier édité
+#### Auto-opening the edited file
 
-- Après chaque édition réussie (`create_new_file`/`edit_existing_file`/`single_find_and_replace`), le fichier est amené au premier plan dans l'éditeur (onglet « preview », réutilisé à chaque édition suivante — pas d'empilement d'onglets), pour que les décorations inline (vert/rouge) soient immédiatement visibles.
-- Réglage `jarvis.autoOpen.mode` (Settings > Optimization ou VS Code settings) : `always` (défaut), `never`, ou `strict-hitl-only` (n'ouvre qu'en mode HITL strict, où l'utilisateur est déjà interrompu à chaque action).
-- La revue détaillée diff par hunk (accept/reject) reste gérée par le panneau de revue existant (`DiffReviewPanel`, CodeLens accept/reject) — l'auto-ouverture ne fait qu'amener le fichier à l'écran, elle ne remplace pas ce mécanisme.
+- After every successful edit (`create_new_file`/`edit_existing_file`/`single_find_and_replace`), the file is brought to the foreground in the editor ("preview" tab, reused for each subsequent edit — no tab stacking), so the inline decorations (green/red) are immediately visible.
+- `jarvis.autoOpen.mode` setting (Settings > Optimization or VS Code settings): `always` (default), `never`, or `strict-hitl-only` (only opens in strict HITL mode, where the user is already interrupted on every action).
+- The detailed per-hunk diff review (accept/reject) remains handled by the existing review panel (`DiffReviewPanel`, accept/reject CodeLens) — auto-open only brings the file to the screen, it doesn't replace this mechanism.
 
-#### Autocomplete inline (Tab / ghost text)
+#### Inline autocomplete (Tab / ghost text)
 
-- `vscode.languages.registerInlineCompletionItemProvider`, un seul appel non-agentique par complétion (pas de boucle d'outils), avec debounce (~350ms) et annulation via `CancellationToken` à chaque nouvelle frappe.
-- Contexte volontairement réduit (≈60 lignes avant / 20 après le curseur, pas de RAG complet) pour rester compatible avec la latence attendue d'une complétion déclenchée à chaque pause de frappe.
-- Modèle utilisé : premier modèle taggé du rôle `autocomplete` (Settings > Models > Roles), sinon repli automatique sur le modèle par défaut du chat — aucune configuration de modèle dédiée n'est obligatoire.
-- **Désactivé par défaut** (réglage `jarvis.autocomplete.enabled`) : fonctionnalité qui appelle un modèle à chaque pause de frappe, à activer explicitement.
+- `vscode.languages.registerInlineCompletionItemProvider`, a single non-agentic call per completion (no tool loop), with debounce (~350ms) and cancellation via `CancellationToken` on every new keystroke.
+- Deliberately reduced context (≈60 lines before / 20 after the cursor, no full RAG) to stay compatible with the expected latency of a completion triggered on every typing pause.
+- Model used: the first model tagged with the `autocomplete` role (Settings > Models > Roles), otherwise automatic fallback to the default chat model — no dedicated model configuration is required.
+- **Disabled by default** (`jarvis.autocomplete.enabled` setting): a feature that calls a model on every typing pause, must be explicitly enabled.
 
-## 6. Sécurité, Fiabilité & Confidentialité (Sandboxing)
+## 6. Security, Reliability & Privacy (Sandboxing)
 
-**Principes de Sécurité** :
-- **Moins de privilèges par défaut** : L'extension n'a accès qu'au workspace ouvert
-- **Transparence totale** : Toutes les actions sont journalisées et visibles
-- **Contrôle utilisateur** : L'utilisateur a toujours le dernier mot
-- **Local-first** : Les données sensibles ne quittent jamais la machine (sauf si explicitement configuré)
+**Security Principles**:
+- **Least privilege by default**: the extension only has access to the open workspace
+- **Total transparency**: all actions are logged and visible
+- **User control**: the user always has the final word
+- **Local-first**: sensitive data never leaves the machine (unless explicitly configured)
 
-### 6.1. Protection du Système
+### 6.1. System Protection
 
-#### `.jarvisignore` (Fichier d'Exclusion)
+#### `.jarvisignore` (Exclusion File)
 
-**Fonctionnement** :
-- **Auto-génération** : Création automatique lors de la première activation
-- **Format** : Identique à `.gitignore` (syntaxe des patterns Git)
-- **Priorité** : Plus restrictif que `.gitignore` (un fichier ignoré par `.jarvisignore` ne peut pas être accès, même s'il est tracked par Git)
+**How it works**:
+- **Auto-generation**: created automatically on first activation
+- **Format**: identical to `.gitignore` (Git pattern syntax)
+- **Priority**: stricter than `.gitignore` (a file ignored by `.jarvisignore` cannot be accessed, even if tracked by Git)
 
-**Contenu par défaut** :
+**Default content**:
 ```ignore
-# Jarvis Ignore File - Fichiers strictement invisibles pour l'IA
-# Généré automatiquement - Modifiable manuellement
+# Jarvis Ignore File - Files strictly invisible to the AI
+# Auto-generated - can be edited manually
 
-# Environnement et secrets
+# Environment and secrets
 .env
 .env.*
 *.env
 !.env.example
 
-# Dépendances
+# Dependencies
 node_modules/
 vendor/
 bower_components/
@@ -308,14 +307,14 @@ out/
 *.min.js
 *.min.css
 
-# Cache et temporaires
+# Cache and temp files
 .cache/
 .tmp/
 *.tmp
 *.swp
 .DS_Store
 
-# IDE et éditeur
+# IDE and editor
 .idea/
 .vscode/
 *.sublime-workspace
@@ -326,7 +325,7 @@ out/
 *.bak
 *.backup
 
-# Sécurité
+# Security
 *.pem
 *.key
 *.crt
@@ -334,102 +333,102 @@ out/
 secrets/
 credentials/
 
-# Bases de données
+# Databases
 *.db
 *.sqlite
 *.sqlite3
 
-# Jarvis interne
+# Jarvis internal
 .jarvis/
 .jarvisignore
 jarvis-*.json
 ```
 
-**Gestion du `.jarvisignore`** :
-- **Édition manuelle** : L'utilisateur peut modifier le fichier à tout moment
-- **Validation automatique** : Vérification de la syntaxe après modification
-- **Synchronisation** : Prise en compte immédiate des changements
+**Managing `.jarvisignore`**:
+- **Manual editing**: the user can modify the file at any time
+- **Automatic validation**: syntax check after modification
+- **Sync**: changes are picked up immediately
 
-**Commandes VS Code** :
-- `Jarvis: Generate .jarvisignore` - Régénère le fichier avec les patterns recommandés
-- `Jarvis: Add to .jarvisignore` - Ajoute le fichier sélectionné à `.jarvisignore`
-- `Jarvis: Remove from .jarvisignore` - Retire un pattern de `.jarvisignore`
+**VS Code Commands**:
+- `Jarvis: Generate .jarvisignore` - regenerates the file with the recommended patterns
+- `Jarvis: Add to .jarvisignore` - adds the selected file to `.jarvisignore`
+- `Jarvis: Remove from .jarvisignore` - removes a pattern from `.jarvisignore`
 
-#### Sandboxing (Isolation du Workspace)
+#### Sandboxing (Workspace Isolation)
 
-**Mécanismes de Sécurité** :
+**Security Mechanisms**:
 
-| Mécanisme | Description | Implémentation |
+| Mechanism | Description | Implementation |
 |-----------|-------------|----------------|
-| **Workspace Root** | Restriction à la racine du workspace VS Code | `vscode.workspace.workspaceFolders[0].uri.fsPath` |
-| **Path Validation** | Vérification que tous les chemins sont dans le workspace | `path.startsWith(workspaceRoot)` |
-| **Symlink Protection** | Détection et blocage des symlinks sortants | `fs.lstat().isSymbolicLink()` |
-| **Parent Directory Check** | Empêche `../` de sortir du workspace | `path.normalize().startsWith(workspaceRoot)` |
+| **Workspace Root** | Restricted to the VS Code workspace root | `vscode.workspace.workspaceFolders[0].uri.fsPath` |
+| **Path Validation** | Verifies all paths are inside the workspace | `path.startsWith(workspaceRoot)` |
+| **Symlink Protection** | Detects and blocks outbound symlinks | `fs.lstat().isSymbolicLink()` |
+| **Parent Directory Check** | Prevents `../` from escaping the workspace | `path.normalize().startsWith(workspaceRoot)` |
 
-**Gestion des Workspaces Multi-Dossiers** :
-- **Support complet** : Chaque dossier du workspace a son propre `.jarvisignore`
-- **Isolation** : Un agent ne peut pas accéder aux fichiers d'un autre dossier du workspace sans permission explicite
-- **Configuration par dossier** : Les règles peuvent être différentes pour chaque dossier
+**Multi-Folder Workspace Management**:
+- **Full support**: each folder in the workspace has its own `.jarvisignore`
+- **Isolation**: an agent cannot access files in another workspace folder without explicit permission
+- **Per-folder configuration**: rules can differ for each folder
 
-#### Scrubbing (Filtrage des Secrets)
+#### Scrubbing (Secret Filtering)
 
-**Types de Secrets Détectés** :
+**Types of Secrets Detected**:
 
-| Type | Pattern | Exemple |
+| Type | Pattern | Example |
 |------|---------|---------|
-| Clés API | `[a-zA-Z0-9]{32,}` | `sk-abcdef1234567890abcdef1234567890` |
-| Tokens JWT | `eyJ[A-Za-z0-9-_=]+\[.A-Za-z0-9-_=]+\.[A-Za-z0-9-_.+/=]+` | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...` |
-| Clés privées | `-----BEGIN (RSA|DSA|EC|OPENSSH) PRIVATE KEY-----` | `-----BEGIN RSA PRIVATE KEY-----` |
-| Mots de passe | `(password|passwd|pwd)[=:"\s][^
+| API keys | `[a-zA-Z0-9]{32,}` | `sk-abcdef1234567890abcdef1234567890` |
+| JWT tokens | `eyJ[A-Za-z0-9-_=]+\[.A-Za-z0-9-_=]+\.[A-Za-z0-9-_.+/=]+` | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...` |
+| Private keys | `-----BEGIN (RSA|DSA|EC|OPENSSH) PRIVATE KEY-----` | `-----BEGIN RSA PRIVATE KEY-----` |
+| Passwords | `(password|passwd|pwd)[=:"\s][^
 ]{4,}` | `password: "mysecret123"` |
-| Secrets AWS | `AKIA[0-9A-Z]{16}` | `AKIAIOSFODNN7EXAMPLE` |
-| Secrets GitHub | `ghp_[a-zA-Z0-9]{36}` | `ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` |
+| AWS secrets | `AKIA[0-9A-Z]{16}` | `AKIAIOSFODNN7EXAMPLE` |
+| GitHub secrets | `ghp_[a-zA-Z0-9]{36}` | `ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` |
 
-**Comportements par Provider** :
-- **Local (Ollama)** : Pas de scrubbing par défaut (les données restent locales)
-- **Cloud (OpenRouter, OpenAI, etc.)** : Scrubbing toujours activé
-- **Option de bypass** : L'utilisateur peut désactiver temporairement pour un prompt spécifique
+**Behavior by Provider**:
+- **Local (Ollama)**: no scrubbing by default (data stays local)
+- **Cloud (OpenRouter, OpenAI, etc.)**: scrubbing always enabled
+- **Bypass option**: the user can temporarily disable it for a specific prompt
 
-### 6.2. "Time Travel" (Checkpointing Git)
+### 6.2. "Time Travel" (Git Checkpointing)
 
-**Concept** : Sauvegarde automatique de l'état du projet avant toute modification importante, permettant un rollback instantané en cas d'erreur.
+**Concept**: automatically saves the project's state before any significant change, allowing instant rollback in case of error.
 
-**Mécanismes de Checkpoint** :
+**Checkpoint Mechanisms**:
 
-| Type | Déclencheur | Méthode | Persistance |
+| Type | Trigger | Method | Persistence |
 |------|-------------|---------|-------------|
-| **Action Unique** | Avant une action dangereuse | `git stash` | Session |
-| **Plan d'Action** | Avant un workflow complet | `git commit` | Permanent |
-| **Session** | Début de session | `git stash` | Session |
-| **Manuel** | Commande utilisateur | `git commit` | Permanent |
+| **Single Action** | Before a dangerous action | `git stash` | Session |
+| **Action Plan** | Before a full workflow | `git commit` | Permanent |
+| **Session** | Session start | `git stash` | Session |
+| **Manual** | User command | `git commit` | Permanent |
 
-**Nommage des Checkpoints** :
-- **Format** : `jarvis/checkpoint-[timestamp]-[type]-[description]`
-- **Exemples** :
+**Checkpoint Naming**:
+- **Format**: `jarvis/checkpoint-[timestamp]-[type]-[description]`
+- **Examples**:
   - `jarvis/checkpoint-20260703-123456-action-rm-node_modules`
   - `jarvis/checkpoint-20260703-123500-workflow-dev-feature-user-auth`
   - `jarvis/checkpoint-20260703-123600-session-start`
 
-**Intégration avec l'UI** :
-- **Bouton "Rollback"** dans la sidebar avec :
-  - Liste des checkpoints disponibles
-  - Aperçu des changements (diff)
-  - Confirmation avant rollback
-- **Notifications** : Avertissement quand un checkpoint est créé
-- **Commande VS Code** : `Jarvis: List Checkpoints` et `Jarvis: Rollback to Checkpoint`
+**UI Integration**:
+- **"Rollback" button** in the sidebar with:
+  - List of available checkpoints
+  - Change preview (diff)
+  - Confirmation before rollback
+- **Notifications**: warning when a checkpoint is created
+- **VS Code Command**: `Jarvis: List Checkpoints` and `Jarvis: Rollback to Checkpoint`
 
 d.json"        |
 |                                          |
 | 🔴 12:00:00 - session-start               |
 |     → Stash: jarvis/checkpoint-120000    |
-|     "Début de session"                   |
+|     "Session start"                      |
 |                                          |
 +------------------------------------------+
-| [✅ Appliquer Rollback] [❌ Annuler]        |
+| [✅ Apply Rollback] [❌ Cancel]        |
 +------------------------------------------+
 ```
 
-**Configuration du Time Travel** :
+**Time Travel Configuration**:
 ```json
 {
   "checkpoints": {
@@ -440,10 +439,10 @@ d.json"        |
       "onSessionStart": true
     },
     "retention": {
-      "actionCheckpoints": 24,    // 24 heures
-      "workflowCheckpoints": 7,   // 7 jours
+      "actionCheckpoints": 24,    // 24 hours
+      "workflowCheckpoints": 7,   // 7 days
       "sessionCheckpoints": 1,    // 1 session
-      "manualCheckpoints": 30     // 30 jours
+      "manualCheckpoints": 30     // 30 days
     },
     "storage": {
       "useGitStash": true,\n      "useGitTags": true
@@ -452,360 +451,360 @@ d.json"        |
 }
 ```
 
-**Gestion des Conflits** :
-- **Détection automatique** : Si des changements non-commités existent avant un rollback
-- **Options** :
-  - **Stash** : Sauvegarder les changements actuels avant rollback
-  - **Discard** : Ignorer les changements actuels
-  - **Cancel** : Annuler le rollback
-- **Notification** : L'utilisateur est toujours averti avant toute perte de données
+**Conflict Management**:
+- **Automatic detection**: if uncommitted changes exist before a rollback
+- **Options**:
+  - **Stash**: save current changes before rollback
+  - **Discard**: ignore current changes
+  - **Cancel**: cancel the rollback
+- **Notification**: the user is always warned before any data loss
 
-## 7. Stratégies d'Optimisation pour Petits Modèles (Local / Ollama)
+## 7. Optimization Strategies for Small Models (Local / Ollama)
 
-**Problématique** : Les petits modèles (ex: qwen2.5-coder:7b, mistral-coder:7b) ont des **limites** :
-- **Contexte limité** : 32K tokens max (contre 200K+ pour les grands modèles)
-- **Capacité de raisonnement réduite** : Moins bons pour les tâches complexes
-- **Précision moindre** : Plus de risques d'erreurs ou d'hallucinations
-- **Pas de connaissances externes** : Pas d'accès à internet ou à des données récentes
+**Problem**: small models (e.g. qwen2.5-coder:7b, mistral-coder:7b) have **limitations**:
+- **Limited context**: 32K tokens max (vs. 200K+ for large models)
+- **Reduced reasoning ability**: worse at complex tasks
+- **Lower accuracy**: more risk of errors or hallucinations
+- **No external knowledge**: no access to the internet or recent data
 
-**Objectif** : **Maximiser l'efficacité** des petits modèles en :
-1. **Réduisant la complexité** des tâches (Micro-Tâches)
-2. **Améliorant la structure** des requêtes (JSON Mode, Few-Shot)
-3. **Optimisant le contexte** (Context Pruning)
-4. **Validant systématiquement** les résultats
+**Goal**: **Maximize the efficiency** of small models by:
+1. **Reducing the complexity** of tasks (Micro-Tasks)
+2. **Improving the structure** of requests (JSON Mode, Few-Shot)
+3. **Optimizing context** (Context Pruning)
+4. **Systematically validating** results
 
-### 7.1. Micro-Tâches (Task Decomposition)
+### 7.1. Micro-Tasks (Task Decomposition)
 
-**Principe** : Découper les demandes complexes en **sous-tâches atomiques** que le modèle peut traiter individuellement.
+**Principle**: break down complex requests into **atomic sub-tasks** that the model can handle individually.
 
-**Exemple de Découpage** :
+**Decomposition Example**:
 ```
-Demande utilisateur:
-"Crée une application web complète avec frontend React, backend Node.js, 
-base de données MongoDB, et déploiement sur AWS"
+User request:
+"Create a complete web application with a React frontend, Node.js backend,
+MongoDB database, and deployment on AWS"
 
-Découpage en Micro-Tâches:
-1. Analyser les requirements et créer un plan d'architecture
-2. Initialiser le projet (structure de dossiers, package.json)
-3. Créer la configuration TypeScript
-4. Développer le frontend React (composants, hooks)
-5. Développer le backend Node.js (routes, contrôleurs)
-6. Configurer MongoDB (schémas, connexions)
-7. Écrire les tests unitaires
-8. Configurer le déploiement AWS
-9. Documenter le projet
+Breakdown into Micro-Tasks:
+1. Analyze the requirements and create an architecture plan
+2. Initialize the project (folder structure, package.json)
+3. Create the TypeScript configuration
+4. Build the React frontend (components, hooks)
+5. Build the Node.js backend (routes, controllers)
+6. Configure MongoDB (schemas, connections)
+7. Write the unit tests
+8. Configure AWS deployment
+9. Document the project
 ```
 
-**Stratégie de Découpage** :
+**Decomposition Strategy**:
 
-| Type de Tâche | Niveau de Découpage | Exemple |
+| Task Type | Decomposition Level | Example |
 |---------------|---------------------|---------|
-| **Création de fonction** | 1 tâche | "Écris une fonction de tri en JS" |
-| **Création de composant** | 1 tâche | "Crée un composant Button avec props" |
-| **Création de page** | 2-3 tâches | 1. Structure HTML, 2. Style CSS, 3. Logique JS |
-| **Création de module** | 3-5 tâches | 1. Types/Interfaces, 2. Fonctions, 3. Tests |
-| **Création d'application** | 10+ tâches | Voir exemple ci-dessus |
+| **Function creation** | 1 task | "Write a sort function in JS" |
+| **Component creation** | 1 task | "Create a Button component with props" |
+| **Page creation** | 2-3 tasks | 1. HTML structure, 2. CSS styling, 3. JS logic |
+| **Module creation** | 3-5 tasks | 1. Types/Interfaces, 2. Functions, 3. Tests |
+| **Application creation** | 10+ tasks | See example above |
 
 
-**Avantages des Micro-Tâches** :
-- **Meilleure qualité** : Le modèle se concentre sur une seule chose à la fois
-- **Moins d'erreurs** : Réduction de la complexité cognitive
-- **Meilleur contexte** : Chaque tâche peut avoir son propre contexte ciblé
-- **Validation intermediate** : Possibilité de valider chaque étape
-- **Reprise facile** : Si une tâche échoue, on peut repartir de là
+**Benefits of Micro-Tasks**:
+- **Better quality**: the model focuses on one thing at a time
+- **Fewer errors**: reduced cognitive complexity
+- **Better context**: each task can have its own targeted context
+- **Intermediate validation**: possibility of validating each step
+- **Easy resumption**: if a task fails, you can restart from there
 
 ### 8.2. JSON Mode & Few-Shot Prompting
 
-**JSON Mode** : Forcer le modèle à répondre dans un **format structuré et parseable**.
+**JSON Mode**: force the model to respond in a **structured, parseable format**.
 
-**Avantages** :
-- **Parsing garanti** : Pas d'ambiguïté dans la réponse
-- **Validation facile** : On peut valider la structure avant de traiter
-- **Intégration simplifiée** : Les réponses peuvent être directement utilisées dans le code
-
-
-**Few-Shot Prompting** : Fournir des **exemples concrets** avant la demande réelle pour guider le modèle.
+**Benefits**:
+- **Guaranteed parsing**: no ambiguity in the response
+- **Easy validation**: the structure can be validated before processing
+- **Simplified integration**: responses can be used directly in the code
 
 
-**Validation des Réponses JSON (Version 2.1 - Avec Nettoyeur Robuste)** :
+**Few-Shot Prompting**: provide **concrete examples** before the actual request to guide the model.
 
-**⚠️ Problème identifié** : Les modèles locaux (Qwen 2.5 7B) ne respectent pas toujours parfaitement le format JSON.
 
-**✅ Solution** : Nettoyeur multi-étapes intégré
+**JSON Response Validation (Version 2.1 - With Robust Cleaner)**:
+
+**⚠️ Identified problem**: local models (Qwen 2.5 7B) don't always perfectly follow the JSON format.
+
+**✅ Solution**: built-in multi-step cleaner
 
 ### 8.3. Context Pruning (AST-based)
 
-**Problème** : Envoyer des **fichiers entiers** à l'IA consomme beaucoup de tokens et peut submerger les petits modèles.
+**Problem**: sending **entire files** to the AI consumes a lot of tokens and can overwhelm small models.
 
-**Solution** : Envoyer uniquement les **parties pertinentes** du code, extraites via l'analyse AST (Abstract Syntax Tree).
+**Solution**: send only the **relevant parts** of the code, extracted via AST (Abstract Syntax Tree) analysis.
 
-**Niveaux de Context Pruning** :
+**Context Pruning Levels**:
 
-| Niveau | Description | Tokens Économisés | Utilisation |
+| Level | Description | Tokens Saved | Use |
 |--------|-------------|------------------|-------------|
-| **Aucun** | Fichier complet | 0% | Debugging complexe |
-| **Fonction** | Fonction actuelle + imports | 70-80% | Modification de fonction |
-| **Classe** | Classe complète + dépendances | 50-60% | Modification de classe |
-| **Module** | Module complet | 30-40% | Ajout de fonctionnalité |
-| **Projet** | Projet entier (filtré) | 10-20% | Refactoring global |
+| **None** | Full file | 0% | Complex debugging |
+| **Function** | Current function + imports | 70-80% | Function modification |
+| **Class** | Full class + dependencies | 50-60% | Class modification |
+| **Module** | Full module | 30-40% | Adding a feature |
+| **Project** | Entire project (filtered) | 10-20% | Global refactoring |
 
 
 ## 9. Roadmap
 
-**Approche** : Développement **incrémental et itératif** avec des livrables fonctionnels à chaque phase.
-**Priorisation** : Commencer par le **MVP (Minimum Viable Product)** puis ajouter des fonctionnalités avancées.
-**Estimation** : Chaque phase devrait prendre **2-4 semaines** selon la disponibilité.
+**Approach**: **Incremental and iterative** development with functional deliverables at each phase.
+**Prioritization**: start with the **MVP (Minimum Viable Product)** then add advanced features.
+**Estimate**: each phase should take **2-4 weeks** depending on availability.
 
-### 9.1. Phase 1: Setup & Fondations (MVP Core)
+### 9.1. Phase 1: Setup & Foundations (MVP Core)
 
-**Objectif** : Créer une extension VS Code **fonctionnelle de base** avec interface utilisateur et gestion des modèles.
+**Goal**: create a **basic functional** VS Code extension with a user interface and model management.
 
-**Livrables** :
-- [ ] Boilerplate VS Code Extension avec TypeScript
-- [ ] Configuration de base (Svelte + Vite + Tailwind)
-- [ ] Architecture backend (Node.js + MCP)
-- [ ] Interface utilisateur (Sidebar, Chat Panel)
-- [ ] **Token Jauge** (indicateur en temps réel)
-- [ ] **`.jarvisignore`** (génération et gestion)
-- [ ] Configuration des modèles (Ollama + OpenRouter)
-- [ ] Streaming de base des réponses
+**Deliverables**:
+- [ ] VS Code Extension boilerplate with TypeScript
+- [ ] Base configuration (Svelte + Vite + Tailwind)
+- [ ] Backend architecture (Node.js + MCP)
+- [ ] User interface (Sidebar, Chat Panel)
+- [ ] **Token Gauge** (real-time indicator)
+- [ ] **`.jarvisignore`** (generation and management)
+- [ ] Model configuration (Ollama + OpenRouter)
+- [ ] Basic response streaming
 
-**Tâches Détaillées** :
+**Detailed Tasks**:
 
-| # | Tâche | Priorité | Complexité | Dépendances |
+| # | Task | Priority | Complexity | Dependencies |
 |---|-------|----------|------------|-------------|
-| 1 | Initialiser le projet VS Code Extension | ⭐⭐⭐⭐⭐ | Moyenne | Aucune |
-| 2 | Configurer TypeScript, ESLint, Prettier | ⭐⭐⭐⭐ | Faible | 1 |
-| 3 | Ajouter Svelte + Vite pour les webviews | ⭐⭐⭐⭐ | Moyenne | 1 |
-| 4 | Configurer Tailwind CSS avec thème VS Code | ⭐⭐⭐ | Faible | 3 |
-| 5 | Créer la structure backend (core/, services/) | ⭐⭐⭐⭐ | Moyenne | 1 |
-| 6 | Implémenter le client MCP de base | ⭐⭐⭐⭐ | Élevée | 5 |
-| 7 | Ajouter les outils MCP de base (read_file, write_file) | ⭐⭐⭐⭐ | Moyenne | 6 |
-| 8 | Créer le Chat Panel (affichage Markdown) | ⭐⭐⭐⭐ | Moyenne | 4 |
-| 9 | Implémenter le Token Counter | ⭐⭐⭐⭐ | Moyenne | 6 |
-| 10 | Ajouter l'indicateur de tokens dans la status bar | ⭐⭐⭐ | Faible | 9 |
-| 11 | Générer et gérer le .jarvisignore | ⭐⭐⭐ | Moyenne | 5 |
-| 12 | Configurer les providers de modèles | ⭐⭐⭐⭐ | Moyenne | 5 |
-| 13 | Implémenter le streaming des réponses | ⭐⭐⭐ | Moyenne | 6 |
-| 14 | Ajouter la sélection de modèle dans l'UI | ⭐⭐⭐ | Faible | 12 |
-| 15 | Tests unitaires de base | ⭐⭐⭐ | Moyenne | 1-14 |
+| 1 | Initialize the VS Code Extension project | ⭐⭐⭐⭐⭐ | Medium | None |
+| 2 | Configure TypeScript, ESLint, Prettier | ⭐⭐⭐⭐ | Low | 1 |
+| 3 | Add Svelte + Vite for webviews | ⭐⭐⭐⭐ | Medium | 1 |
+| 4 | Configure Tailwind CSS with VS Code theme | ⭐⭐⭐ | Low | 3 |
+| 5 | Create the backend structure (core/, services/) | ⭐⭐⭐⭐ | Medium | 1 |
+| 6 | Implement the basic MCP client | ⭐⭐⭐⭐ | High | 5 |
+| 7 | Add basic MCP tools (read_file, write_file) | ⭐⭐⭐⭐ | Medium | 6 |
+| 8 | Create the Chat Panel (Markdown display) | ⭐⭐⭐⭐ | Medium | 4 |
+| 9 | Implement the Token Counter | ⭐⭐⭐⭐ | Medium | 6 |
+| 10 | Add the token indicator to the status bar | ⭐⭐⭐ | Low | 9 |
+| 11 | Generate and manage .jarvisignore | ⭐⭐⭐ | Medium | 5 |
+| 12 | Configure the model providers | ⭐⭐⭐⭐ | Medium | 5 |
+| 13 | Implement response streaming | ⭐⭐⭐ | Medium | 6 |
+| 14 | Add model selection in the UI | ⭐⭐⭐ | Low | 12 |
+| 15 | Basic unit tests | ⭐⭐⭐ | Medium | 1-14 |
 
-**Critères de Validation** :
-- [ ] L'extension s'installe et s'active dans VS Code
-- [ ] Le chat affiche les réponses en Markdown
-- [ ] Le Token Jauge fonctionne et met à jour en temps réel
-- [ ] Le `.jarvisignore` bloque effectivement l'accès aux fichiers listés
-- [ ] Les modèles Ollama et OpenRouter répondent correctement
-- [ ] Le streaming affiche les réponses mot par mot
+**Validation Criteria**:
+- [ ] The extension installs and activates in VS Code
+- [ ] The chat displays responses in Markdown
+- [ ] The Token Gauge works and updates in real time
+- [ ] `.jarvisignore` effectively blocks access to the listed files
+- [ ] Ollama and OpenRouter models respond correctly
+- [ ] Streaming displays responses word by word
 
 ---
 
-### 9.2. Phase 2: Actions & Sécurité
+### 9.2. Phase 2: Actions & Security
 
-**Objectif** : Ajouter les **capacités d'action** (terminal, modification de fichiers) avec un **système de sécurité robuste**.
+**Goal**: add **action capabilities** (terminal, file modification) with a **robust security system**.
 
-**Livrables** :
-- [ ] **Terminal intégré** avec exécution de commandes
-- [ ] **Lecture/Écriture de fichiers** avec validation
-- [ ] **HITL (Human-in-the-Loop)** avec 3 modes
+**Deliverables**:
+- [ ] **Integrated terminal** with command execution
+- [ ] **File read/write** with validation
+- [ ] **HITL (Human-in-the-Loop)** with 3 modes
 - [ ] **Time Travel** (Git Checkpoints)
-- [ ] **Scrubbing** des secrets
-- [ ] **Sandboxing** complet
-- [ ] Système de notifications et confirmations
+- [ ] Secret **Scrubbing**
+- [ ] Full **Sandboxing**
+- [ ] Notification and confirmation system
 
-**Tâches Détaillées** :
+**Detailed Tasks**:
 
-| # | Tâche | Priorité | Complexité | Dépendances |
+| # | Task | Priority | Complexity | Dependencies |
 |---|-------|----------|------------|-------------|
-| 1 | Implémenter l'outil terminal MCP | ⭐⭐⭐⭐⭐ | Élevée | Phase 1 |
-| 2 | Ajouter la capture stdout/stderr | ⭐⭐⭐⭐ | Élevée | 1 |
-| 3 | Implémenter edit_file (pas juste write_file) | ⭐⭐⭐⭐ | Élevée | Phase 1 |
-| 4 | Créer le système HITL Manager | ⭐⭐⭐⭐⭐ | Élevée | Phase 1 |
-| 5 | Ajouter les 3 modes HITL (strict, modéré, libre) | ⭐⭐⭐⭐ | Moyenne | 4 |
-| 6 | Implémenter la configuration HITL | ⭐⭐⭐ | Moyenne | 4 |
-| 7 | Créer le SandboxManager | ⭐⭐⭐⭐⭐ | Élevée | Phase 1 |
-| 8 | Implémenter la validation des paths | ⭐⭐⭐⭐ | Élevée | 7 |
-| 9 | Ajouter la détection de symlinks | ⭐⭐⭐ | Moyenne | 7 |
-| 10 | Implémenter le SecretScrubber | ⭐⭐⭐⭐ | Élevée | Phase 1 |
-| 11 | Ajouter les patterns par défaut | ⭐⭐⭐ | Moyenne | 10 |
-| 12 | Configurer le scrubbing par provider | ⭐⭐⭐ | Moyenne | 10 |
-| 13 | Créer le CheckpointManager | ⭐⭐⭐⭐ | Élevée | Phase 1 |
-| 14 | Implémenter la création de checkpoints | ⭐⭐⭐⭐ | Élevée | 13 |
-| 15 | Ajouter le rollback via git stash/tag | ⭐⭐⭐⭐ | Élevée | 13 |
-| 16 | Créer l'UI du bouton Rollback | ⭐⭐⭐ | Moyenne | 13 |
-| 17 | Ajouter les notifications de sécurité | ⭐⭐⭐ | Faible | 4,7,10 |
-| 18 | Tests de sécurité (sandboxing, scrubbing) | ⭐⭐⭐⭐ | Élevée | 1-17 |
+| 1 | Implement the MCP terminal tool | ⭐⭐⭐⭐⭐ | High | Phase 1 |
+| 2 | Add stdout/stderr capture | ⭐⭐⭐⭐ | High | 1 |
+| 3 | Implement edit_file (not just write_file) | ⭐⭐⭐⭐ | High | Phase 1 |
+| 4 | Create the HITL Manager system | ⭐⭐⭐⭐⭐ | High | Phase 1 |
+| 5 | Add the 3 HITL modes (strict, moderate, free) | ⭐⭐⭐⭐ | Medium | 4 |
+| 6 | Implement HITL configuration | ⭐⭐⭐ | Medium | 4 |
+| 7 | Create the SandboxManager | ⭐⭐⭐⭐⭐ | High | Phase 1 |
+| 8 | Implement path validation | ⭐⭐⭐⭐ | High | 7 |
+| 9 | Add symlink detection | ⭐⭐⭐ | Medium | 7 |
+| 10 | Implement the SecretScrubber | ⭐⭐⭐⭐ | High | Phase 1 |
+| 11 | Add default patterns | ⭐⭐⭐ | Medium | 10 |
+| 12 | Configure scrubbing per provider | ⭐⭐⭐ | Medium | 10 |
+| 13 | Create the CheckpointManager | ⭐⭐⭐⭐ | High | Phase 1 |
+| 14 | Implement checkpoint creation | ⭐⭐⭐⭐ | High | 13 |
+| 15 | Add rollback via git stash/tag | ⭐⭐⭐⭐ | High | 13 |
+| 16 | Create the Rollback button UI | ⭐⭐⭐ | Medium | 13 |
+| 17 | Add security notifications | ⭐⭐⭐ | Low | 4,7,10 |
+| 18 | Security tests (sandboxing, scrubbing) | ⭐⭐⭐⭐ | High | 1-17 |
 
-**Critères de Validation** :
-- [ ] Les commandes terminales s'exécutent avec confirmation HITL
-- [ ] Les fichiers ne peuvent pas être lus/écrits hors du workspace
-- [ ] Le `.jarvisignore` bloque effectivement l'accès
-- [ ] Les secrets sont filtrés avant envoi au cloud
-- [ ] Les checkpoints Git sont créés automatiquement
-- [ ] Le rollback fonctionne et restaure l'état exact
-- [ ] Les 3 modes HITL fonctionnent comme attendu
+**Validation Criteria**:
+- [ ] Terminal commands run with HITL confirmation
+- [ ] Files cannot be read/written outside the workspace
+- [ ] `.jarvisignore` effectively blocks access
+- [ ] Secrets are filtered before being sent to the cloud
+- [ ] Git checkpoints are created automatically
+- [ ] Rollback works and restores the exact state
+- [ ] The 3 HITL modes work as expected
 
 ---
 
 ### 9.3. Phase 3: Agentic & TDD
 
-**Objectif** : Ajouter les **capacités agentiques** avancées et la **boucle Auto-TDD**.
+**Goal**: add advanced **agentic capabilities** and the **Auto-TDD loop**.
 
-**Livrables** :
-- [ ] **Configuration JSON pour les Tools**
-- [ ] **Boucle Auto-TDD** complète
-- [ ] **Gestion des erreurs** intelligente
-- [ ] **Système de workflows** simples
-- [ ] **Agents spécialisés** de base (@QA-Agent, @Doc-Agent)
-- [ ] Intégration avec les tests (Jest, Mocha, etc.)
+**Deliverables**:
+- [ ] **JSON configuration for Tools**
+- [ ] Full **Auto-TDD loop**
+- [ ] Smart **error handling**
+- [ ] Simple **workflow system**
+- [ ] Basic **specialized agents** (@QA-Agent, @Doc-Agent)
+- [ ] Integration with tests (Jest, Mocha, etc.)
 
-**Tâches Détaillées** :
+**Detailed Tasks**:
 
-| # | Tâche | Priorité | Complexité | Dépendances |
+| # | Task | Priority | Complexity | Dependencies |
 |---|-------|----------|------------|-------------|
-| 1 | Implémenter le système de Tools personnalisés | ⭐⭐⭐⭐ | Élevée | Phase 2 |
-| 2 | Ajouter le chargement des outils depuis jarvis-tools/ | ⭐⭐⭐ | Moyenne | 1 |
-| 3 | Créer l'Auto-TDD Loop Manager | ⭐⭐⭐⭐⭐ | Élevée | Phase 2 |
-| 4 | Implémenter l'exécution des tests | ⭐⭐⭐⭐ | Élevée | Phase 2 |
-| 5 | Ajouter l'analyse des erreurs de test | ⭐⭐⭐⭐ | Élevée | 4 |
-| 6 | Implémenter la génération de corrections | ⭐⭐⭐⭐ | Élevée | 5 |
-| 7 | Configurer le nombre max de tentatives | ⭐⭐⭐ | Moyenne | 3 |
-| 8 | Ajouter la gestion des timeouts | ⭐⭐⭐ | Moyenne | 3 |
-| 9 | Créer les agents spécialisés de base | ⭐⭐⭐ | Moyenne | Phase 2 |
-| 10 | Implémenter le système d'appel d'agents | ⭐⭐⭐⭐ | Élevée | 9 |
-| 11 | Ajouter les mentions @agent dans le chat | ⭐⭐⭐ | Moyenne | 10 |
-| 12 | Créer les workflows prédéfinis | ⭐⭐⭐ | Moyenne | Phase 2 |
-| 13 | Implémenter l'exécution séquentielle de workflows | ⭐⭐⭐⭐ | Élevée | 12 |
-| 14 | Ajouter la gestion des dépendances entre tâches | ⭐⭐⭐ | Moyenne | 13 |
-| 15 | Tests de la boucle TDD | ⭐⭐⭐⭐ | Élevée | 1-14 |
+| 1 | Implement the custom Tools system | ⭐⭐⭐⭐ | High | Phase 2 |
+| 2 | Add loading tools from jarvis-tools/ | ⭐⭐⭐ | Medium | 1 |
+| 3 | Create the Auto-TDD Loop Manager | ⭐⭐⭐⭐⭐ | High | Phase 2 |
+| 4 | Implement test execution | ⭐⭐⭐⭐ | High | Phase 2 |
+| 5 | Add test error analysis | ⭐⭐⭐⭐ | High | 4 |
+| 6 | Implement fix generation | ⭐⭐⭐⭐ | High | 5 |
+| 7 | Configure the max number of attempts | ⭐⭐⭐ | Medium | 3 |
+| 8 | Add timeout handling | ⭐⭐⭐ | Medium | 3 |
+| 9 | Create the basic specialized agents | ⭐⭐⭐ | Medium | Phase 2 |
+| 10 | Implement the agent invocation system | ⭐⭐⭐⭐ | High | 9 |
+| 11 | Add @agent mentions in the chat | ⭐⭐⭐ | Medium | 10 |
+| 12 | Create the predefined workflows | ⭐⭐⭐ | Medium | Phase 2 |
+| 13 | Implement sequential workflow execution | ⭐⭐⭐⭐ | High | 12 |
+| 14 | Add dependency management between tasks | ⭐⭐⭐ | Medium | 13 |
+| 15 | TDD loop tests | ⭐⭐⭐⭐ | High | 1-14 |
 
-**Critères de Validation** :
-- [ ] Les outils personnalisés peuvent être définis et utilisés
-- [ ] La boucle Auto-TDD fonctionne pour les cas simples
-- [ ] Les erreurs de tests sont analysées et corrigées automatiquement
-- [ ] Les agents spécialisés répondent correctement à leurs mentions
-- [ ] Les workflows s'exécutent séquentiellement
-- [ ] Maximum 5 tentatives avant abandon
+**Validation Criteria**:
+- [ ] Custom tools can be defined and used
+- [ ] The Auto-TDD loop works for simple cases
+- [ ] Test errors are analyzed and fixed automatically
+- [ ] Specialized agents respond correctly to their mentions
+- [ ] Workflows run sequentially
+- [ ] Maximum 5 attempts before giving up
 
 ---
 
 ### 9.4. Phase 4: Analytics & Context
 
-**Objectif** : Ajouter la **couche d'analytics** et améliorer la **gestion du contexte**.
+**Goal**: add the **analytics layer** and improve **context management**.
 
-**Livrables** :
-- [ ] **Dashboard Analytics** complet
-- [ ] **Suivi des tokens** par modèle et session
-- [ ] **Métriques de performance** (taux de succès, temps moyen)
-- [ ] **@file et @docs** dans le chat
-- [ ] **Recherche de code similaire** (RAG basique)
-- [ ] **Auto-évaluation** des prompts
-- [ ] Export des données
+**Deliverables**:
+- [ ] Full **Analytics Dashboard**
+- [ ] **Token tracking** per model and session
+- [ ] **Performance metrics** (success rate, average time)
+- [ ] **@file and @docs** in the chat
+- [ ] **Similar code search** (basic RAG)
+- [ ] Prompt **self-assessment**
+- [ ] Data export
 
-**Tâches Détaillées** :
+**Detailed Tasks**:
 
-| # | Tâche | Priorité | Complexité | Dépendances |
+| # | Task | Priority | Complexity | Dependencies |
 |---|-------|----------|------------|-------------|
-| 1 | Créer la structure des fichiers de stats | ⭐⭐⭐ | Moyenne | Phase 1 |
-| 2 | Implémenter l'AnalyticsCollector | ⭐⭐⭐⭐ | Élevée | 1 |
-| 3 | Ajouter le tracking des tokens | ⭐⭐⭐⭐ | Élevée | 2 |
-| 4 | Implémenter le tracking des actions | ⭐⭐⭐⭐ | Élevée | 2 |
-| 5 | Créer le Dashboard UI (Svelte) | ⭐⭐⭐⭐ | Élevée | Phase 1 |
-| 6 | Ajouter les graphiques (Chart.js) | ⭐⭐⭐ | Moyenne | 5 |
-| 7 | Implémenter les onglets du dashboard | ⭐⭐⭐ | Moyenne | 5 |
-| 8 | Ajouter @file pour lire des fichiers | ⭐⭐⭐ | Moyenne | Phase 2 |
-| 9 | Implémenter @docs pour la documentation | ⭐⭐⭐ | Moyenne | Phase 2 |
-| 10 | Configurer le RAG local (index en mémoire + embeddings) | ⭐⭐⭐⭐ | Élevée | Phase 2 |
-| 11 | Implémenter l'indexation des fichiers | ⭐⭐⭐ | Moyenne | 10 |
-| 12 | Ajouter la recherche sémantique | ⭐⭐⭐⭐ | Élevée | 10 |
-| 13 | Implémenter l'auto-évaluation | ⭐⭐⭐ | Moyenne | 2 |
-| 14 | Ajouter le scoring des prompts | ⭐⭐⭐ | Moyenne | 13 |
-| 15 | Implémenter l'export des données | ⭐⭐⭐ | Moyenne | 2 |
-| 16 | Ajouter la réinitialisation des stats | ⭐⭐⭐ | Faible | 2 |
-| 17 | Tests des fonctionnalités analytics | ⭐⭐⭐ | Moyenne | 1-16 |
+| 1 | Create the stats file structure | ⭐⭐⭐ | Medium | Phase 1 |
+| 2 | Implement the AnalyticsCollector | ⭐⭐⭐⭐ | High | 1 |
+| 3 | Add token tracking | ⭐⭐⭐⭐ | High | 2 |
+| 4 | Implement action tracking | ⭐⭐⭐⭐ | High | 2 |
+| 5 | Create the Dashboard UI (Svelte) | ⭐⭐⭐⭐ | High | Phase 1 |
+| 6 | Add charts (Chart.js) | ⭐⭐⭐ | Medium | 5 |
+| 7 | Implement dashboard tabs | ⭐⭐⭐ | Medium | 5 |
+| 8 | Add @file to read files | ⭐⭐⭐ | Medium | Phase 2 |
+| 9 | Implement @docs for documentation | ⭐⭐⭐ | Medium | Phase 2 |
+| 10 | Set up local RAG (in-memory index + embeddings) | ⭐⭐⭐⭐ | High | Phase 2 |
+| 11 | Implement file indexing | ⭐⭐⭐ | Medium | 10 |
+| 12 | Add semantic search | ⭐⭐⭐⭐ | High | 10 |
+| 13 | Implement self-assessment | ⭐⭐⭐ | Medium | 2 |
+| 14 | Add prompt scoring | ⭐⭐⭐ | Medium | 13 |
+| 15 | Implement data export | ⭐⭐⭐ | Medium | 2 |
+| 16 | Add stats reset | ⭐⭐⭐ | Low | 2 |
+| 17 | Analytics feature tests | ⭐⭐⭐ | Medium | 1-16 |
 
-**Critères de Validation** :
-- [ ] Le dashboard affiche correctement les stats
-- [ ] Les tokens sont comptés précisément
-- [ ] @file et @docs fonctionnent dans le chat
-- [ ] La recherche RAG retourne des résultats pertinents
-- [ ] L'export génère des fichiers JSON/CSV valides
-- [ ] L'auto-évaluation propose des améliorations
+**Validation Criteria**:
+- [ ] The dashboard correctly displays stats
+- [ ] Tokens are counted accurately
+- [ ] @file and @docs work in the chat
+- [ ] RAG search returns relevant results
+- [ ] Export generates valid JSON/CSV files
+- [ ] Self-assessment suggests improvements
 
 ---
 
-### 9.5. Phase 5: Optimisation & Fonctionnalités Avancées
+### 9.5. Phase 5: Optimization & Advanced Features
 
-**Objectif** : **Optimiser** les performances et ajouter des **fonctionnalités avancées** pour les utilisateurs power users.
+**Goal**: **optimize** performance and add **advanced features** for power users.
 
-**Livrables** :
-- [x] **Tree-sitter** pour le parsing AST
-- [x] **Context Pruning** avancé
-- [x] **RAG local** complet avec embeddings (`@xenova/transformers`, index maison en mémoire)
+**Deliverables**:
+- [x] **Tree-sitter** for AST parsing
+- [x] Advanced **Context Pruning**
+- [x] Full **local RAG** with embeddings (`@xenova/transformers`, homegrown in-memory index)
 - [x] **Inline Diff** (Cmd+K)
-- [ ] **Système de plugins** — non fait tel quel ; couvert autrement par MCP externe + custom tools (`jarvis-tools/*.json`)
-- [x] **Extensibilité** (Tools, Agents, Workflows) — agents avec restriction d'outils par persona, règles par dossier
-- [x] **Intégration Web Search** avancée — Brave Search API, sources configurables (§4.2)
-- [x] **Micro-Tâches** automatiques (`TaskDecomposer`, workflow `dynamic`)
+- [ ] **Plugin system** — not done as such; covered otherwise by external MCP + custom tools (`jarvis-tools/*.json`)
+- [x] **Extensibility** (Tools, Agents, Workflows) — agents with per-persona tool restrictions, folder-scoped rules
+- [x] Advanced **Web Search** integration — DuckDuckGo (free, no key), configurable sources (§4.2)
+- [x] Automatic **Micro-Tasks** (`TaskDecomposer`, `dynamic` workflow)
 
-**Tâches Détaillées** :
+**Detailed Tasks**:
 
-| # | Tâche | Priorité | Complexité | Dépendances |
+| # | Task | Priority | Complexity | Dependencies |
 |---|-------|----------|------------|-------------|
-| 1 | Intégrer Tree-sitter (web-tree-sitter) | ⭐⭐⭐⭐ | Élevée | Phase 3 |
-| 2 | Ajouter les grammaires pour les langages supportés | ⭐⭐⭐ | Moyenne | 1 |
-| 3 | Implémenter le ContextPruner AST-based | ⭐⭐⭐⭐⭐ | Très Élevée | 1 |
-| 4 | Ajouter la sélection automatique de stratégie | ⭐⭐⭐⭐ | Élevée | 3 |
-| 5 | Intégrer le pruning avec le Token Counter | ⭐⭐⭐⭐ | Élevée | 3, Phase 2 |
-| 6 | Compléter le RAG local | ⭐⭐⭐⭐ | Élevée | Phase 4 |
-| 7 | Ajouter les embeddings (all-minilm) | ⭐⭐⭐ | Moyenne | 6 |
-| 8 | Implémenter l'augmentation de contexte | ⭐⭐⭐⭐ | Élevée | 6 |
-| 9 | Créer l'Inline Diff View | ⭐⭐⭐ | Moyenne | Phase 2 |
-| 10 | Implémenter Cmd+K pour les diffs | ⭐⭐⭐⭐ | Élevée | 9 |
-| 11 | Ajouter le système de plugins | ⭐⭐⭐⭐ | Élevée | Phase 3 |
-| 12 | Créer l'API des plugins | ⭐⭐⭐⭐ | Élevée | 11 |
-| 13 | Implémenter le chargement dynamique | ⭐⭐⭐ | Moyenne | 11 |
-| 14 | Ajouter la Web Search avancée | ⭐⭐⭐ | Moyenne | Phase 2 |
-| 15 | Implémenter le caching des résultats | ⭐⭐⭐ | Moyenne | 14 |
-| 16 | Ajouter les Micro-Tâches automatiques | ⭐⭐⭐⭐ | Élevée | Phase 3 |
-| 17 | Implémenter la détection de complexité | ⭐⭐⭐⭐ | Élevée | 16 |
-| 18 | Optimisations de performance | ⭐⭐⭐ | Moyenne | Toutes |
-| 19 | Tests complets de toutes les fonctionnalités | ⭐⭐⭐⭐ | Élevée | Toutes |
+| 1 | Integrate Tree-sitter (web-tree-sitter) | ⭐⭐⭐⭐ | High | Phase 3 |
+| 2 | Add grammars for supported languages | ⭐⭐⭐ | Medium | 1 |
+| 3 | Implement the AST-based ContextPruner | ⭐⭐⭐⭐⭐ | Very High | 1 |
+| 4 | Add automatic strategy selection | ⭐⭐⭐⭐ | High | 3 |
+| 5 | Integrate pruning with the Token Counter | ⭐⭐⭐⭐ | High | 3, Phase 2 |
+| 6 | Complete the local RAG | ⭐⭐⭐⭐ | High | Phase 4 |
+| 7 | Add embeddings (all-minilm) | ⭐⭐⭐ | Medium | 6 |
+| 8 | Implement context augmentation | ⭐⭐⭐⭐ | High | 6 |
+| 9 | Create the Inline Diff View | ⭐⭐⭐ | Medium | Phase 2 |
+| 10 | Implement Cmd+K for diffs | ⭐⭐⭐⭐ | High | 9 |
+| 11 | Add the plugin system | ⭐⭐⭐⭐ | High | Phase 3 |
+| 12 | Create the plugin API | ⭐⭐⭐⭐ | High | 11 |
+| 13 | Implement dynamic loading | ⭐⭐⭐ | Medium | 11 |
+| 14 | Add advanced Web Search | ⭐⭐⭐ | Medium | Phase 2 |
+| 15 | Implement result caching | ⭐⭐⭐ | Medium | 14 |
+| 16 | Add automatic Micro-Tasks | ⭐⭐⭐⭐ | High | Phase 3 |
+| 17 | Implement complexity detection | ⭐⭐⭐⭐ | High | 16 |
+| 18 | Performance optimizations | ⭐⭐⭐ | Medium | All |
+| 19 | Full tests of all features | ⭐⭐⭐⭐ | High | All |
 
-**Critères de Validation** :
-- [x] Le Context Pruning réduit les tokens de 50%+ pour les petits modèles
-- [x] Le RAG retourne des résultats précis
-- [x] L'Inline Diff fonctionne avec Cmd+K
-- [ ] Les plugins peuvent être installés et utilisés (non applicable — pas de système de plugins dédié)
-- [x] Les Micro-Tâches sont générées automatiquement
-- [x] Les performances sont optimales (pas de lag dans l'UI)
+**Validation Criteria**:
+- [x] Context Pruning reduces tokens by 50%+ for small models
+- [x] RAG returns accurate results
+- [x] Inline Diff works with Cmd+K
+- [ ] Plugins can be installed and used (not applicable — no dedicated plugin system)
+- [x] Micro-Tasks are generated automatically
+- [x] Performance is optimal (no UI lag)
 
-### 9.6. Finalisation v1 (audit du 11/07/2026)
+### 9.6. V1 Finalization (2026-07-11 audit)
 
-**Objectif** : combler les derniers écarts avec la spec identifiés par un audit de code complet (`docs/audit-2026-07-11.md`) avant publication v1, et nettoyer le code mort accumulé au fil des itérations.
+**Goal**: close the remaining gaps with the spec identified by a full code audit (`docs/audit-2026-07-11.md`) before the v1 release, and clean up dead code accumulated over the iterations.
 
-**Livrables** :
-- [x] **Agents spécialisés** avec restriction d'outils réelle par persona (§5.1)
-- [x] **Ouverture automatique** du fichier édité par l'agent (§5.3)
-- [x] **`search_web` fonctionnel** via Brave Search API, sources configurables (§4.2)
-- [x] **`JARVIS.md`** — fichier d'instructions projet versionné + commande `/init` (§5.2)
-- [x] **Règles par dossier** (`RuleItem.scope`, §5.2)
-- [x] **Checklist TODO** persistante au-dessus du chat, pré-remplie pour les workflows (§5.3)
-- [x] **Autocomplete inline** (Tab / ghost text), désactivé par défaut (§5.3)
-- [x] Nettoyage : rôles de modèle morts retirés de l'UI, `setHitlMode` instantané, code mort supprimé (`onListSessions`), icônes manquantes ajoutées, types `ProviderType`/`ChatPanel` synchronisés, dépendance `chart.js` retirée (jamais utilisée), références `Vectra` retirées de la doc (jamais installé)
-- [~] Props `onNewChat`/`onResumeChat` de `ChatPanel` : marquées "rendues fonctionnelles" à tort — jamais réellement câblées dans le template. Corrigé le 11/07/2026 (suite) en les **supprimant** plutôt qu'en les câblant : les vrais boutons "New chat"/"Resume" vivent déjà dans le header d'`App.svelte`, un doublon dans l'état vide du chat n'était pas souhaité.
-- Explicitement hors scope (reporté) : sous-agents/délégation parallèle, suivi de coût monétaire, checkpoints sur repo git « fantôme »
+**Deliverables**:
+- [x] **Specialized agents** with real per-persona tool restrictions (§5.1)
+- [x] **Auto-opening** the file edited by the agent (§5.3)
+- [x] **Functional `search_web`** via DuckDuckGo (free, no key), configurable sources (§4.2)
+- [x] **`JARVIS.md`** — versioned project instructions file + `/init` command (§5.2)
+- [x] **Folder-scoped rules** (`RuleItem.scope`, §5.2)
+- [x] Persistent **TODO checklist** above the chat, pre-filled for workflows (§5.3)
+- [x] **Inline autocomplete** (Tab / ghost text), disabled by default (§5.3)
+- [x] Cleanup: dead model roles removed from the UI, instant `setHitlMode`, dead code removed (`onListSessions`), missing icons added, `ProviderType`/`ChatPanel` types synced, unused `chart.js` dependency removed (never used), `Vectra` references removed from the docs (never installed)
+- [~] `ChatPanel`'s `onNewChat`/`onResumeChat` props: wrongly marked "made functional" — never actually wired up in the template. Fixed on 2026-07-11 (follow-up) by **removing** them rather than wiring them up: the real "New chat"/"Resume" buttons already live in `App.svelte`'s header, a duplicate in the chat's empty state was not desired.
+- Explicitly out of scope (deferred): sub-agents/parallel delegation, monetary cost tracking, checkpoints on a "shadow" git repo
 
-**9.6.1. Passe de vérification code + préparation publication (11/07/2026, suite)** — voir l'addendum de `docs/audit-2026-07-11.md` et `CHANGELOG.md` pour le détail :
-- [x] Build + lint + suite de tests complète vérifiés (42 fichiers, 322 tests) — 5 erreurs ESLint réelles corrigées ; props mortes `onNewChat`/`onResumeChat` de `ChatPanel` (+ CSS `.empty-actions` orpheline) supprimées plutôt que câblées, à la demande explicite de l'utilisateur
-- [x] Blocage `vsce package` corrigé (`engines.vscode` vs `@types/vscode`), dépendances mortes/mal classées nettoyées (`uuid`, `marked`/`prismjs`), migration `vsce` → `@vscode/vsce` (0 vulnérabilité restante)
-- [x] `.vscodeignore`, icône Marketplace PNG, métadonnées `package.json` (repository/bugs/homepage/keywords/icon), `CHANGELOG.md`, `SECURITY.md` ajoutés
-- [ ] Captures d'écran/vidéos de démonstration (`docs/media/`) — reste à faire manuellement, voir la liste de tâches de publication
+**9.6.1. Code verification pass + publication prep (2026-07-11, follow-up)** — see the addendum in `docs/audit-2026-07-11.md` and `CHANGELOG.md` for details:
+- [x] Build + lint + full test suite verified (42 files, 322 tests) — 5 genuine ESLint errors fixed; `ChatPanel`'s dead `onNewChat`/`onResumeChat` props (+ orphaned `.empty-actions` CSS) removed rather than wired up, at the user's explicit request
+- [x] `vsce package` blocker fixed (`engines.vscode` vs `@types/vscode`), dead/misplaced dependencies cleaned up (`uuid`, `marked`/`prismjs`), migrated `vsce` → `@vscode/vsce` (0 vulnerabilities remaining)
+- [x] `.vscodeignore`, Marketplace PNG icon, `package.json` metadata (repository/bugs/homepage/keywords/icon), `CHANGELOG.md`, `SECURITY.md` added
+- [ ] Screenshots/demo videos (`docs/media/`) — still to be done manually, see the publication task list
 
 
-### 10 Ressources et Références
+### 10 Resources and References
 
-**Documentation Officielle** :
+**Official Documentation**:
 - [VS Code Extension API](https://code.visualstudio.com/api)
 - [Model Context Protocol (MCP)](https://github.com/modelcontextprotocol/spec)
 - [Svelte Documentation](https://svelte.dev/docs)
@@ -813,26 +812,26 @@ Découpage en Micro-Tâches:
 - [Vite Documentation](https://vitejs.dev/)
 - [Tailwind CSS Documentation](https://tailwindcss.com/docs)
 
-**Librairies et Outils** :
-- [Ollama](https://ollama.ai/) - Modèles locaux
-- [OpenRouter](https://openrouter.ai/) - API de modèles cloud
-- [web-tree-sitter](https://github.com/Paulrberg/web-tree-sitter) - Tree-sitter pour le browser
-- [@xenova/transformers](https://github.com/xenova/transformers.js) - Embeddings locaux pour le RAG (index vectoriel maison en mémoire, pas de base externe)
-- [marked.js](https://marked.js.org/) - Parsing Markdown
+**Libraries and Tools**:
+- [Ollama](https://ollama.ai/) - Local models
+- [OpenRouter](https://openrouter.ai/) - Cloud model API
+- [web-tree-sitter](https://github.com/Paulrberg/web-tree-sitter) - Tree-sitter for the browser
+- [@xenova/transformers](https://github.com/xenova/transformers.js) - Local embeddings for RAG (homegrown in-memory vector index, no external database)
+- [marked.js](https://marked.js.org/) - Markdown parsing
 
-**Projets Inspirants** :
-- [Continue.dev](https://github.com/continuedev/continue) - Extension VS Code AI
-- [Claude Code](https://github.com/sourcegraph/claude-code) - (anciennement)
-- [Antigravity](https://github.com/antigravity-ai/antigravity) - Agent de code
+**Inspiring Projects**:
+- [Continue.dev](https://github.com/continuedev/continue) - AI VS Code extension
+- [Claude Code](https://github.com/sourcegraph/claude-code) - (formerly)
+- [Antigravity](https://github.com/antigravity-ai/antigravity) - Code agent
 - [Mistral Vibe](https://github.com/mistralai/vibe) - CLI Agent
 - [Codex](https://github.com/features/codex) - (GitHub)
 
-**Communauté** :
+**Community**:
 - [VS Code Extensions](https://code.visualstudio.com/docs/editor/extension-gallery)
 - [Awesome VS Code](https://github.com/viatsko/awesome-vscode)
 - [MCP Community](https://github.com/modelcontextprotocol/community)
 
-**Outils de Développement** :
+**Development Tools**:
 - [VS Code Extension Generator](https://code.visualstudio.com/api/get-started/extension-generator)
 - [VS Code Extension Samples](https://github.com/microsoft/vscode-extension-samples)
 - [VS Code Testing](https://code.visualstudio.com/api/working-with-extensions/testing-extension)

@@ -5,7 +5,7 @@
 
   interface Props {
     used?: number;
-    /** Longueur de contexte du modèle ; `null` = aucun modèle configuré. */
+    /** Model's context length; `null` = no model configured. */
     limit?: number | null;
     inputTokens?: number;
     outputTokens?: number;

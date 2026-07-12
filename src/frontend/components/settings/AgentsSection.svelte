@@ -14,7 +14,7 @@
     onChange(next);
   }
 
-  /** Cartes dépliées (nouvel agent = ouvert en édition). */
+  /** Expanded cards (a new agent opens in edit mode). */
   let expanded = $state<Record<string, boolean>>({});
 
   function addAgent() {
@@ -42,7 +42,7 @@
   }
 
   function resetToDefaults() {
-    // snapshot d'abord : structuredClone ne sait pas cloner un proxy $state.
+    // Snapshot first: structuredClone can't clone a $state proxy.
     update(structuredClone($state.snapshot(defaults)) as SpecializedAgent[]);
   }
 

@@ -1,7 +1,7 @@
 /**
- * Journalisation de toutes les opérations de l'agent (spec §4.1 / §6 —
- * "Transparence totale"). Les écouteurs (OutputChannel VS Code, webview)
- * s'abonnent aux entrées.
+ * Logging of all agent operations (spec §4.1 / §6 —
+ * "Total transparency"). Listeners (VS Code OutputChannel, webview)
+ * subscribe to entries.
  */
 
 export interface OperationLogEntry {
@@ -34,7 +34,7 @@ export class OperationLogger {
       try {
         listener(entry);
       } catch {
-        // un écouteur défaillant ne doit pas casser la journalisation
+        // a faulty listener must not break logging
       }
     }
   }
@@ -51,5 +51,5 @@ export class OperationLogger {
   }
 }
 
-/** Instance partagée par l'extension. */
+/** Instance shared by the extension. */
 export const operationLogger = new OperationLogger();

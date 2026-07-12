@@ -6,13 +6,13 @@ import { RagIndex, RagSearchResult } from './rag.js';
 import type { DocSite } from '../../config/config-manager.js';
 
 /**
- * Section Docs (façon Continue) : récupère un site de documentation par crawl
- * léger (même origine + même préfixe de chemin), met les pages en cache sur
- * disque (`~/.jarvis/docs/<id>/`) et les indexe dans un RagIndex **séparé** —
- * l'index workspace fait `clear()` à chaque réindexation et effacerait les
- * docs si elles y vivaient.
+ * Docs section (Continue-style): fetches a documentation site via a light
+ * crawl (same origin + same path prefix), caches pages on disk
+ * (`~/.jarvis/docs/<id>/`), and indexes them in a **separate** RagIndex —
+ * the workspace index calls `clear()` on every reindex, which would wipe
+ * the docs if they lived there too.
  *
- * Pur Node (aucun import vscode) — testable via les options injectables.
+ * Pure Node (no vscode import) — testable via injectable options.
  */
 
 export interface DocsServiceOptions {
@@ -37,7 +37,7 @@ interface SiteMeta {
   pages: Array<{ url: string; title: string; file: string }>;
 }
 
-/** Extrait le titre et le texte lisible d'une page HTML (sans dépendance). */
+/** Extracts the title and readable text of an HTML page (no dependency). */
 export function stripHtml(html: string): { title: string; text: string } {
   const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
   const title = titleMatch ? decodeEntities(titleMatch[1].trim()) : '';
@@ -51,7 +51,7 @@ export function stripHtml(html: string): { title: string; text: string } {
       .replace(/<footer[\s\S]*?<\/footer>/gi, ' ')
       .replace(/<aside[\s\S]*?<\/aside>/gi, ' ')
       .replace(/<!--[\s\S]*?-->/g, ' ')
-      // Conserve des sauts de ligne aux frontières de blocs pour le chunking.
+      // Preserves line breaks at block boundaries for chunking.
       .replace(/<\/(p|div|section|article|li|h[1-6]|tr|pre|blockquote)>/gi, '\n')
       .replace(/<(br|hr)\s*\/?>/gi, '\n')
       .replace(/<[^>]+>/g, ' ')
@@ -74,7 +74,7 @@ function decodeEntities(text: string): string {
     .replace(/&amp;/g, '&');
 }
 
-/** Liens absolus http(s) d'une page, résolus contre `baseUrl`, sans fragment. */
+/** Absolute http(s) links of a page, resolved against `baseUrl`, without fragments. */
 export function extractLinks(html: string, baseUrl: string): string[] {
   const links = new Set<string>();
   for (const match of html.matchAll(/href\s*=\s*["']([^"']+)["']/gi)) {
@@ -84,13 +84,13 @@ export function extractLinks(html: string, baseUrl: string): string[] {
       url.hash = '';
       links.add(url.toString());
     } catch {
-      /* href invalide — ignoré */
+      /* invalid href — ignored */
     }
   }
   return [...links];
 }
 
-/** Préfixe de répertoire du chemin de départ (`/docs/intro` → `/docs/`). */
+/** Directory prefix of the starting path (`/docs/intro` → `/docs/`). */
 function pathPrefixOf(startUrl: URL): string {
   const p = startUrl.pathname;
   if (p.endsWith('/')) return p;
@@ -102,7 +102,7 @@ function normalizeForDedupe(url: string): string {
   return url.endsWith('/') ? url.slice(0, -1) : url;
 }
 
-/** Fusionne des résultats de recherche de plusieurs index, triés par score. */
+/** Merges search results from multiple indexes, sorted by score. */
 export function mergeSearchResults(
   topK: number,
   ...lists: RagSearchResult[][]
@@ -138,7 +138,7 @@ export class DocsService {
     return `docs:${id}:`;
   }
 
-  /** Crawl BFS + cache disque + indexation RAG. Remplace tout index/cache existant du site. */
+  /** BFS crawl + disk cache + RAG indexing. Replaces any existing index/cache for the site. */
   public async indexSite(
     site: DocSite,
     onProgress?: (pages: number) => void
@@ -196,7 +196,7 @@ export class DocsService {
     return { pages: pages.length };
   }
 
-  /** GET politesse : timeout, UA dédié, HTML 2xx uniquement, jamais de throw. */
+  /** Polite GET: timeout, dedicated UA, HTML 2xx only, never throws. */
   private async fetchPage(url: string): Promise<string | null> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.fetchTimeoutMs);
@@ -226,7 +226,7 @@ export class DocsService {
     }
   }
 
-  /** Ré-hydrate l'index en mémoire depuis le cache disque des sites activés. */
+  /** Rehydrates the in-memory index from the disk cache of enabled sites. */
   public async loadFromCache(sites: DocSite[]): Promise<void> {
     for (const site of sites) {
       if (!site.enabled) continue;
@@ -238,18 +238,18 @@ export class DocsService {
           const text = await fs.readFile(path.join(this.siteDir(site.id), 'pages', page.file), 'utf-8');
           await this.index.addDocument(this.indexPrefix(site.id) + page.url, text);
         } catch {
-          /* page manquante — ignorée */
+          /* missing page — ignored */
         }
       }
     }
   }
 
-  /** Retire un site de l'index en mémoire (le cache disque reste). */
+  /** Removes a site from the in-memory index (the disk cache remains). */
   public unloadSite(id: string): void {
     this.index.removeByPrefix(this.indexPrefix(id));
   }
 
-  /** Supprime un site : index en mémoire + cache disque. */
+  /** Deletes a site: in-memory index + disk cache. */
   public async removeSite(id: string): Promise<void> {
     this.unloadSite(id);
     await fs.rm(this.siteDir(id), { recursive: true, force: true });

@@ -10,31 +10,31 @@ import { sanitizeTodoItems, type TodoItem } from './todo.js';
 export interface GateResult {
   granted: boolean;
   reason: string;
-  /** Instructions de l'utilisateur données lors d'un refus. */
+  /** User instructions given when refusing. */
   feedback?: string;
 }
 
 export interface ApprovalGate {
   checkApproval(actionType: string, params: Record<string, unknown>): Promise<GateResult>;
-  /** Confirmation inconditionnelle (politique d'outil « ask first »). */
+  /** Unconditional confirmation ("ask first" tool policy). */
   askApproval?(actionType: string, params: Record<string, unknown>): Promise<GateResult>;
 }
 
-/** Politique par outil (voir config-manager.ToolPolicy) ; `excluded` est géré en amont, au registre. */
+/** Per-tool policy (see config-manager.ToolPolicy); `excluded` is handled upstream, at the registry. */
 export type ToolPolicy = 'auto' | 'ask' | 'excluded';
 
 export interface AgentEvents {
-  /** Chaîne de pensée du modèle à chaque itération. */
+  /** The model's chain of thought at each iteration. */
   onThinking?(text: string): void;
   onToolCall?(name: string, args: Record<string, unknown>): void;
   onToolResult?(name: string, result: string, success: boolean, args?: Record<string, unknown>): void;
-  /** Texte final complet (à la fin). */
+  /** Full final text (at the end). */
   onFinal?(text: string): void;
-  /** Chunk de pensée en streaming. */
+  /** Streaming thought chunk. */
   onThinkingChunk?(text: string): void;
-  /** Chunk de texte final en streaming. */
+  /** Streaming final-text chunk. */
   onFinalChunk?(text: string): void;
-  /** La checklist TODO a été remplacée (outil `update_todo_list`, ou synthèse d'un workflow). */
+  /** The TODO checklist was replaced (`update_todo_list` tool, or a workflow's synthesis). */
   onTodoUpdate?(items: TodoItem[]): void;
 }
 
@@ -52,16 +52,16 @@ export interface AgentResult {
   steps: AgentStep[];
   iterations: number;
   error?: string;
-  /** Cumul des stats de tokens renvoyées par l'API sur la boucle (dont le cache). */
+  /** Cumulative token stats returned by the API over the loop (including cache). */
   usage?: ProviderUsage;
 }
 
-/** Détecte un refus d'API lié au mode JSON forcé (`response_format`/`format`). */
+/** Detects an API refusal related to forced JSON mode (`response_format`/`format`). */
 function isJsonModeError(message: string): boolean {
   return /response_format|json_object|json mode|json_schema|does not support|not supported/i.test(message);
 }
 
-/** Additionne les stats de tokens d'un appel dans le cumul de la boucle. */
+/** Adds a call's token stats to the loop's running total. */
 function accumulateUsage(total: ProviderUsage, next: ProviderUsage | undefined): void {
   if (!next) return;
   total.promptTokens = (total.promptTokens ?? 0) + (next.promptTokens ?? 0);
@@ -73,23 +73,23 @@ export interface OrchestratorOptions {
   maxIterations?: number;
   systemPrompt?: string;
   hitl?: ApprovalGate;
-  /** Filtrage des secrets appliqué aux messages sortants (providers cloud). */
+  /** Secret scrubbing applied to outgoing messages (cloud providers). */
   scrub?: (text: string) => string;
-  /** Troncature des résultats d'outils injectés dans le contexte. */
+  /** Truncation of tool results injected into the context. */
   maxToolResultChars?: number;
-  /** Politique par nom d'outil : `auto` court-circuite le HITL, `ask` le force. */
+  /** Policy per tool name: `auto` bypasses HITL, `ask` forces it. */
   toolPolicies?: Record<string, ToolPolicy>;
-  /** Tracker pour l'enregistrement des diffs de fichiers modifiés. */
+  /** Tracker for recording diffs of modified files. */
   changeTracker?: ChangeTracker;
-  /** Racine du workspace pour résoudre les chemins relatifs. */
+  /** Workspace root for resolving relative paths. */
   workspaceFolder?: string;
-  /** Signal d'annulation pour arrêter la génération en cours. */
+  /** Abort signal to stop the ongoing generation. */
   abortSignal?: AbortSignal;
-  /** Notifié après l'enregistrement réussi d'une édition de fichier (auto-ouverture UI). */
+  /** Notified after successfully recording a file edit (UI auto-open). */
   onFileEdited?: (filePath: string) => void;
 }
 
-/** Réponse structurée attendue du modèle (JSON Mode, spec §8.2). */
+/** Structured response expected from the model (JSON Mode, spec §8.2). */
 interface AgentAction {
   thought?: string;
   action?: { tool?: string; args?: Record<string, unknown> };
@@ -99,16 +99,16 @@ interface AgentAction {
 const DEFAULT_MAX_ITERATIONS = 100;
 const DEFAULT_MAX_RESULT_CHARS = 6000;
 
-/** Adaptations du prompt système au profil du modèle (spec §7 — petits modèles). */
+/** System prompt adaptations based on the model profile (spec §7 — small models). */
 export interface AgentPromptOptions {
-  /** Phrase(s) ajoutée(s) à la persona (ex. profil devstral). */
+  /** Extra sentence(s) appended to the persona (e.g. devstral profile). */
   personaExtra?: string;
-  /** Prompt resserré + few-shot supplémentaire (petits modèles locaux type Qwen 7B). */
+  /** Tightened prompt + extra few-shot (small local models like Qwen 7B). */
   compact?: boolean;
   /**
-   * Mode Plan : retire les règles qui poussent le modèle à agir avec ses outils
-   * (elles contredisent l'instruction de la persona de ne rien écrire sur disque)
-   * et les remplace par des règles adaptées à la production d'un plan en lecture seule.
+   * Plan mode: removes the rules that push the model to act with its tools
+   * (they contradict the persona instruction to write nothing to disk)
+   * and replaces them with rules suited to producing a read-only plan.
    */
   planOnly?: boolean;
 }
@@ -121,73 +121,73 @@ export function buildAgentSystemPrompt(
 ): string {
   return [
     persona ??
-      'Tu es Jarvis, un ingénieur logiciel autonome intégré à VS Code. ' +
-      'Tu accomplis les tâches de manière incrémentale en utilisant les outils disponibles.',
+      'You are Jarvis, an autonomous software engineer embedded in VS Code. ' +
+      'You accomplish tasks incrementally using the tools available to you.',
     ...(options.personaExtra ? [options.personaExtra] : []),
     ...(rulesText ? ['', rulesText] : []),
     '',
-    'OUTILS DISPONIBLES:',
+    'AVAILABLE TOOLS:',
     tools.describeForPrompt(),
     '',
-    'FORMAT DE RÉPONSE — Tu DOIS répondre avec UN SEUL objet JSON, sans texte autour:',
-    'Pour utiliser un outil:',
-    '{"thought": "raisonnement court", "action": {"tool": "nom_outil", "args": {"param_string": "valeur", "param_array": ["item1"]}}}',
-    'IMPORTANT: Respecte les types des arguments (string, number, boolean, array). Par exemple, pour un tableau (array), utilise bien `["val1", "val2"]` et non une chaîne `"[\\"val1\\"]"`.',
-    'Pour terminer et répondre à l\'utilisateur:',
-    '{"thought": "raisonnement court", "final": "réponse en Markdown"}',
+    'RESPONSE FORMAT — You MUST respond with a SINGLE JSON object, with no surrounding text:',
+    'To use a tool:',
+    '{"thought": "short reasoning", "action": {"tool": "tool_name", "args": {"string_param": "value", "array_param": ["item1"]}}}',
+    'IMPORTANT: Respect argument types (string, number, boolean, array). For example, for an array, use `["val1", "val2"]` and not a string `"[\\"val1\\"]"`.',
+    'To finish and answer the user:',
+    '{"thought": "short reasoning", "final": "answer in Markdown"}',
     '',
-    'EXEMPLE:',
-    'Utilisateur: Quels fichiers TypeScript existent dans src ?',
-    'Toi: {"thought": "Je liste les fichiers .ts", "action": {"tool": "file_glob_search", "args": {"pattern": "src/**/*.ts"}}}',
-    'Résultat: src/index.ts',
-    'Toi: {"thought": "J\'ai la liste", "final": "Un seul fichier TypeScript : `src/index.ts`"}',
+    'EXAMPLE:',
+    'User: What TypeScript files exist under src?',
+    'You: {"thought": "Listing the .ts files", "action": {"tool": "file_glob_search", "args": {"pattern": "src/**/*.ts"}}}',
+    'Result: src/index.ts',
+    'You: {"thought": "Got the list", "final": "Only one TypeScript file: `src/index.ts`"}',
     ...(options.compact
       ? [
           '',
-          'EXEMPLE 2 (modification de fichier):',
-          'Utilisateur: Corrige le titre du README',
-          'Toi: {"thought": "Je lis le fichier", "action": {"tool": "read_file", "args": {"path": "README.md"}}}',
-          'Résultat: # Ancien titre…',
-          'Toi: {"thought": "Je remplace le titre", "action": {"tool": "single_find_and_replace", "args": {"path": "README.md", "old_string": "# Ancien titre", "new_string": "# Nouveau titre"}}}',
-          'Résultat: Remplacement effectué',
-          'Toi: {"thought": "Terminé", "final": "Titre corrigé dans `README.md`."}',
+          'EXAMPLE 2 (editing a file):',
+          'User: Fix the README title',
+          'You: {"thought": "Reading the file", "action": {"tool": "read_file", "args": {"path": "README.md"}}}',
+          'Result: # Old title…',
+          'You: {"thought": "Replacing the title", "action": {"tool": "single_find_and_replace", "args": {"path": "README.md", "old_string": "# Old title", "new_string": "# New title"}}}',
+          'Result: Replacement done',
+          'You: {"thought": "Done", "final": "Fixed the title in `README.md`."}',
           '',
-          'IMPORTANT: réponds UNIQUEMENT avec l\'objet JSON — aucun texte avant ou après, pas de bloc markdown autour.'
+          'IMPORTANT: respond ONLY with the JSON object — no text before or after, no surrounding markdown block.'
         ]
       : []),
     '',
-    'RÈGLES:',
-    '- Une seule action par réponse.',
+    'RULES:',
+    '- One action per response.',
     ...(options.planOnly
       ? [
-          '- Tu NE DOIS RIEN créer ni modifier sur disque et ne dois exécuter aucune commande : utilise uniquement tes outils de lecture (read_file, grep_search, ls, file_glob_search...) pour explorer le projet.',
-          '- Une fois ton exploration terminée, réponds avec `final` contenant le plan d\'implémentation complet en Markdown. Ne t\'arrête jamais sur une action d\'écriture : ces outils ne te sont pas fournis dans ce mode.',
-          '- Juste avant (ou avec) cette réponse finale, appelle UNE SEULE FOIS update_todo_list avec les étapes d\'implémentation du plan (toutes en "pending") : c\'est cette checklist qui sera suivie en direct plus tard, quand le plan sera exécuté. Ne l\'appelle pas pendant l\'exploration.'
+          '- You MUST NOT create or modify anything on disk and must not run any command: use only your read-only tools (read_file, grep_search, ls, file_glob_search...) to explore the project.',
+          '- Once your exploration is complete, respond with `final` containing the full implementation plan in Markdown. Never stop on a write action: those tools are not provided to you in this mode.',
+          '- Just before (or with) that final response, call update_todo_list EXACTLY ONCE with the plan\'s implementation steps (all "pending"): this checklist is the one that will be followed live later, when the plan is executed. Do not call it during exploration.'
         ]
       : [
-          '- AGIS avec tes outils, ne décris pas : pour créer/modifier un fichier utilise create_new_file/edit_existing_file, pour exécuter une commande utilise run_terminal_command. Ne donne JAMAIS de script ou de commande à copier-coller à l\'utilisateur quand un outil peut le faire.',
-          '- Pour un processus long (serveur de dev, watcher), utilise run_in_background puis check_background_process.',
-          '- Ne réécris JAMAIS le contenu complet d\'un fichier dans ta réponse finale. Contente-toi de confirmer succinctement tes modifications.',
-          '- Si tu suis une checklist avec update_todo_list (la tienne, ou celle héritée d\'un plan validé), tiens-la à jour en direct : rappelle l\'outil ' +
-            'à chaque changement de statut (une tâche passe à "in_progress" quand tu la commences, "completed" ' +
-            'dès qu\'elle est finie) plutôt que de la poser une seule fois puis de l\'oublier.'
+          '- ACT with your tools, don\'t describe: to create/modify a file use create_new_file/edit_existing_file, to run a command use run_terminal_command. NEVER give the user a script or command to copy-paste when a tool can do it.',
+          '- For a long-running process (dev server, watcher), use run_in_background then check_background_process.',
+          '- NEVER rewrite a file\'s full content in your final response. Just briefly confirm your changes.',
+          '- If you\'re following a checklist with update_todo_list (yours, or one inherited from an approved plan), keep it up to date live: call the tool again ' +
+            'on every status change (a task moves to "in_progress" when you start it, "completed" ' +
+            'as soon as it\'s done) rather than setting it once and forgetting about it.'
         ]),
-    '- Décompose les tâches complexes en micro-tâches (une étape atomique à la fois).',
-    '- Vérifie le résultat de chaque outil avant de continuer.',
-    '- Si un outil échoue, analyse l\'erreur et adapte ta stratégie.'
+    '- Break complex tasks down into micro-tasks (one atomic step at a time).',
+    '- Check the result of each tool before continuing.',
+    '- If a tool fails, analyze the error and adapt your strategy.'
   ].join('\n');
 }
 
 /**
- * Boucle agentique (spec §4) : le modèle choisit des outils, l'orchestrateur
- * les exécute (avec approbation HITL) et renvoie les résultats jusqu'à la
- * réponse finale ou le nombre max d'itérations.
+ * Agentic loop (spec §4): the model chooses tools, the orchestrator executes
+ * them (with HITL approval) and feeds back the results until the final
+ * response or the max number of iterations.
  */
 export class AgentOrchestrator {
   /**
-   * Providers (par `name`) ayant rejeté le mode JSON forcé : on n'y renvoie plus
-   * `response_format`, on retombe sur le prompt + json-cleaner. Mémorisé au niveau
-   * du process pour ne pas retenter à chaque requête.
+   * Providers (by `name`) that have rejected forced JSON mode: we stop sending
+   * them `response_format` and fall back to the prompt + json-cleaner. Remembered
+   * at the process level so we don't retry on every request.
    */
   private static jsonModeUnsupported = new Set<string>();
 
@@ -213,7 +213,7 @@ export class AgentOrchestrator {
     let retryCount = 0;
     let loopCount = 0;
     let lastToolSignature = '';
-    // Structured Outputs : on force un JSON parsable via l'API tant que le provider l'accepte.
+    // Structured Outputs: force parsable JSON via the API for as long as the provider accepts it.
     let useJsonMode = !AgentOrchestrator.jsonModeUnsupported.has(this.provider.name);
     const totalUsage: ProviderUsage = { promptTokens: 0, completionTokens: 0, cachedTokens: 0 };
 
@@ -221,7 +221,7 @@ export class AgentOrchestrator {
       this.options.abortSignal?.throwIfAborted();
 
       if (iteration === maxIterations) {
-        const msg = `J'ai atteint la limite de ${maxIterations} itérations. Souhaitez-vous que je continue ?`;
+        const msg = `I've reached the limit of ${maxIterations} iterations. Would you like me to continue?`;
         events.onFinal?.(msg);
         steps.push({ success: true, result: msg });
         return { success: true, finalText: msg, steps, iterations: iteration, usage: totalUsage };
@@ -238,7 +238,7 @@ export class AgentOrchestrator {
             messages,
             chunk => {
               raw += chunk;
-              // Extraction streaming de <thinking>
+              // Streaming extraction of <thinking>
               const thinkingMatch = raw.match(/<thinking>([\s\S]*?)(?:<\/thinking>|$)/i);
               if (thinkingMatch) {
                 const thinkingText = thinkingMatch[1];
@@ -248,7 +248,7 @@ export class AgentOrchestrator {
                   lastThoughtLength = thinkingText.length;
                 }
               } else {
-                // Extraction rudimentaire de la "thought" pour streaming partiel
+                // Rudimentary extraction of "thought" for partial streaming
                 const thoughtMatch = raw.match(/"thought"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)/);
                 if (thoughtMatch) {
                   try {
@@ -262,7 +262,7 @@ export class AgentOrchestrator {
                 }
               }
 
-              // Extraction rudimentaire de la "final" pour streaming partiel
+              // Rudimentary extraction of "final" for partial streaming
               const finalMatch = raw.match(/"final"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)/);
               if (finalMatch) {
                 try {
@@ -293,19 +293,19 @@ export class AgentOrchestrator {
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        // Fallback Structured Outputs : le provider refuse `response_format` → on
-        // désactive le mode JSON (mémorisé) et on rejoue l'itération sans lui.
+        // Structured Outputs fallback: the provider refuses `response_format` -
+        // disable JSON mode (remembered) and replay the iteration without it.
         if (useJsonMode && isJsonModeError(msg)) {
           useJsonMode = false;
           AgentOrchestrator.jsonModeUnsupported.add(this.provider.name);
-          operationLogger.log('agent', `Mode JSON non supporté par ${this.provider.name} — repli sur le prompt (${msg.slice(0, 120)})`, 'error');
-          iteration--; // le for(...) réincrémente : on rejoue la même itération
+          operationLogger.log('agent', `JSON mode not supported by ${this.provider.name} - falling back to prompt (${msg.slice(0, 120)})`, 'error');
+          iteration--; // the for(...) re-increments: we replay the same iteration
           continue;
         }
         if (msg.includes('aborted')) {
-          return { success: false, finalText: '', steps, iterations: iteration, error: "Génération annulée par l'utilisateur.", usage: totalUsage };
+          return { success: false, finalText: '', steps, iterations: iteration, error: 'Generation canceled by the user.', usage: totalUsage };
         }
-        return { success: false, finalText: '', steps, iterations: iteration, error: `Erreur du modèle: ${msg}`, usage: totalUsage };
+        return { success: false, finalText: '', steps, iterations: iteration, error: `Model error: ${msg}`, usage: totalUsage };
       }
 
       const parsed = extractJson<AgentAction>(raw);
@@ -353,16 +353,16 @@ export class AgentOrchestrator {
         }
       }
 
-      // Système de Retry
+      // Retry system
       if (!isNativeTool && (!parsed.ok || (!action.action?.tool && action.final === undefined))) {
         if (retryCount < 3) {
           retryCount++;
           messages.push({ role: 'assistant', content: raw });
-          messages.push({ role: 'user', content: "Erreur : Format inattendu. Tu dois utiliser un appel d'outil natif ou fournir un objet JSON valide avec 'action' ou 'final'. Refais ta réponse." });
-          events.onThinkingChunk?.('\n\n*(Nouvelle tentative suite à une erreur de format)*\n\n');
+          messages.push({ role: 'user', content: "Error: Unexpected format. You must use a native tool call or provide a valid JSON object with 'action' or 'final'. Redo your response." });
+          events.onThinkingChunk?.('\n\n*(Retrying after a format error)*\n\n');
           continue;
         } else {
-          // Pas de JSON exploitable → on considère la réponse brute comme finale.
+          // No usable JSON - treat the raw response as final.
           const finalText = (parsed.surroundingText ?? raw).trim();
           events.onFinal?.(finalText);
           steps.push({ success: true, result: finalText });
@@ -373,7 +373,7 @@ export class AgentOrchestrator {
       retryCount = 0;
       const thoughtText = action.thought || parsed.surroundingText;
 
-      // On ne renvoie pas onThinking ici si on a déjà streamé
+      // Don't emit onThinking here if we already streamed it
       if (thoughtText && lastThoughtLength === 0) {
         events.onThinking?.(thoughtText);
       }
@@ -416,7 +416,7 @@ export class AgentOrchestrator {
         }
 
         if (loopCount >= 3) {
-          const errMsg = `BOUCLE DÉTECTÉE : Tu as appelé l'outil "${toolName}" avec les mêmes arguments 4 fois de suite. C'est interdit. Modifie ta stratégie, utilise un autre outil, ou termine avec "final".`;
+          const errMsg = `LOOP DETECTED: You called the tool "${toolName}" with the same arguments 4 times in a row. This is not allowed. Change your strategy, use another tool, or finish with "final".`;
           steps.push({ thought: thoughtText, tool: toolName, args, result: errMsg, success: false });
           events.onToolResult?.(toolName, errMsg, false, args);
           messages.push({
@@ -428,7 +428,7 @@ export class AgentOrchestrator {
         }
 
         if (!tool) {
-          const errText = `Outil inconnu: "${toolName}". Outils disponibles: ${this.tools.list().map(td => td.name).join(', ')}`;
+          const errText = `Unknown tool: "${toolName}". Available tools: ${this.tools.list().map(td => td.name).join(', ')}`;
           steps.push({ thought: thoughtText, tool: toolName, args, result: errText, success: false });
           messages.push({ 
             role: isNativeTool ? 'tool' : 'user', 
@@ -457,12 +457,12 @@ export class AgentOrchestrator {
         try {
           result = await this.executeWithTracking(tool, toolName, args);
         } catch (err) {
-          result = `Erreur: ${err instanceof Error ? err.message : String(err)}`;
+          result = `Error: ${err instanceof Error ? err.message : String(err)}`;
           success = false;
         }
 
         if (result.length > maxResultChars) {
-          result = result.slice(0, maxResultChars) + `\n… (tronqué, ${result.length} caractères au total)`;
+          result = result.slice(0, maxResultChars) + `\n... (truncated, ${result.length} characters total)`;
         }
 
         steps.push({ thought: thoughtText, tool: toolName, args, result, success });
@@ -474,17 +474,17 @@ export class AgentOrchestrator {
 
         messages.push({
           role: isNativeTool ? 'tool' : 'user',
-          content: isNativeTool ? scrub(result) : scrub(`Résultat de l'outil ${toolName}:\n${result}\n\nContinue (JSON ou appel d'outil natif uniquement).`),
+          content: isNativeTool ? scrub(result) : scrub(`Result of tool ${toolName}:\n${result}\n\nContinue (JSON or native tool call only).`),
           tool_call_id: t.id
         });
       }
     }
 
-    const error = `Nombre maximum d'itérations atteint (${maxIterations})`;
+    const error = `Maximum number of iterations reached (${maxIterations})`;
     return { success: false, finalText: '', steps, iterations: maxIterations, error, usage: totalUsage };
   }
 
-  /** Contrôle HITL d'un appel d'outil (partagé par les deux boucles). */
+  /** HITL check for a tool call, shared by both loops. */
   private async gate(
     tool: ToolDefinition,
     toolName: string,
@@ -501,12 +501,12 @@ export class AgentOrchestrator {
     if (approval.granted) return { granted: true };
 
     const refusal = approval.feedback
-      ? `Action refusée par l'utilisateur. Ses instructions : « ${approval.feedback} ». Suis ces instructions.`
-      : `Action refusée par l'utilisateur (${approval.reason}). N'insiste pas, propose une alternative ou termine.`;
+      ? `Action refused by the user. Their instructions: "${approval.feedback}". Follow these instructions.`
+      : `Action refused by the user (${approval.reason}). Don't insist, suggest an alternative or stop.`;
     return { granted: false, refusal };
   }
 
-  /** Exécute un outil et enregistre le diff des fichiers modifiés (change-tracker). */
+  /** Executes a tool and records the diff of modified files (change-tracker). */
   private async executeWithTracking(
     tool: ToolDefinition,
     toolName: string,
@@ -526,7 +526,7 @@ export class AgentOrchestrator {
     let beforeContent: string | null = null;
 
     if (isFileEdit && this.options.changeTracker) {
-      // Extraire le chemin (souvent "path", "file", "TargetFile" ou "AbsolutePath").
+      // Extract the path (often "path", "file", "TargetFile" or "AbsolutePath").
       const possiblePath = args.path ?? args.file ?? args.TargetFile ?? args.AbsolutePath;
       if (possiblePath && typeof possiblePath === 'string') {
         filePath = path.isAbsolute(possiblePath)
@@ -550,7 +550,7 @@ export class AgentOrchestrator {
         this.options.changeTracker.record(filePath, beforeContent, afterContent);
         this.options.onFileEdited?.(filePath);
       } catch {
-        // Lecture possiblement en échec si le fichier a été supprimé — on ignore.
+        // Read may fail if the file was deleted - ignore.
       }
     }
 

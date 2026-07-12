@@ -28,8 +28,8 @@ function fakeProvider(responses: string[]): IModelProvider {
 function echoTool(): ToolDefinition {
   return {
     name: 'echo',
-    description: 'renvoie le texte',
-    parameters: [{ name: 'text', type: 'string', description: 'texte', required: true }],
+    description: 'returns the text',
+    parameters: [{ name: 'text', type: 'string', description: 'text', required: true }],
     hitlAction: 'read_file',
     execute: async args => `ECHO: ${args.text}`
   };
@@ -41,8 +41,8 @@ describe('AgentOrchestrator', () => {
     registry.register(echoTool());
 
     const provider = fakeProvider([
-      '{"thought": "j\'utilise echo", "action": {"tool": "echo", "args": {"text": "bonjour"}}}',
-      '{"thought": "fini", "final": "Le résultat est bonjour"}'
+      '{"thought": "I will use echo", "action": {"tool": "echo", "args": {"text": "hello"}}}',
+      '{"thought": "done", "final": "The result is hello"}'
     ]);
 
     const orchestrator = new AgentOrchestrator(provider, registry);
@@ -50,20 +50,20 @@ describe('AgentOrchestrator', () => {
     const result = await orchestrator.run('test', [], events);
 
     expect(result.success).toBe(true);
-    expect(result.finalText).toBe('Le résultat est bonjour');
+    expect(result.finalText).toBe('The result is hello');
     expect(result.iterations).toBe(2);
-    expect(events.onToolCall).toHaveBeenCalledWith('echo', { text: 'bonjour' });
-    expect(events.onToolResult).toHaveBeenCalledWith('echo', 'ECHO: bonjour', true, { text: 'bonjour' });
+    expect(events.onToolCall).toHaveBeenCalledWith('echo', { text: 'hello' });
+    expect(events.onToolResult).toHaveBeenCalledWith('echo', 'ECHO: hello', true, { text: 'hello' });
   });
 
   it('treats non-JSON responses as final answers', async () => {
     const registry = new ToolRegistry();
-    const provider = fakeProvider(['Réponse en texte libre sans JSON.']);
+    const provider = fakeProvider(['Free text response without JSON.']);
     const orchestrator = new AgentOrchestrator(provider, registry);
     const result = await orchestrator.run('test');
 
     expect(result.success).toBe(true);
-    expect(result.finalText).toBe('Réponse en texte libre sans JSON.');
+    expect(result.finalText).toBe('Free text response without JSON.');
   });
 
   it('reports unknown tools back to the model and continues', async () => {
@@ -78,7 +78,7 @@ describe('AgentOrchestrator', () => {
 
     expect(result.success).toBe(true);
     expect(result.steps[0].success).toBe(false);
-    expect(result.steps[0].result).toContain('Outil inconnu');
+    expect(result.steps[0].result).toContain('Unknown tool');
   });
 
   it('stops at maxIterations', async () => {
@@ -92,7 +92,7 @@ describe('AgentOrchestrator', () => {
 
     expect(result.success).toBe(true);
     expect(result.iterations).toBe(3);
-    expect(result.finalText).toContain('itérations');
+    expect(result.finalText).toContain('iterations');
   });
 
   it('respects HITL refusal', async () => {
@@ -100,17 +100,17 @@ describe('AgentOrchestrator', () => {
     registry.register(echoTool());
     const provider = fakeProvider([
       '{"action": {"tool": "echo", "args": {"text": "x"}}}',
-      '{"final": "abandonné"}'
+      '{"final": "abandoned"}'
     ]);
     const hitl = {
-      checkApproval: vi.fn().mockResolvedValue({ granted: false, reason: 'Refusé par l\'utilisateur' })
+      checkApproval: vi.fn().mockResolvedValue({ granted: false, reason: 'Refused by user' })
     };
     const orchestrator = new AgentOrchestrator(provider, registry, { hitl });
     const result = await orchestrator.run('test');
 
     expect(hitl.checkApproval).toHaveBeenCalled();
     expect(result.steps[0].success).toBe(false);
-    expect(result.finalText).toBe('abandonné');
+    expect(result.finalText).toBe('abandoned');
   });
 
   it('tool policy "auto" bypasses the HITL gate', async () => {
@@ -121,8 +121,8 @@ describe('AgentOrchestrator', () => {
       '{"final": "ok"}'
     ]);
     const hitl = {
-      checkApproval: vi.fn().mockResolvedValue({ granted: false, reason: 'refusé' }),
-      askApproval: vi.fn().mockResolvedValue({ granted: false, reason: 'refusé' })
+      checkApproval: vi.fn().mockResolvedValue({ granted: false, reason: 'refused' }),
+      askApproval: vi.fn().mockResolvedValue({ granted: false, reason: 'refused' })
     };
     const orchestrator = new AgentOrchestrator(provider, registry, {
       hitl,
@@ -144,8 +144,8 @@ describe('AgentOrchestrator', () => {
       '{"final": "ok"}'
     ]);
     const hitl = {
-      checkApproval: vi.fn().mockResolvedValue({ granted: true, reason: 'mode libre' }),
-      askApproval: vi.fn().mockResolvedValue({ granted: true, reason: 'approuvé' })
+      checkApproval: vi.fn().mockResolvedValue({ granted: true, reason: 'free mode' }),
+      askApproval: vi.fn().mockResolvedValue({ granted: true, reason: 'approved' })
     };
     const orchestrator = new AgentOrchestrator(provider, registry, {
       hitl,
@@ -167,11 +167,11 @@ describe('AgentOrchestrator', () => {
 
     const compact = buildAgentSystemPrompt(registry, undefined, undefined, {
       compact: true,
-      personaExtra: 'Tu privilégies la qualité à la vitesse.'
+      personaExtra: 'You prioritize quality over speed.'
     });
-    expect(compact).toContain('EXEMPLE 2');
+    expect(compact).toContain('EXAMPLE 2');
     expect(compact).toContain('single_find_and_replace');
-    expect(compact).toContain('Tu privilégies la qualité à la vitesse.');
+    expect(compact).toContain('You prioritize quality over speed.');
   });
 
   it('captures tool execution errors as step failures', async () => {
@@ -201,7 +201,7 @@ describe('AgentOrchestrator', () => {
       const registry = new ToolRegistry();
       registry.register({
         name: 'edit_existing_file',
-        description: 'édite un fichier',
+        description: 'edits a file',
         parameters: [],
         hitlAction: 'edit_existing_file',
         execute: async () => {

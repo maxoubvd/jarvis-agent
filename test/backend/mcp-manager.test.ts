@@ -13,7 +13,7 @@ function fakeConfigManager(mcpServers: Record<string, McpServerConfig>): ConfigM
     version: 1,
     models: { default: null, items: [] },
     mcpServers,
-    // Ces tests ciblent les serveurs utilisateur : builtins désactivés.
+    // These tests target user servers: builtins disabled.
     builtinMcp: { memory: { enabled: false }, fetch: { enabled: false } }
   };
   return { getConfig: () => config } as unknown as ConfigManager;
@@ -81,7 +81,7 @@ describe('McpManager', () => {
     const defs = manager.toToolDefinitions();
     expect(defs).toHaveLength(1);
     expect(defs[0].name).toBe('mcp__srv__echo');
-    // `echo` ne matche aucune règle de mapping → catégorie HITL par défaut.
+    // `echo` does not match any mapping rule → default HITL category.
     expect(defs[0].hitlAction).toBe('mcp_custom');
     expect(defs[0].parameters[0].name).toBe('text');
 
@@ -133,8 +133,7 @@ describe('McpManager', () => {
     );
     await manager.initialize();
 
-    const defs = manager.toToolDefinitions();
-    expect(defs.map(d => d.name)).toEqual(['mcp__srv__other']);
+    expect(manager.toToolDefinitions().map(d => d.name)).toEqual(['mcp__srv__other']);
 
     const status = manager.getStatuses().find(s => s.name === 'srv')!;
     expect(status.tools).toEqual([
@@ -177,13 +176,13 @@ describe('McpManager', () => {
     );
     await manager.initialize();
 
-    // excluded absent du registre agentique.
+    // excluded absent from the agentic registry.
     expect(manager.toToolDefinitions().map(d => d.name)).toEqual([
       'mcp__srv__echo',
       'mcp__srv__other'
     ]);
 
-    // Politique par nom de registre : configurée sinon défaut ask.
+    // Policy by registry name: configured otherwise default ask.
     expect(manager.toolPolicies()).toEqual({
       mcp__srv__echo: 'auto',
       mcp__srv__other: 'ask',
@@ -226,10 +225,10 @@ describe('McpManager', () => {
     await manager.initialize();
 
     const active = manager.activeToolNames();
-    // Serveur injoignable ou désactivé : absent (ses équivalents builtin restent).
+    // Unreachable or disabled server: absent (its builtin equivalents remain).
     expect(active.has('bad')).toBe(false);
     expect(active.has('off')).toBe(false);
-    // Tool exclu : filtré.
+    // Excluded tool: filtered.
     expect([...active.get('good')!]).toEqual(['echo']);
   });
 

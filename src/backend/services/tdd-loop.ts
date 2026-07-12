@@ -27,7 +27,7 @@ export interface TDDDeps {
 export interface TDDOptions {
   maxAttempts?: number;
   testCommand?: string;
-  /** Timeout initial en ms — doublé après chaque timeout (spec §3.3). */
+  /** Initial timeout in ms — doubled after each timeout (spec §3.3). */
   timeout?: number;
 }
 
@@ -50,26 +50,26 @@ const DEFAULT_MAX_ATTEMPTS = 5;
 const DEFAULT_TIMEOUT = 30000;
 
 const TDD_SYSTEM_PROMPT = [
-  'Tu es Jarvis en mode Auto-TDD : tu écris du code qui doit faire passer les tests.',
-  'Tu DOIS répondre avec UN SEUL objet JSON, sans texte autour:',
-  '{"explanation": "résumé court", "files": [{"path": "chemin/relatif.ts", "content": "contenu complet du fichier"}]}',
-  'Règles:',
-  '- Fournis le contenu COMPLET de chaque fichier (pas de fragments).',
-  '- Modifie uniquement les fichiers nécessaires.',
-  '- Corrige la cause racine des échecs de tests, pas les symptômes.'
+  'You are Jarvis in Auto-TDD mode: you write code that must make tests pass.',
+  'You MUST respond with A SINGLE JSON object, no text around:',
+  '{"explanation": "brief summary", "files": [{"path": "relative/path.ts", "content": "full file content"}]}',
+  'Rules:',
+  '- Provide the COMPLETE content of each file (no fragments).',
+  '- Only modify necessary files.',
+  '- Fix the root cause of test failures, not the symptoms.'
 ].join('\n');
 
-/** Tronque la sortie de test pour ne garder que la fin (là où sont les erreurs). */
+/** Truncates test output to keep only the end (where errors are). */
 export function summarizeTestOutput(stdout: string, stderr: string, maxChars = 4000): string {
   const combined = `${stdout}\n${stderr}`.trim();
   if (combined.length <= maxChars) return combined;
-  return '… (début tronqué)\n' + combined.slice(combined.length - maxChars);
+  return '... (start truncated)\n' + combined.slice(combined.length - maxChars);
 }
 
 /**
- * Boucle Auto-TDD (spec §3.3) :
- * générer code → écrire fichiers → exécuter tests → analyser → corriger,
- * maximum `maxAttempts` tentatives.
+ * Auto-TDD loop (spec §3.3):
+ * generate code → write files → run tests → analyze → fix,
+ * maximum `maxAttempts` attempts.
  */
 export class AutoTDDLoop {
   constructor(
@@ -84,7 +84,7 @@ export class AutoTDDLoop {
 
     const messages: ChatMessage[] = [
       { role: 'system', content: TDD_SYSTEM_PROMPT },
-      { role: 'user', content: `Tâche: ${task}\nCommande de test: ${testCommand}` }
+      { role: 'user', content: `Task: ${task}\nTest command: ${testCommand}` }
     ];
 
     const filesWritten = new Set<string>();
@@ -94,7 +94,7 @@ export class AutoTDDLoop {
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       callbacks.onAttemptStart?.(attempt, maxAttempts);
 
-      // 1-2. Générer le code
+      // 1-2. Generate the code
       let raw: string;
       try {
         const res = await this.provider.sendPrompt(messages);
@@ -106,7 +106,7 @@ export class AutoTDDLoop {
           attempts: attempt,
           filesWritten: [...filesWritten],
           lastTestOutput,
-          error: `Erreur du modèle: ${msg}`
+          error: `Model error: ${msg}`
         };
       }
 
@@ -115,7 +115,7 @@ export class AutoTDDLoop {
         messages.push({ role: 'assistant', content: raw });
         messages.push({
           role: 'user',
-          content: 'Réponse invalide. Réponds UNIQUEMENT avec le JSON demandé: {"explanation": "...", "files": [{"path": "...", "content": "..."}]}'
+          content: 'Invalid response. RESPOND ONLY with the requested JSON: {"explanation": "...", "files": [{"path": "...", "content": "..."}]}'
         });
         continue;
       }
@@ -124,7 +124,7 @@ export class AutoTDDLoop {
       lastExplanation = explanation;
       callbacks.onFilesGenerated?.(files!, explanation);
 
-      // 3. Écrire/éditer les fichiers
+      // 3. Write/edit the files
       try {
         for (const file of files!) {
           await this.deps.writeFile(file.path, file.content);
@@ -133,16 +133,16 @@ export class AutoTDDLoop {
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         messages.push({ role: 'assistant', content: raw });
-        messages.push({ role: 'user', content: `Échec d'écriture: ${msg}. Adapte les chemins et réessaie.` });
+        messages.push({ role: 'user', content: `Write failure: ${msg}. Adjust the paths and retry.` });
         continue;
       }
 
-      // 4. Exécuter les tests
+      // 4. Run the tests
       const result = await this.deps.runCommand(testCommand, timeout);
       lastTestOutput = summarizeTestOutput(result.stdout, result.stderr);
       callbacks.onTestResult?.(result, attempt);
 
-      // 5. Analyser
+      // 5. Analyze
       if (result.success) {
         return {
           success: true,
@@ -154,7 +154,7 @@ export class AutoTDDLoop {
       }
 
       if (result.timedOut) {
-        // Augmentation progressive du timeout (spec §3.3)
+        // Progressive timeout increase (spec §3.3)
         timeout *= 2;
       }
 
@@ -162,12 +162,12 @@ export class AutoTDDLoop {
       messages.push({
         role: 'user',
         content: [
-          `Les tests échouent (tentative ${attempt}/${maxAttempts})${result.timedOut ? ' — TIMEOUT' : ''}.`,
-          'Sortie des tests:',
+          `Tests are failing (attempt ${attempt}/${maxAttempts})${result.timedOut ? ' — TIMEOUT' : ''}.`,
+          'Test output:',
           '```',
           lastTestOutput,
           '```',
-          'Analyse la cause de l\'échec et génère une correction ciblée (JSON uniquement).'
+          'Analyze the cause of the failure and generate a targeted correction (JSON only).'
         ].join('\n')
       });
     }
@@ -178,7 +178,7 @@ export class AutoTDDLoop {
       filesWritten: [...filesWritten],
       lastTestOutput,
       explanation: lastExplanation,
-      error: `Échec après ${maxAttempts} tentatives`
+      error: `Failure after ${maxAttempts} attempts`
     };
   }
 }

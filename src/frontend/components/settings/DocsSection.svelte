@@ -6,7 +6,7 @@
   interface Props {
     sites?: DocSite[];
     statuses?: DocsSiteStatus[];
-    /** true tant que les modifications ne sont pas sauvegardées. */
+    /** true while changes haven't been saved yet. */
     dirty?: boolean;
     onChange?: (next: DocSite[]) => void;
     onIndex?: (id: string) => void;
@@ -18,7 +18,7 @@
     return statuses.find(s => s.id === id);
   }
 
-  /** Cartes dépliées (nouveau site = ouvert en édition). */
+  /** Expanded cards (a new site opens in edit mode). */
   let expanded = $state<Record<string, boolean>>({});
 
   function addSite() {

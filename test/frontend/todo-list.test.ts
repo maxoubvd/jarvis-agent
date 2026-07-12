@@ -3,12 +3,12 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/svelte';
 import { tick } from 'svelte';
 
-/** Mock d'acquireVsCodeApi installé avant l'import de l'App (cf. approval-diff-review.test.ts). */
+/** Mock of acquireVsCodeApi installed before importing App (see approval-diff-review.test.ts). */
 vi.hoisted(() => {
   (globalThis as unknown as { acquireVsCodeApi: unknown }).acquireVsCodeApi = () => ({
     postMessage() {},
     getState() { return undefined; },
-    setState() { /* no-op en test */ }
+    setState() { /* no-op in tests */ }
   });
 });
 

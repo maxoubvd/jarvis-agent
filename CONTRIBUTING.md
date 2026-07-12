@@ -1,6 +1,6 @@
 # Contributing to Jarvis Agent
 
-First off, thank you for considering contributing to Jarvis Agent! It's people like you that make Jarvis such a great tool for the community.
+First off, thank you for considering contributing to Jarvis Agent! 
 
 ## 🚀 How to Contribute
 

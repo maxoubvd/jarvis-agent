@@ -1,10 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
 
-// ChangeTracker importe `vscode` uniquement pour son EventEmitter (notification de revue).
+// ChangeTracker imports `vscode` only for its EventEmitter (review notification).
 vi.mock('vscode', () => ({
   EventEmitter: class {
-    fire() { /* no-op en test */ }
-    event() { /* no-op en test */ }
+    fire() { /* no-op in test */ }
+    event() { /* no-op in test */ }
   }
 }));
 
@@ -12,7 +12,7 @@ import { computeHunks, resolveHunk } from '../../src/backend/services/diff.js';
 import { ChangeTracker } from '../../src/backend/services/change-tracker.js';
 
 const BEFORE = ['line1', 'line2', 'line3', 'line4', 'line5'].join('\n');
-// Deux hunks : line2 modifiée, et une insertion après line4.
+// Two hunks: line2 modified, and an insertion after line4.
 const AFTER = ['line1', 'line2-modified', 'line3', 'line4', 'inserted', 'line5'].join('\n');
 
 describe('diff — computeHunks', () => {
@@ -44,7 +44,7 @@ describe('diff — resolveHunk', () => {
   it('accept merges the hunk into the baseline, file untouched', () => {
     const { before, after } = resolveHunk(BEFORE, AFTER, 0, 'accept');
     expect(after).toBe(AFTER);
-    // La base intègre line2-modified ; seul le hunk "inserted" reste en diff.
+    // The baseline incorporates line2-modified; only the "inserted" hunk remains in the diff.
     const remaining = computeHunks(before, after);
     expect(remaining).toHaveLength(1);
     expect(remaining[0].afterLines).toEqual(['inserted']);
@@ -64,7 +64,7 @@ describe('ChangeTracker', () => {
   it('records writes, merges successive edits, and clears on no-op', () => {
     const tracker = new ChangeTracker();
     tracker.record('a.ts', BEFORE, AFTER);
-    tracker.record('a.ts', AFTER, BEFORE); // retour au contenu initial
+    tracker.record('a.ts', AFTER, BEFORE); // back to the initial content
     expect(tracker.pendingCount).toBe(0);
   });
 
@@ -90,7 +90,7 @@ describe('ChangeTracker', () => {
 
     const action = tracker.resolveHunk('a.ts', 1, view.revision, 'reject');
     expect(action?.content).toBe(['line1', 'line2-modified', 'line3', 'line4', 'line5'].join('\n'));
-    expect(tracker.pendingCount).toBe(1); // le hunk line2 reste à revoir
+    expect(tracker.pendingCount).toBe(1); // the line2 hunk remains to review
   });
 
   it('ignores stale revisions (double-click safety)', () => {
@@ -98,7 +98,7 @@ describe('ChangeTracker', () => {
     tracker.record('a.ts', BEFORE, AFTER);
     const view = tracker.snapshot()[0];
     tracker.resolveHunk('a.ts', 0, view.revision, 'accept');
-    // Deuxième clic avec la révision périmée : ignoré.
+    // Second click with the stale revision: ignored.
     expect(tracker.resolveHunk('a.ts', 1, view.revision, 'reject')).toBeNull();
   });
 

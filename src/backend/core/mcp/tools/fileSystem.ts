@@ -17,7 +17,7 @@ export function setSandbox(manager: SandboxManager | null): void {
   sandbox = manager;
 }
 
-/** Notifié après chaque écriture (revue de diffs). `before` = null si le fichier n'existait pas. */
+/** Notified after each write (diff review). `before` = null if the file didn't exist. */
 export type FileChangeListener = (change: { path: string; before: string | null; after: string }) => void;
 
 let changeListener: FileChangeListener | null = null;
@@ -34,14 +34,14 @@ function notifyChange(workspaceFolder: string, resolvedPath: string, before: str
       after
     });
   } catch {
-    // le suivi des changements ne doit jamais faire échouer une écriture
+    // change tracking must never cause a write to fail
   }
 }
 
 function getWorkspaceFolder(): string {
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!workspaceFolder) {
-    throw new Error('Workspace introuvable');
+    throw new Error('Workspace not found');
   }
   return workspaceFolder;
 }
@@ -60,14 +60,14 @@ export function assertPathWithinWorkspace(workspaceFolder: string, targetPath: s
   const relative = path.relative(normalizedWorkspace, normalizedTarget);
 
   if (relative.startsWith('..') || path.isAbsolute(relative)) {
-    throw new Error('Accès hors workspace interdit');
+    throw new Error('Access outside workspace is forbidden');
   }
 }
 
 function assertCanAccess(resolvedPath: string): void {
   const result = getSandbox().canAccess(resolvedPath);
   if (!result.allowed) {
-    throw new Error(`Accès refusé : ${result.reason}`);
+    throw new Error(`Access denied: ${result.reason}`);
   }
 }
 
@@ -94,7 +94,7 @@ export async function writeFileTool(filePath: string, content: string): Promise<
   try {
     before = await fs.readFile(resolvedPath, 'utf-8');
   } catch {
-    // fichier inexistant — création
+    // file doesn't exist yet — creating
   }
 
   const dirPath = path.dirname(resolvedPath);
@@ -124,7 +124,7 @@ export async function editFileTool(
   const end = Math.min(lines.length, endLine || startLine);
 
   if (start > lines.length) {
-    throw new Error(`edit_file : ligne de départ ${start} hors limites (fichier: ${lines.length} lignes)`);
+    throw new Error(`edit_file: start line ${start} out of bounds (file has ${lines.length} lines)`);
   }
 
   const newLines = newText.split('\n');

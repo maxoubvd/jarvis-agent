@@ -32,9 +32,9 @@ export default defineConfig({
         }
       },
       {
-        // configFile: false — la build de prod (vite.config.mts, root src/frontend)
-        // ne charge jamais svelte.config.js ; svelte-preprocess y éliderait les
-        // imports utilisés uniquement dans le template. Svelte 5 gère le TS nativement.
+        // configFile: false — the prod build (vite.config.mts, root src/frontend)
+        // never loads svelte.config.js; svelte-preprocess would elide the
+        // imports used only in the template. Svelte 5 handles TS natively.
         plugins: [
           svelte({ configFile: false, hot: false, compilerOptions: { runes: true } }),
           svelteTesting()
@@ -48,8 +48,8 @@ export default defineConfig({
         },
         resolve: {
           alias: { '@': resolve(__dirname, 'src') },
-          // Résout Svelte côté client (sinon le compilateur/runtime serveur est
-          // chargé sous Node et le rendu de composants échoue).
+          // Resolves Svelte on the client side (otherwise the server compiler/runtime
+          // is loaded under Node and component rendering fails).
           conditions: ['browser']
         }
       }

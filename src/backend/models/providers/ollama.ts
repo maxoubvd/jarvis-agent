@@ -5,9 +5,9 @@ export interface OllamaOptions {
   baseUrl?: string;
   model?: string;
   apiKey?: string;
-  /** Limite de tokens de complétion (`options.num_predict`), omise si non configurée. */
+  /** Completion token limit (`options.num_predict`), omitted if not configured. */
   maxTokens?: number;
-  /** Température d'échantillonnage (`options.temperature`), omise si non configurée. */
+  /** Sampling temperature (`options.temperature`), omitted if not configured. */
   temperature?: number;
 }
 
@@ -96,7 +96,7 @@ export class OllamaProvider implements IModelProvider {
         throw new Error(`Ollama HTTP ${response.status}: ${await response.text()}`);
       }
       if (!response.body) {
-        throw new Error('Ollama: réponse sans corps de flux');
+        throw new Error('Ollama: response without a streaming body');
       }
 
       const reader = response.body.getReader();

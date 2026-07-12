@@ -18,7 +18,7 @@ export class JarvisCodeLensProvider implements vscode.CodeLensProvider {
     const changeTracker = this.getChangeTracker();
     const filePath = document.uri.fsPath;
 
-    // Vérifier si le fichier est en attente
+    // Check whether the file is pending review
     if (!changeTracker.isPending(filePath)) {
       return [];
     }
@@ -32,7 +32,7 @@ export class JarvisCodeLensProvider implements vscode.CodeLensProvider {
 
     const lenses: vscode.CodeLens[] = [];
 
-    // CodeLens en haut du fichier pour accepter/rejeter toutes les modifications du fichier
+    // CodeLens at the top of the file to accept/reject all changes in the file
     const topRange = new vscode.Range(0, 0, 0, 0);
     lenses.push(
       new vscode.CodeLens(topRange, {
@@ -47,10 +47,10 @@ export class JarvisCodeLensProvider implements vscode.CodeLensProvider {
       })
     );
 
-    // CodeLens pour chaque hunk de modifications
+    // CodeLens for each change hunk
     for (const hunk of view.hunks) {
-      // Les lignes dans vscode.Range sont 0-indexées.
-      // `hunk.afterStart` est 1-indexé, donc la ligne dans le document est `hunk.afterStart - 1`.
+      // Lines in vscode.Range are 0-indexed.
+      // `hunk.afterStart` is 1-indexed, so the line in the document is `hunk.afterStart - 1`.
       const line = Math.max(0, hunk.afterStart - 1);
       const range = new vscode.Range(line, 0, line, 0);
 

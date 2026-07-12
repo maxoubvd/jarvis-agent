@@ -10,9 +10,10 @@ import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { McpServerConfig } from '../../config/config-manager.js';
 
 /**
- * Répertoires d'installation connus de `uv`/`uvx` (installateur officiel astral.sh),
- * absents du PATH hérité par l'Extension Host si l'outil a été installé après le
- * démarrage de VS Code (le process ne relit pas le PATH utilisateur à chaud).
+ * Known install directories for `uv`/`uvx` (official astral.sh installer),
+ * missing from the PATH inherited by the Extension Host if the tool was
+ * installed after VS Code started (the process doesn't re-read the user's
+ * PATH on the fly).
  */
 function knownUvInstallDirs(): string[] {
   const home = os.homedir();
@@ -21,7 +22,7 @@ function knownUvInstallDirs(): string[] {
     : [path.join(home, '.local', 'bin'), path.join(home, '.cargo', 'bin')];
 }
 
-/** Ajoute au PATH les répertoires connus d'installation de `uv`/`uvx` s'ils existent et n'y sont pas déjà. */
+/** Adds the known `uv`/`uvx` install directories to PATH if they exist and aren't already there. */
 function augmentPathForUv(env: Record<string, string>): Record<string, string> {
   const sep = process.platform === 'win32' ? ';' : ':';
   const currentPath = env.PATH ?? '';
@@ -34,13 +35,13 @@ function augmentPathForUv(env: Record<string, string>): Record<string, string> {
 export interface McpToolInfo {
   name: string;
   description: string;
-  /** JSON Schema des arguments, tel que déclaré par le serveur. */
+  /** JSON Schema of the arguments, as declared by the server. */
   inputSchema: Record<string, unknown>;
 }
 
 /**
- * Client MCP réel : se connecte à un serveur (stdio ou SSE), découvre ses
- * tools et permet de les appeler. Une instance par serveur configuré.
+ * Real MCP client: connects to a server (stdio or SSE), discovers its
+ * tools, and allows calling them. One instance per configured server.
  */
 export class JarvisMcpClient {
   private client: McpClient;
@@ -48,17 +49,17 @@ export class JarvisMcpClient {
   public connected = false;
   public lastError: string | null = null;
   /**
-   * Dernière sortie stderr du process stdio (ex: traceback Python d'un
-   * `mcp-server-git` qui crashe au démarrage). Sans ça, un échec de connexion
-   * ne remonte que "MCP error -32000: Connection closed" — vrai mais inutile
-   * pour diagnostiquer *pourquoi* le process est mort.
+   * Last stderr output of the stdio process (e.g. a Python traceback from a
+   * `mcp-server-git` that crashes on startup). Without this, a connection
+   * failure only surfaces as "MCP error -32000: Connection closed" — true
+   * but useless for diagnosing *why* the process died.
    */
   private stderrBuffer = '';
 
   constructor(
     public readonly serverName: string,
     private readonly config: McpServerConfig,
-    /** Serveur in-process (builtin implémenté dans l'extension) : connexion par paire mémoire. */
+    /** In-process server (builtin implemented in the extension): connected via an in-memory pair. */
     private readonly inProcessFactory?: () => Server
   ) {
     this.client = new McpClient(
@@ -99,10 +100,10 @@ export class JarvisMcpClient {
     }
     if (this.config.transport === 'stdio') {
       if (!this.config.command) {
-        throw new Error(`MCP ${this.serverName}: 'command' requis pour le transport stdio`);
+        throw new Error(`MCP ${this.serverName}: 'command' is required for stdio transport`);
       }
-      // Fusionne avec l'environnement par défaut : un `env` fourni tel quel
-      // REMPLACERAIT l'environnement du process (PATH perdu → npx/uvx cassés).
+      // Merge with the default environment: an `env` provided as-is would
+      // REPLACE the process environment (PATH lost → npx/uvx broken).
       let env = { ...getDefaultEnvironment(), ...this.config.env };
       if (this.config.command === 'uvx' || this.config.command === 'uv') {
         env = augmentPathForUv(env);
@@ -115,7 +116,7 @@ export class JarvisMcpClient {
       });
     }
     if (!this.config.url) {
-      throw new Error(`MCP ${this.serverName}: 'url' requise pour le transport sse`);
+      throw new Error(`MCP ${this.serverName}: 'url' is required for sse transport`);
     }
     return new SSEClientTransport(new URL(this.config.url), {
       requestInit: this.config.headers ? { headers: this.config.headers } : undefined
@@ -131,7 +132,7 @@ export class JarvisMcpClient {
     }));
   }
 
-  /** Appelle un tool et aplatit le contenu texte de la réponse. */
+  /** Calls a tool and flattens the text content of the response. */
   public async callTool(name: string, args: Record<string, unknown>): Promise<string> {
     const result = await this.client.callTool({ name, arguments: args });
     const content = Array.isArray(result.content) ? result.content : [];
@@ -142,7 +143,7 @@ export class JarvisMcpClient {
       })
       .join('\n');
     if (result.isError) {
-      throw new Error(text || `MCP tool ${name}: erreur sans message`);
+      throw new Error(text || `MCP tool ${name}: error with no message`);
     }
     return text;
   }

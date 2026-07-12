@@ -150,9 +150,9 @@ describe('normalizeConfig', () => {
     expect(normalizeConfig({}).models.default).toBeNull();
   });
 
-  // Garde-fou anti-strip : normalizeConfig supprime les clés inconnues, donc
-  // chaque nouveau champ de config DOIT passer au travers, sinon il est
-  // silencieusement effacé à la première sauvegarde des Settings.
+  // Anti-strip safeguard: normalizeConfig removes unknown keys, so
+  // every new config field MUST pass through it, otherwise it is
+  // silently deleted on first Settings save.
   it('round-trips builtinMcp, prompts, docs, workspaces, activeWorkspaceId and showThinking', () => {
     const input = {
       builtinMcp: { memory: { enabled: false }, fetch: { enabled: true, disabledTools: ['fetch'] } },
@@ -289,7 +289,7 @@ describe('ConfigManager', () => {
     );
     const cm = new ConfigManager({ globalPath, workspacePath });
     expect(cm.getConfig().models.items[0]).toMatchObject({ name: 'ws-m', provider: 'ollama' });
-    // Le default global n'est pas écrasé par un `null` fantôme de la migration.
+    // The global default is not overwritten by a ghost `null` from migration.
     expect(cm.getConfig().models.default).toBeNull();
   });
 

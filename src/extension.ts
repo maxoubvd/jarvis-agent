@@ -7,7 +7,7 @@ import { ModelConfigManager } from './backend/config/model-config-manager.js';
 import { JarvisInlineCompletionProvider } from './backend/core/autocomplete/provider.js';
 
 export function activate(context: vscode.ExtensionContext) {
-  console.log('Jarvis: activation de l\'extension');
+  console.log('Jarvis: activating extension');
   const jarvis = new JarvisExtension(context);
 
   const commands = [
@@ -26,7 +26,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(...commands);
   jarvis.initialize();
 
-  // Autocomplete inline (Tab / ghost text) — désactivé par défaut (jarvis.autocomplete.enabled).
+  // Inline autocomplete (Tab / ghost text) — disabled by default (jarvis.autocomplete.enabled).
   const autocompleteModelConfig = new ModelConfigManager();
   const inlineCompletionProvider = new JarvisInlineCompletionProvider({
     isEnabled: () => {
@@ -51,21 +51,21 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.languages.registerInlineCompletionItemProvider({ pattern: '**' }, inlineCompletionProvider)
   );
 
-  // Génère le fichier .jarvisignore automatiquement après que le workspace soit prêt.
-  // Différé + protégé par try/catch : SandboxManager lève si aucun dossier n'est ouvert,
-  // ce qui ferait échouer activate() (et donc toute l'extension) si appelé plus haut sans garde.
+  // Automatically generates .jarvisignore after the workspace is ready.
+  // Deferred + protected by try/catch: SandboxManager throws if no folder is opened,
+  // which would cause activate() (and thus the entire extension) to fail if called earlier without guard.
   setTimeout(async () => {
     try {
       const sandbox = getSandbox();
       await sandbox.ensureIgnoreFile();
     } catch (err) {
-      console.warn('Jarvis: impossible de créer .jarvisignore:', err);
+      console.warn('Jarvis: unable to create .jarvisignore:', err);
     }
   }, 1000);
 }
 
 export function deactivate() {
-  console.log('Jarvis: désactivation de l\'extension');
-  // Ne laisse aucun processus lancé via run_in_background survivre à l'extension.
+  console.log('Jarvis: deactivating extension');
+  // Do not let any process started via run_in_background survive the extension.
   backgroundProcesses.dispose();
 }

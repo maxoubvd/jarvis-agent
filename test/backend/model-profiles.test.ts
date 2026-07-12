@@ -1,13 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { resolveProfile, effectiveTemperature } from '../../src/backend/services/model-profiles.js';
 
-describe('model profiles (spec §7 — optimisation petits modèles)', () => {
+describe('model profiles (spec §7 — small model optimization)', () => {
   it('matches devstral on the API id or the display name', () => {
     expect(resolveProfile({ model: 'devstral-small-2507', name: 'Dev' })?.id).toBe('devstral');
     expect(resolveProfile({ model: 'mistralai/devstral-small', name: 'x' })?.id).toBe('devstral');
     expect(resolveProfile({ model: 'foo', name: 'Devstral local' })?.id).toBe('devstral');
     expect(resolveProfile({ model: 'devstral', name: '' })?.promptStyle).toBe('agentic-rich');
-    expect(resolveProfile({ model: 'devstral', name: '' })?.personaExtra).toContain('méthodique');
+    expect(resolveProfile({ model: 'devstral', name: '' })?.personaExtra).toContain('methodical');
   });
 
   it('matches codestral', () => {
@@ -23,7 +23,7 @@ describe('model profiles (spec §7 — optimisation petits modèles)', () => {
       expect(profile?.promptStyle).toBe('compact-json');
       expect(profile?.maxToolResultChars).toBe(4000);
     }
-    // Le nom d'affichage suffit (id API opaque).
+    // The display name is enough (opaque API id).
     expect(resolveProfile({ model: 'local-model', name: 'Qwen 2.5 Coder 7B (Local)' })?.id).toBe('qwen-coder');
   });
 

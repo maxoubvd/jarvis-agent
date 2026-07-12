@@ -31,14 +31,14 @@ export const PROVIDER_TYPES: ProviderType[] = [
   'openai-compatible'
 ];
 
-/** Base URL par défaut de chaque provider (surchargée par `ModelItem.apiBase`). */
+/** Default base URL for each provider (overridden by `ModelItem.apiBase`). */
 export const DEFAULT_BASE_URL: Record<ProviderType, string> = {
   ollama: 'http://localhost:11434',
   openai: 'https://api.openai.com/v1',
   openrouter: 'https://openrouter.ai/api/v1',
   lmstudio: 'http://localhost:1234/v1',
   mistral: 'https://api.mistral.ai/v1',
-  // Endpoints « OpenAI-compatible » officiels de chaque fournisseur.
+  // Official "OpenAI-compatible" endpoints for each provider.
   gemini: 'https://generativelanguage.googleapis.com/v1beta/openai',
   anthropic: 'https://api.anthropic.com/v1',
   sambanova: 'https://api.sambanova.ai/v1',
@@ -58,37 +58,37 @@ export const MODEL_ROLES: ModelRole[] = [
   'summarize'
 ];
 
-/** Rôles attribués à un modèle migré depuis l'ancien schéma centré provider. */
+/** Roles assigned to a model migrated from the old provider-centric schema. */
 export const DEFAULT_MODEL_ROLES: ModelRole[] = ['chat', 'edit', 'apply'];
 
 /**
- * Entrée de modèle centrée « modèle » (façon Continue) : chaque modèle porte
- * son provider, sa clé API et ses rôles. `name` est l'identifiant d'affichage
- * (unique, référencé par `models.default`), `model` l'id envoyé à l'API.
+ * "Model"-centric model entry (Continue-style): each model carries its own
+ * provider, API key, and roles. `name` is the display identifier (unique,
+ * referenced by `models.default`), `model` is the id sent to the API.
  */
 export interface ModelItem {
   name: string;
   provider: ProviderType;
   model: string;
   apiKey?: string;
-  /** Base URL personnalisée ; défaut : `DEFAULT_BASE_URL[provider]`. */
+  /** Custom base URL; defaults to `DEFAULT_BASE_URL[provider]`. */
   apiBase?: string;
   roles?: ModelRole[];
   contextLength?: number;
   maxTokens?: number;
-  /** Température d'échantillonnage ; défaut : profil du modèle, sinon défaut de l'API. */
+  /** Sampling temperature; defaults to the model's profile, otherwise the API default. */
   temperature?: number;
-  /** Défaut : true. */
+  /** Default: true. */
   enabled?: boolean;
 }
 
-/** @deprecated Ancien schéma centré provider — conservé pour la migration. */
+/** @deprecated Old provider-centric schema — kept for migration purposes. */
 export interface ModelConfigItem {
   name: string;
   contextLength: number;
 }
 
-/** @deprecated Ancien schéma centré provider — conservé pour la migration. */
+/** @deprecated Old provider-centric schema — kept for migration purposes. */
 export interface ProviderConfigItem {
   enabled: boolean;
   type?: ProviderType;
@@ -105,22 +105,22 @@ export interface McpServerConfig {
   env?: Record<string, string>;
   url?: string;
   headers?: Record<string, string>;
-  /** @deprecated Legacy — un tool listé ici équivaut à `toolPolicies[tool] = 'excluded'`. */
+  /** @deprecated Legacy — a tool listed here is equivalent to `toolPolicies[tool] = 'excluded'`. */
   disabledTools?: string[];
-  /** Politique par tool du serveur (défaut MCP : `ask`). */
+  /** Per-tool policy for the server (MCP default: `ask`). */
   toolPolicies?: Record<string, ToolPolicy>;
 }
 
-/** Override d'un serveur MCP intégré (activation + politiques par tool). */
+/** Override for a built-in MCP server (enable flag + per-tool policies). */
 export interface BuiltinMcpOverride {
   enabled?: boolean;
-  /** @deprecated Legacy — un tool listé ici équivaut à `toolPolicies[tool] = 'excluded'`. */
+  /** @deprecated Legacy — a tool listed here is equivalent to `toolPolicies[tool] = 'excluded'`. */
   disabledTools?: string[];
-  /** Politique par tool du serveur (défaut MCP : `ask`). */
+  /** Per-tool policy for the server (MCP default: `ask`). */
   toolPolicies?: Record<string, ToolPolicy>;
 }
 
-/** Prompt enregistré, invocable via `/nom` dans le chat (section Prompts). */
+/** Saved prompt, invocable via `/name` in the chat (Prompts section). */
 export interface PromptItem {
   id: string;
   name: string;
@@ -133,36 +133,36 @@ export interface RuleItem {
   name: string;
   enabled: boolean;
   content: string;
-  /** Glob optionnel (ex: `src/backend/**`) : la règle ne s'applique qu'au fichier actif matché. Absent = globale. */
+  /** Optional glob (e.g. `src/backend/**`): the rule only applies when it matches the active file. Absent = global. */
   scope?: string;
 }
 
 export interface OptimizationConfig {
   hitlMode?: 'strict' | 'moderate' | 'free';
-  /** Mode du chat par défaut : `agent` (boucle outillée, défaut) ou `chat` (texte seul). */
+  /** Default chat mode: `agent` (tool-using loop, default) or `chat` (text only). */
   chatMode?: 'agent' | 'chat';
   agentMaxIterations?: number;
   tddMaxAttempts?: number;
   tddTestCommand?: string;
   terminalTimeout?: number;
-  /** Affichage des blocs <thinking> dans le chat (défaut : true). */
+  /** Whether to show <thinking> blocks in the chat (default: true). */
   showThinking?: boolean;
-  /** Verbosité des réponses (défaut : `normal` = aucune consigne ajoutée). */
+  /** Response verbosity (default: `normal` = no extra instruction added). */
   verbosity?: 'concise' | 'normal' | 'detailed';
   /**
-   * Ouverture automatique du fichier édité par l'agent (onglet preview, réutilisé à
-   * chaque édition). `strict-hitl-only` : n'ouvre qu'en mode HITL strict. Défaut : `always`.
+   * Automatically opens the file edited by the agent (preview tab, reused across
+   * edits). `strict-hitl-only`: only opens in strict HITL mode. Default: `always`.
    */
   autoOpenMode?: 'always' | 'never' | 'strict-hitl-only';
   /**
-   * Autocomplete inline (Tab / ghost text) — appelle un modèle à chaque pause de frappe.
-   * Désactivé par défaut : coût/latence non négligeables pour une fonctionnalité toujours
-   * déclenchée automatiquement, à activer explicitement une fois validée par l'usage.
+   * Inline autocomplete (Tab / ghost text) — calls a model on every typing pause.
+   * Disabled by default: the cost/latency isn't negligible for a feature that's
+   * always triggered automatically, so it should be enabled explicitly once validated by usage.
    */
   autocompleteEnabled?: boolean;
 }
 
-/** Site de documentation externe mis en cache et indexé (section Docs). */
+/** External documentation site, cached and indexed (Docs section). */
 export interface DocSite {
   id: string;
   title: string;
@@ -171,18 +171,18 @@ export interface DocSite {
 }
 
 /**
- * Politique d'exécution d'un outil de l'agent (façon Continue) :
- * - `auto` : exécuté sans confirmation, quel que soit le mode HITL ;
- * - `ask` : confirmation demandée à chaque fois, même en mode free ;
- * - `excluded` : retiré du registre (invisible pour le modèle).
- * Absent = comportement du mode HITL courant.
+ * Execution policy for an agent tool (Continue-style):
+ * - `auto`: executed without confirmation, regardless of HITL mode;
+ * - `ask`: confirmation requested every time, even in free mode;
+ * - `excluded`: removed from the registry (invisible to the model).
+ * Absent = behavior of the current HITL mode.
  */
 export type ToolPolicy = 'auto' | 'ask' | 'excluded';
 
 /**
- * Profil de workspace : instructions type CLAUDE.md injectées dans le prompt système
- * quand actif. Pur profil de contexte — ne change PAS le dossier accessible à l'agent
- * (toujours celui ouvert dans VS Code, cf. SandboxManager).
+ * Workspace profile: CLAUDE.md-style instructions injected into the system prompt
+ * when active. Pure context profile — does NOT change the folder the agent can
+ * access (always the one open in VS Code, see SandboxManager).
  */
 export interface WorkspaceProfile {
   id: string;
@@ -194,14 +194,14 @@ export interface WorkspaceProfile {
 export interface JarvisConfig {
   version: number;
   models: {
-    /** `null` = aucun modèle configuré (onboarding façon Continue). */
+    /** `null` = no model configured (Continue-style onboarding). */
     default: string | null;
     items: ModelItem[];
   };
   mcpServers?: Record<string, McpServerConfig>;
-  /** Overrides des serveurs MCP de base (définis dans le code). */
+  /** Overrides for the base MCP servers (defined in code). */
   builtinMcp?: Record<string, BuiltinMcpOverride>;
-  /** Politique par outil de l'agent (nom → auto/ask/excluded). */
+  /** Per-tool policy for the agent (name → auto/ask/excluded). */
   toolPolicies?: Record<string, ToolPolicy>;
   rules?: RuleItem[];
   workflows?: Workflow[];
@@ -215,13 +215,18 @@ export interface JarvisConfig {
   webSearch?: WebSearchConfig;
 }
 
-/** Configuration de l'outil `search_web` (§4.2). Un seul provider supporté pour l'instant. */
+/** Configuration for the `search_web` tool (§4.2). Free — DuckDuckGo, no API key. */
 export interface WebSearchConfig {
-  provider: 'brave';
-  apiKey?: string;
-  /** Domaines appliqués par défaut (`site:` OR) quand le modèle n'en précise pas. */
+  provider: 'duckduckgo';
+  /** Domains applied by default (`site:` OR) when the model doesn't specify any. */
   defaultSites?: string[];
 }
+
+/**
+ * Sources checked by default in Settings > Web Search. Also used here (`webSearch.ts`)
+ * when the user has never opened/saved that screen (`cfg.defaultSites` is then `undefined`).
+ */
+export const DEFAULT_WEB_SEARCH_SITES = ['stackoverflow.com', 'developer.mozilla.org', 'github.com', 'devdocs.io'];
 
 export const EMPTY_CONFIG: JarvisConfig = {
   version: 1,
@@ -238,9 +243,9 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Deep-merge pur : objets fusionnés récursivement, tableaux et scalaires
- * remplacés en bloc par `override` (workspace gagne). Utilisé pour appliquer
- * l'override workspace par-dessus la config globale.
+ * Pure deep-merge: objects are merged recursively, arrays and scalars are
+ * replaced wholesale by `override` (workspace wins). Used to apply the
+ * workspace override on top of the global config.
  */
 export function deepMerge<T>(base: T, override: unknown): T {
   if (override === undefined) return base;
@@ -259,7 +264,7 @@ export function deepMerge<T>(base: T, override: unknown): T {
   return result as T;
 }
 
-/** Coercition défensive d'une entrée de modèle venue du JSON utilisateur. */
+/** Defensive coercion of a model entry coming from user JSON. */
 function normalizeModelItem(raw: unknown): ModelItem | null {
   if (!isPlainObject(raw)) return null;
   const name = typeof raw.name === 'string' ? raw.name.trim() : '';
@@ -291,14 +296,14 @@ function normalizeModelItem(raw: unknown): ModelItem | null {
   return item;
 }
 
-/** Type de provider déduit d'une clé de l'ancien schéma (clé inconnue => openai-compatible). */
+/** Provider type inferred from a legacy-schema key (unknown key => openai-compatible). */
 function inferProviderType(providerKey: string): ProviderType {
   return PROVIDER_TYPES.includes(providerKey as ProviderType) && providerKey !== 'openai-compatible'
     ? (providerKey as ProviderType)
     : 'openai-compatible';
 }
 
-/** Migre l'ancien schéma centré provider (`models.providers`) vers `ModelItem[]`. */
+/** Migrates the old provider-centric schema (`models.providers`) to `ModelItem[]`. */
 function migrateLegacyProviders(providers: Record<string, unknown>): ModelItem[] {
   const items: ModelItem[] = [];
   const usedNames = new Set<string>();
@@ -308,7 +313,7 @@ function migrateLegacyProviders(providers: Record<string, unknown>): ModelItem[]
     const type = (legacy.type as ProviderType | undefined) ?? inferProviderType(key);
     for (const model of Array.isArray(legacy.models) ? legacy.models : []) {
       if (!isPlainObject(model) || typeof model.name !== 'string' || !model.name.trim()) continue;
-      // Le premier occupant garde le nom (models.default continue de résoudre).
+      // The first occupant keeps the name (models.default keeps resolving).
       const name = usedNames.has(model.name) ? `${model.name} (${key})` : model.name;
       usedNames.add(name);
       const item = normalizeModelItem({
@@ -328,9 +333,9 @@ function migrateLegacyProviders(providers: Record<string, unknown>): ModelItem[]
 }
 
 /**
- * Normalise la section `models`, en migrant l'ancienne forme `providers` vers
- * `items` si nécessaire. Idempotent : une section déjà au nouveau format est
- * seulement coercée, jamais re-migrée.
+ * Normalizes the `models` section, migrating the old `providers` shape to
+ * `items` if needed. Idempotent: a section already in the new format is
+ * only coerced, never re-migrated.
  */
 export function normalizeModelsSection(raw: unknown): JarvisConfig['models'] {
   const models = isPlainObject(raw) ? raw : {};
@@ -347,7 +352,7 @@ export function normalizeModelsSection(raw: unknown): JarvisConfig['models'] {
   return { default: defaultModel, items: [] };
 }
 
-/** Garantit la forme complète d'un objet config (défensif face au JSON utilisateur). */
+/** Ensures the full shape of a config object (defensive against user JSON). */
 export function normalizeConfig(input: unknown): JarvisConfig {
   const cfg = (isPlainObject(input) ? input : {}) as Partial<JarvisConfig>;
   return {
@@ -375,17 +380,17 @@ export function normalizeConfig(input: unknown): JarvisConfig {
 }
 
 export interface ConfigManagerOptions {
-  /** Chemin de la config globale (défaut `~/.jarvis/config.json`). */
+  /** Path to the global config (default `~/.jarvis/config.json`). */
   globalPath?: string;
-  /** Chemin de l'override workspace ; `null` désactive explicitement (utile en test). */
+  /** Path to the workspace override; `null` explicitly disables it (useful in tests). */
   workspacePath?: string | null;
 }
 
 /**
- * Source unique de vérité de la config Jarvis : charge la config globale
- * (`~/.jarvis/config.json`), la fusionne avec l'override workspace optionnel,
- * gère la migration depuis l'ancien `jarvis/jarvis-config.json`, et persiste.
- * Ne throw jamais : une config absente/illisible retombe sur `EMPTY_CONFIG`.
+ * Single source of truth for the Jarvis config: loads the global config
+ * (`~/.jarvis/config.json`), merges it with the optional workspace override,
+ * handles migration from the old `jarvis/jarvis-config.json`, and persists.
+ * Never throws: a missing/unreadable config falls back to `EMPTY_CONFIG`.
  */
 export class ConfigManager {
   private globalPath: string;
@@ -423,7 +428,7 @@ export class ConfigManager {
       try {
         fsSync.writeFileSync(this.globalPath, JSON.stringify(seeded, null, 2), 'utf-8');
       } catch (err) {
-        console.warn("Jarvis: impossible d'écrire la config globale:", err);
+        console.warn('Jarvis: unable to write the global config:', err);
       }
       return seeded;
     }
@@ -432,12 +437,12 @@ export class ConfigManager {
       const raw = fsSync.readFileSync(this.globalPath, 'utf-8');
       return normalizeConfig(JSON.parse(raw));
     } catch (err) {
-      console.warn('Jarvis: config globale illisible, config vide utilisée:', err);
+      console.warn('Jarvis: global config unreadable, using empty config:', err);
       return clone(EMPTY_CONFIG);
     }
   }
 
-  /** Seed la config globale depuis l'ancien fichier workspace au premier lancement. */
+  /** Seeds the global config from the old workspace file on first launch. */
   private migrateFromWorkspace(): JarvisConfig | null {
     if (!this.workspacePath || !fsSync.existsSync(this.workspacePath)) return null;
     try {
@@ -461,9 +466,9 @@ export class ConfigManager {
   private computeMerged(): JarvisConfig {
     const override = this.loadWorkspaceOverride();
     if (!override) return this.globalConfig;
-    // L'override est partiel : on ne migre que sa section models si elle est
-    // présente, sans introduire de clés fantômes (`default: null` ou `items: []`)
-    // qui écraseraient la config globale.
+    // The override is partial: we only migrate its models section if present,
+    // without introducing phantom keys (`default: null` or `items: []`) that
+    // would overwrite the global config.
     if (isPlainObject(override.models)) {
       const rawModels = override.models as Record<string, unknown>;
       const migrated = normalizeModelsSection(override.models);
@@ -479,17 +484,17 @@ export class ConfigManager {
     return deepMerge(this.globalConfig, override);
   }
 
-  /** Config effective (globale + override workspace). */
+  /** Effective config (global + workspace override). */
   public getConfig(): JarvisConfig {
     return this.merged;
   }
 
-  /** Config globale brute (à éditer dans l'onglet Settings). */
+  /** Raw global config (edited in the Settings tab). */
   public getGlobalConfig(): JarvisConfig {
     return this.globalConfig;
   }
 
-  /** Chemin du fichier de config globale (~/.jarvis/config.json). */
+  /** Path to the global config file (~/.jarvis/config.json). */
   public getGlobalConfigPath(): string {
     return this.globalPath;
   }
@@ -507,7 +512,7 @@ export class ConfigManager {
   }
 
   public async writeWorkspace(partial: Partial<JarvisConfig>): Promise<void> {
-    if (!this.workspacePath) throw new Error('Aucun workspace ouvert');
+    if (!this.workspacePath) throw new Error('No workspace open');
     await fs.mkdir(path.dirname(this.workspacePath), { recursive: true });
     await fs.writeFile(this.workspacePath, JSON.stringify(partial, null, 2), 'utf-8');
     this.merged = this.computeMerged();
@@ -545,7 +550,7 @@ export function getConfigManager(): ConfigManager {
   return singleton;
 }
 
-/** Réinitialise le singleton (tests uniquement). */
+/** Resets the singleton (tests only). */
 export function resetConfigManager(): void {
   singleton = null;
 }

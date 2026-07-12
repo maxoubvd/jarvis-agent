@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/svelte';
 import { tick } from 'svelte';
 
-/** Mock d'acquireVsCodeApi installé avant l'import de l'App (cf. settings-panel.test.ts). */
+/** Mock of acquireVsCodeApi installed before importing App (see settings-panel.test.ts). */
 const posted = vi.hoisted(() => {
   const messages: Array<Record<string, unknown>> = [];
   (globalThis as unknown as { acquireVsCodeApi: unknown }).acquireVsCodeApi = () => ({
@@ -11,7 +11,7 @@ const posted = vi.hoisted(() => {
       messages.push(structuredClone(message) as Record<string, unknown>);
     },
     getState() { return undefined; },
-    setState() { /* no-op en test */ }
+    setState() { /* no-op in tests */ }
   });
   return messages;
 });
@@ -31,7 +31,7 @@ const REQUEST = {
   type: 'approvalRequest',
   id: 'approval-1',
   actionType: 'terminal',
-  description: 'Exécuter: npm test',
+  description: 'Execute: npm test',
   detail: 'command: npm test'
 };
 
@@ -43,14 +43,14 @@ describe('in-chat approval card', () => {
     postToWebview(REQUEST);
     await tick();
 
-    expect(screen.getByText('Exécuter: npm test')).toBeTruthy();
+    expect(screen.getByText('Execute: npm test')).toBeTruthy();
     screen.getByRole('button', { name: 'Allow for this session' }).click();
     await tick();
 
     const response = posted.find(m => m.type === 'approvalResponse');
     expect(response).toMatchObject({ id: 'approval-1', decision: 'allow-session' });
-    // La carte disparaît après la décision.
-    expect(screen.queryByText('Exécuter: npm test')).toBeNull();
+    // The card disappears after the decision.
+    expect(screen.queryByText('Execute: npm test')).toBeNull();
   });
 
   it('deny opens a feedback field whose content is sent to the agent', async () => {
@@ -64,7 +64,7 @@ describe('in-chat approval card', () => {
     await tick();
 
     const textarea = screen.getByPlaceholderText(/what to do instead|Don't run/i) as HTMLTextAreaElement;
-    textarea.value = 'Lance seulement le lint';
+    textarea.value = 'Only run the linter';
     textarea.dispatchEvent(new Event('input', { bubbles: true }));
     await tick();
 
@@ -75,7 +75,7 @@ describe('in-chat approval card', () => {
     expect(response).toMatchObject({
       id: 'approval-1',
       decision: 'deny',
-      feedback: 'Lance seulement le lint'
+      feedback: 'Only run the linter'
     });
   });
 });
@@ -131,7 +131,7 @@ describe('diff review panel', () => {
     expect(screen.getByText(/- const a = 1;/)).toBeTruthy();
     expect(screen.getByText(/\+ const a = 2;/)).toBeTruthy();
 
-    // Accepte le premier hunk de src/app.ts.
+    // Accept the first hunk of src/app.ts.
     const fileCard = screen.getByText('src/app.ts').closest('.file') as HTMLElement;
     (fileCard.querySelector('.hunk-btn') as HTMLElement).click();
     await tick();

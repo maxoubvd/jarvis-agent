@@ -59,7 +59,7 @@ describe('update_todo_list tool', () => {
   it('reports the item count without throwing on malformed input', async () => {
     const tool = createBuiltinTools().find(t => t.name === 'update_todo_list')!;
     const result = await tool.execute({ items: [{ content: 'a' }, { content: '' }] });
-    expect(result).toContain('1 tâche');
+    expect(result).toContain('1 task');
   });
 });
 

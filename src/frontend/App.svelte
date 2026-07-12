@@ -37,16 +37,16 @@
     timestamp: string;
   }
 
-  // Largeur de la webview (pas de l'écran) : dans une webview, window.innerWidth
-  // est la largeur du panneau — c'est notre breakpoint « conteneur ».
+  // Width of the webview (not the screen): inside a webview, window.innerWidth
+  // is the panel's width — that's our "container" breakpoint.
   let innerWidth = $state(600);
   const isNarrow = $derived(innerWidth < 500);
   let sidebarOpen = $state(false);
 
-  // État UI léger persisté côté webview (survit au reload de la fenêtre).
+  // Lightweight UI state persisted on the webview side (survives a window reload).
   const persistedUi = (vscode?.getState() as { activeTab?: Tab } | undefined) ?? {};
 
-  // Synchronisation de sidebarOpen lors des transitions de taille (narrow <=> wide)
+  // Sync sidebarOpen on size transitions (narrow <=> wide)
   let wasNarrow = false;
   $effect(() => {
     const narrow = isNarrow;
@@ -78,8 +78,8 @@
   let activeWorkspaceName = $derived(workspaces.find(w => w.id === activeWorkspaceId)?.name || currentFolder.split(/[/\\]/).pop() || 'Workspace');
   let indexStatus = $state<{ indexing: boolean; fileCount: number } | null>(null);
   let needsSetup = $state(false);
-  // Onboarding : `true` par défaut pour ne pas flasher l'écran d'accueil chez les
-  // utilisateurs déjà configurés (le backend corrige via `onboardingState`).
+  // Onboarding: defaults to `true` so we don't flash the welcome screen for
+  // already-configured users (the backend corrects it via `onboardingState`).
   let onboardingDone = $state(true);
   let welcomeDismissed = $state(false);
   let connectionResult = $state<{ ok: boolean; error?: string; sample?: string } | null>(null);
@@ -223,7 +223,7 @@
         break;
       case 'settingsSaved':
         saveStatus = { ok: msg.ok ?? false, error: msg.error };
-        // La confirmation s'efface seule ; une erreur reste affichée.
+        // The confirmation clears itself; an error stays displayed.
         clearTimeout(saveStatusTimer);
         if (msg.ok) {
           saveStatusTimer = setTimeout(() => (saveStatus = null), 4000);
@@ -277,7 +277,7 @@
         pendingChanges = msg.changes ?? [];
         break;
       case 'docsStatus':
-        // Fusion par id : une mise à jour partielle ne doit pas effacer les autres sites.
+        // Merge by id: a partial update must not erase the other sites.
         for (const site of msg.sites ?? []) {
           const idx = docsStatuses.findIndex(s => s.id === site.id);
           if (idx === -1) docsStatuses = [...docsStatuses, site];
@@ -320,7 +320,7 @@
         messages = [];
         isSending = false;
         if (msg.title) {
-          pushMessage('assistant', `*(Contexte restauré : ${msg.title})*`);
+          pushMessage('assistant', `*(Context restored: ${msg.title})*`);
         }
         break;
       case 'chatStart':
@@ -435,7 +435,7 @@
   }
 
   function handlePlanProceed() {
-    pushMessage('user', "Le plan est validé. Procède à son implémentation étape par étape.");
+    pushMessage('user', "The plan is approved. Proceed with its implementation step by step.");
     isSending = true;
     vscode?.postMessage({ type: 'planProceed' });
   }
@@ -480,8 +480,8 @@
       const cleanConfig = $state.snapshot(config);
       vscode?.postMessage({ type: 'updateSettings', scope: 'global', config: cleanConfig });
     } catch (err) {
-      // postMessage clone la config (structured clone) : une valeur non
-      // sérialisable ne doit jamais faire échouer la sauvegarde en silence.
+      // postMessage clones the config (structured clone): a non-serializable
+      // value must never make the save fail silently.
       saveStatus = { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
   }
@@ -744,9 +744,9 @@
   .app-shell {
     display: flex;
     flex-direction: column;
-    /* height (et non min-height) : le scroll doit vivre dans .main-content,
-       pas sur le document — sinon le header (et son bouton ☰ en mode étroit)
-       disparaît dès qu'on défile une page longue comme les Settings. */
+    /* height (not min-height): scrolling must live inside .main-content,
+       not on the document — otherwise the header (and its ☰ button in
+       narrow mode) disappears as soon as a long page like Settings scrolls. */
     height: 100vh;
     overflow: hidden;
     color: var(--vscode-editor-foreground);

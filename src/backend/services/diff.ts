@@ -1,21 +1,21 @@
 /**
- * Diff ligne à ligne (LCS) pour la revue des modifications IA (façon
- * Antigravity) : les changements sont regroupés en hunks que l'utilisateur
- * accepte (intégré à la base) ou rejette (retiré du fichier) individuellement.
+ * Line-by-line diff (LCS) for AI change review (Antigravity-style): changes
+ * are grouped into hunks that the user accepts (merged into the baseline)
+ * or rejects (removed from the file) individually.
  */
 
 export interface DiffHunk {
-  /** Index du hunk dans le diff courant — recalculé après chaque résolution. */
+  /** Index of the hunk in the current diff — recomputed after each resolution. */
   id: number;
-  /** Première ligne concernée côté « avant » (1-indexée). */
+  /** First affected line on the "before" side (1-indexed). */
   beforeStart: number;
-  /** Première ligne concernée côté « après » (1-indexée). */
+  /** First affected line on the "after" side (1-indexed). */
   afterStart: number;
-  /** Lignes supprimées (rouge). */
+  /** Removed lines (red). */
   beforeLines: string[];
-  /** Lignes ajoutées (vert). */
+  /** Added lines (green). */
   afterLines: string[];
-  /** Jusqu'à 2 lignes de contexte avant/après, pour l'affichage. */
+  /** Up to 2 lines of context before/after, for display. */
   contextBefore: string[];
   contextAfter: string[];
 }
@@ -23,14 +23,14 @@ export interface DiffHunk {
 type Op = { type: 'equal' | 'del' | 'add'; line: string };
 
 const CONTEXT_LINES = 2;
-/** Au-delà, le LCS O(n·m) devient coûteux — on retombe sur un hunk unique. */
+/** Beyond this, O(n·m) LCS becomes expensive — we fall back to a single hunk. */
 const MAX_LCS_LINES = 3000;
 
 function splitLines(text: string): string[] {
   return text.split('\n');
 }
 
-/** Ops du diff entre deux textes (préfixe/suffixe communs éliminés avant LCS). */
+/** Diff ops between two texts (common prefix/suffix stripped before LCS). */
 export function computeLineOps(before: string, after: string): Op[] {
   const a = splitLines(before);
   const b = splitLines(after);
@@ -55,7 +55,7 @@ export function computeLineOps(before: string, after: string): Op[] {
     ops.push(...midA.map(line => ({ type: 'del' as const, line })));
     ops.push(...midB.map(line => ({ type: 'add' as const, line })));
   } else {
-    // LCS classique par programmation dynamique sur la zone modifiée.
+    // Classic dynamic-programming LCS over the modified region.
     const rows = midA.length + 1;
     const cols = midB.length + 1;
     const table = new Uint32Array(rows * cols);
@@ -90,7 +90,7 @@ export function computeLineOps(before: string, after: string): Op[] {
   return ops;
 }
 
-/** Regroupe les ops non-equal contigus en hunks numérotés. */
+/** Groups contiguous non-equal ops into numbered hunks. */
 export function computeHunks(before: string, after: string): DiffHunk[] {
   const ops = computeLineOps(before, after);
   const hunks: DiffHunk[] = [];
@@ -128,16 +128,16 @@ export function computeHunks(before: string, after: string): DiffHunk[] {
       .filter(o => o.type === 'equal')
       .map(o => o.line);
     hunks.push({ id: index++, beforeStart, afterStart, beforeLines, afterLines, contextBefore, contextAfter });
-    i--; // la boucle for ré-incrémente
+    i--; // the for loop re-increments
   }
   return hunks;
 }
 
 /**
- * Reconstruit un texte en résolvant UN hunk :
- * - `accept` : le hunk est intégré à la base → nouveau « before » (le fichier ne bouge pas) ;
- * - `reject` : le hunk est annulé dans le fichier → nouveau « after » (à écrire sur disque).
- * Les autres hunks restent en attente.
+ * Rebuilds a text by resolving ONE hunk:
+ * - `accept`: the hunk is merged into the baseline → new "before" (the file doesn't change);
+ * - `reject`: the hunk is undone in the file → new "after" (to write to disk).
+ * The other hunks remain pending.
  */
 export function resolveHunk(
   before: string,
@@ -164,11 +164,11 @@ export function resolveHunk(
     }
     const resolved = index === hunkId;
     if (op.type === 'del') {
-      // accept : la suppression devient la base ; reject : la ligne revient dans le fichier.
+      // accept: the deletion becomes the baseline; reject: the line comes back into the file.
       if (!(resolved && action === 'accept')) newBefore.push(op.line);
       if (resolved && action === 'reject') newAfter.push(op.line);
     } else {
-      // add — accept : la ligne entre dans la base ; reject : elle sort du fichier.
+      // add — accept: the line enters the baseline; reject: it leaves the file.
       if (resolved && action === 'accept') newBefore.push(op.line);
       if (!(resolved && action === 'reject')) newAfter.push(op.line);
     }

@@ -2,24 +2,24 @@ import { RagSearchResult, formatSearchResults } from './rag.js';
 
 export interface MentionDeps {
   readFile(path: string): Promise<string>;
-  /** Recherche RAG limitée à la documentation (fichiers .md). */
+  /** RAG search limited to documentation (.md files). */
   searchDocs?(query: string): Promise<RagSearchResult[]>;
 }
 
 export interface ExpandedPrompt {
-  /** Prompt avec le contexte des mentions injecté. */
+  /** Prompt with the mention context injected. */
   expanded: string;
-  /** Mentions résolues, pour affichage de badges dans l'UI. */
+  /** Resolved mentions, for displaying badges in the UI. */
   mentions: Array<{ kind: 'file' | 'docs'; value: string; ok: boolean }>;
 }
 
-// Chemin/requête avec espaces autorisés via la forme citée : @file:"my folder/file.md", @docs:"my query"
+// Path/query with spaces allowed via the quoted form: @file:"my folder/file.md", @docs:"my query"
 const FILE_MENTION = /@file:(?:"([^"]+)"|(\S+))/g;
 const DOCS_MENTION = /@docs:(?:"([^"]+)"|(\S+))/g;
 
 /**
- * Expansion des mentions `@file:<chemin>` et `@docs:<requête>` (spec Phase 4) :
- * le contenu référencé est ajouté au prompt comme contexte.
+ * Expansion of `@file:<path>` and `@docs:<query>` mentions (spec Phase 4):
+ * the referenced content is appended to the prompt as context.
  */
 export async function expandMentions(text: string, deps: MentionDeps): Promise<ExpandedPrompt> {
   const mentions: ExpandedPrompt['mentions'] = [];
@@ -29,11 +29,11 @@ export async function expandMentions(text: string, deps: MentionDeps): Promise<E
     const filePath = match[1] ?? match[2];
     try {
       const content = await deps.readFile(filePath);
-      contextParts.push(`Contenu de ${filePath}:\n\`\`\`\n${content}\n\`\`\``);
+      contextParts.push(`Content of ${filePath}:\n\`\`\`\n${content}\n\`\`\``);
       mentions.push({ kind: 'file', value: filePath, ok: true });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      contextParts.push(`(Impossible de lire ${filePath}: ${msg})`);
+      contextParts.push(`(Unable to read ${filePath}: ${msg})`);
       mentions.push({ kind: 'file', value: filePath, ok: false });
     }
   }
@@ -43,7 +43,7 @@ export async function expandMentions(text: string, deps: MentionDeps): Promise<E
     const results = (await deps.searchDocs?.(query)) ?? [];
     if (results.length > 0) {
       const snippets = formatSearchResults(results.slice(0, 3));
-      contextParts.push(`Documentation pertinente pour "${query}":\n${snippets}`);
+      contextParts.push(`Relevant documentation for "${query}":\n${snippets}`);
       mentions.push({ kind: 'docs', value: query, ok: true });
     } else {
       mentions.push({ kind: 'docs', value: query, ok: false });
@@ -56,7 +56,7 @@ export async function expandMentions(text: string, deps: MentionDeps): Promise<E
 
   const cleaned = text.replace(FILE_MENTION, '$1$2').replace(DOCS_MENTION, '$1$2');
   return {
-    expanded: `${cleaned}\n\n--- CONTEXTE ---\n${contextParts.join('\n\n')}`,
+    expanded: `${cleaned}\n\n--- CONTEXT ---\n${contextParts.join('\n\n')}`,
     mentions
   };
 }

@@ -76,8 +76,8 @@ describe('ModelConfigManager (model-centric schema)', () => {
     expect(mgr.getContextLength('GPT-OSS 120B')).toBe(32768);
     expect(mgr.getContextLength('unknown')).toBeNull();
     expect(mgr.getContextLength(null)).toBeNull();
-    // Pas de contextLength en config, même pour une famille de modèle connue → null
-    // (pas d'estimation affichée tant que l'utilisateur ne l'a pas réglée lui-même).
+    // No contextLength in config, even for a known model family → null
+    // (no estimate displayed until user sets it themselves).
     const noCtx = new ModelConfigManager(
       fakeConfigManager([{ name: 'Codestral', provider: 'mistral', model: 'codestral-latest' }])
     );
@@ -91,7 +91,7 @@ describe('ModelConfigManager (model-centric schema)', () => {
     expect(mgr.isCloudProvider('openrouter')).toBe(true);
     expect(mgr.isCloudProvider('ollama')).toBe(false);
     expect(mgr.isCloudProvider('lmstudio')).toBe(false);
-    // Inconnu => cloud par sécurité (le scrubbing s'applique).
+    // Unknown => cloud by default (scrubbing applies).
     expect(mgr.isCloudProvider('mystery')).toBe(true);
   });
 
@@ -99,7 +99,7 @@ describe('ModelConfigManager (model-centric schema)', () => {
     const mgr = new ModelConfigManager(fakeConfigManager([chatModel, tabModel]));
     expect(mgr.getProviderNameForModel('Qwen tab')).toBe('ollama');
     expect(mgr.getProviderNameForModel('GPT-OSS 120B')).toBe('openrouter');
-    // Fallback : premier modèle activé.
+    // Fallback: first enabled model.
     expect(mgr.getProviderNameForModel(null)).toBe('openrouter');
   });
 });

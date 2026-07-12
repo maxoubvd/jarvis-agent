@@ -1,25 +1,25 @@
 import type { ModelItem } from '../config/config-manager.js';
 
 /**
- * Profils d'optimisation par famille de modèle (spec §7 — petits modèles) :
- * température recommandée par l'éditeur du modèle et style de prompt agentique
- * adapté. `ModelItem.temperature` (Settings) surcharge toujours le profil.
+ * Optimization profiles per model family (spec §7 — small models):
+ * temperature recommended by the model's publisher and a matching agentic
+ * prompt style. `ModelItem.temperature` (Settings) always overrides the profile.
  *
- * Sources : Devstral (Mistral) recommande T° 0.0–0.15 et un prompt « agentic
- * scaffold » ; Qwen2.5-Coder produit un JSON fiable à basse température.
+ * Sources: Devstral (Mistral) recommends a temperature of 0.0–0.15 and an
+ * "agentic scaffold" prompt; Qwen2.5-Coder produces reliable JSON at low temperature.
  */
 export interface ModelProfile {
   id: 'devstral' | 'codestral' | 'qwen-coder';
   match: RegExp;
   temperature: number;
   /**
-   * - `agentic-rich` : persona renforcée orientée agent (grands modèles code) ;
-   * - `compact-json` : prompt resserré + few-shot supplémentaire (petits modèles locaux).
+   * - `agentic-rich`: reinforced agent-oriented persona (large code models);
+   * - `compact-json`: tightened prompt + extra few-shot examples (small local models).
    */
   promptStyle: 'agentic-rich' | 'compact-json';
-  /** Ajout à la persona du prompt système de l'agent. */
+  /** Addition to the agent's system prompt persona. */
   personaExtra?: string;
-  /** Troncature des résultats d'outils (petits contextes). */
+  /** Truncation of tool results (small contexts). */
   maxToolResultChars?: number;
 }
 
@@ -30,8 +30,8 @@ const PROFILES: ModelProfile[] = [
     temperature: 0.1,
     promptStyle: 'agentic-rich',
     personaExtra:
-      'Tu es un agent d\'ingénierie logicielle : méthodique et exhaustif, tu privilégies la qualité à la vitesse. ' +
-      'Tu explores le code avec tes outils avant de modifier, tu vérifies chaque changement, et tu itères jusqu\'à ce que la tâche soit réellement terminée.'
+      'You are a software engineering agent: methodical and thorough, favoring quality over speed. ' +
+      'You explore the code with your tools before making changes, verify every change, and iterate until the task is truly complete.'
   },
   {
     id: 'codestral',
@@ -48,14 +48,14 @@ const PROFILES: ModelProfile[] = [
   }
 ];
 
-/** Profil correspondant au modèle (id API ou nom d'affichage), sinon `null`. */
+/** Profile matching the model (API id or display name), otherwise `null`. */
 export function resolveProfile(item: Pick<ModelItem, 'model' | 'name'> | null | undefined): ModelProfile | null {
   if (!item) return null;
   const haystack = `${item.model} ${item.name}`;
   return PROFILES.find(p => p.match.test(haystack)) ?? null;
 }
 
-/** Température effective : réglage utilisateur > profil > aucune (défaut API). */
+/** Effective temperature: user setting > profile > none (API default). */
 export function effectiveTemperature(
   item: Pick<ModelItem, 'model' | 'name' | 'temperature'> | null | undefined
 ): number | undefined {

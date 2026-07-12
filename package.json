@@ -2,7 +2,7 @@
   "name": "jarvis-agent",
   "displayName": "Jarvis Agent",
   "publisher": "maxoubvd",
-  "description": "Extension VS Code Agentique - Votre ingénieur logiciel autonome. Chat agentique multi-provider (Ollama, OpenRouter, OpenAI, Anthropic...), édition inline (Cmd+K), Auto-TDD, RAG local, agents spécialisés, checkpoints Git.",
+  "description": "Agentic VS Code extension - Your autonomous software engineer. Multi-provider agentic chat (Ollama, OpenRouter, OpenAI, Anthropic...), inline editing (Cmd+K), Auto-TDD, local RAG, specialized agents, Git checkpoints.",
   "version": "0.0.1",
   "type": "module",
   "main": "./dist/extension.js",
@@ -180,7 +180,7 @@
         "jarvis.models.default": {
           "type": "string",
           "default": "",
-          "description": "Legacy — le modèle par défaut est géré dans l'onglet Settings (~/.jarvis/config.json)"
+          "description": "Legacy — the default model is managed in the Settings tab (~/.jarvis/config.json)"
         },
         "jarvis.hitl.mode": {
           "type": "string",
@@ -190,7 +190,7 @@
             "moderate",
             "free"
           ],
-          "description": "Mode de validation Human-in-the-Loop"
+          "description": "Human-in-the-Loop validation mode"
         },
         "jarvis.autoOpen.mode": {
           "type": "string",
@@ -200,32 +200,32 @@
             "never",
             "strict-hitl-only"
           ],
-          "description": "Ouverture automatique du fichier édité par l'agent (onglet preview)"
+          "description": "Automatically open the file edited by the agent (preview tab)"
         },
         "jarvis.autocomplete.enabled": {
           "type": "boolean",
           "default": false,
-          "description": "Autocomplete inline (Tab / ghost text) — appelle un modèle à chaque pause de frappe"
+          "description": "Inline autocomplete (Tab / ghost text) — calls a model on every typing pause"
         },
         "jarvis.agent.maxIterations": {
           "type": "number",
           "default": 100,
-          "description": "Nombre maximum d'itérations pour la boucle de l'agent (ex: appels d'outils, corrections d'erreurs) avant de demander l'autorisation de continuer."
+          "description": "Maximum number of iterations for the agent loop (e.g. tool calls, error fixes) before asking for permission to continue."
         },
         "jarvis.tdd.maxAttempts": {
           "type": "number",
           "default": 5,
-          "description": "Nombre maximum de tentatives de la boucle Auto-TDD"
+          "description": "Maximum number of attempts for the Auto-TDD loop"
         },
         "jarvis.tdd.testCommand": {
           "type": "string",
           "default": "npm test",
-          "description": "Commande de test utilisée par la boucle Auto-TDD"
+          "description": "Test command used by the Auto-TDD loop"
         },
         "jarvis.terminal.timeout": {
           "type": "number",
           "default": 30000,
-          "description": "Timeout des commandes terminal (ms)"
+          "description": "Terminal command timeout (ms)"
         }
       }
     }

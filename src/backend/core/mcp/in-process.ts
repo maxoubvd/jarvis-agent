@@ -3,7 +3,7 @@ import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprot
 
 const DEFAULT_MAX_LENGTH = 5000;
 
-/** Décode les entités HTML courantes (sans dépendance). */
+/** Decodes common HTML entities (no dependency). */
 function decodeEntities(text: string): string {
   return text
     .replace(/&nbsp;/g, ' ')
@@ -17,8 +17,8 @@ function decodeEntities(text: string): string {
 }
 
 /**
- * Conversion HTML → markdown-lite en regex : suffisant pour donner au modèle
- * un contenu lisible (titres, liens, listes) sans embarquer un vrai parseur.
+ * HTML → markdown-lite conversion via regex: enough to give the model
+ * readable content (headings, links, lists) without embedding a real parser.
  */
 export function htmlToMarkdown(html: string): string {
   let text = html
@@ -50,7 +50,7 @@ interface FetchArgs {
   raw: boolean;
 }
 
-/** Récupère l'URL et renvoie le contenu extrait (fenêtré par start_index/max_length). */
+/** Fetches the URL and returns the extracted content (windowed by start_index/max_length). */
 async function fetchAsText({ url, maxLength, startIndex, raw }: FetchArgs): Promise<string> {
   const response = await fetch(url, {
     headers: { 'User-Agent': 'JarvisAgent/0.1 (VS Code extension; MCP fetch)' },
@@ -75,9 +75,9 @@ async function fetchAsText({ url, maxLength, startIndex, raw }: FetchArgs): Prom
 }
 
 /**
- * Serveur MCP « fetch » in-process : même surface que le serveur officiel
- * Python (`uvx mcp-server-fetch`) mais implémenté en Node dans l'extension —
- * zéro dépendance externe, se connecte via une paire InMemoryTransport.
+ * In-process "fetch" MCP server: same surface as the official Python
+ * server (`uvx mcp-server-fetch`) but implemented in Node inside the
+ * extension — zero external dependency, connects via an InMemoryTransport pair.
  */
 export function createFetchServer(): Server {
   const server = new Server(
@@ -141,7 +141,7 @@ export function createFetchServer(): Server {
   return server;
 }
 
-/** Serveurs de base implémentés dans l'extension (connexion InMemoryTransport). */
+/** Built-in servers implemented in the extension (InMemoryTransport connection). */
 export const IN_PROCESS_SERVERS: Record<string, () => Server> = {
   fetch: createFetchServer
 };

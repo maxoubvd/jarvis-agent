@@ -5,15 +5,15 @@ import { tick } from 'svelte';
 import App from '../../src/frontend/App.svelte';
 
 /**
- * Régression du bug « menu inaccessible dans les paramètres » : en mode étroit
- * (webview < 500px), le bouton ☰ doit ouvrir le drawer de navigation depuis
- * n'importe quel onglet — y compris Settings — et le drawer doit permettre de
- * revenir sur les autres pages.
+ * Regression test for bug "menu inaccessible in settings": in narrow mode
+ * (webview < 500px), the ☰ button must open the navigation drawer from
+ * any tab — including Settings — and the drawer must allow returning
+ * to other pages.
  */
 
 beforeAll(() => {
-  // happy-dom n'implémente pas la Web Animations API utilisée par
-  // svelte/transition — on termine chaque animation au microtask suivant.
+  // happy-dom does not implement the Web Animations API used by
+  // svelte/transition — we end each animation at the next microtask.
   Element.prototype.animate = function () {
     const animation = {
       cancel: () => {},
@@ -42,7 +42,7 @@ function drawerTab(label: string): HTMLElement | undefined {
 async function click(el: HTMLElement) {
   el.click();
   await tick();
-  // Laisse les transitions (stubbées) se terminer avant d'inspecter le DOM.
+  // Let the transitions (stubbed) finish before inspecting the DOM.
   await new Promise(resolve => setTimeout(resolve, 0));
   await tick();
 }
@@ -76,18 +76,18 @@ describe('narrow-mode navigation drawer', () => {
   it('re-opens the drawer while on the Settings tab (reported bug)', async () => {
     await renderNarrowApp();
 
-    // Aller dans Settings via le drawer.
+    // Go to Settings via the drawer.
     await click(menuButton());
     await click(drawerTab('Settings')!);
-    // Le drawer se ferme à la navigation et la page Settings est affichée.
+    // The drawer closes on navigation and the Settings page is displayed.
     expect(screen.queryByText('Navigation')).toBeNull();
     expect(screen.getByRole('heading', { name: /Settings/ })).toBeTruthy();
 
-    // Ré-ouvrir le drawer depuis Settings…
+    // Re-open the drawer from Settings...
     await click(menuButton());
     expect(screen.getByText('Navigation')).toBeTruthy();
 
-    // …et revenir sur une autre page.
+    // ...and return to another page.
     await click(drawerTab('Checkpoints')!);
     expect(screen.queryByText('Navigation')).toBeNull();
     expect(screen.getByRole('heading', { name: /Checkpoints/ })).toBeTruthy();

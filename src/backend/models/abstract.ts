@@ -16,11 +16,11 @@ export interface NativeToolCall {
   };
 }
 
-/** Statistiques de tokens renvoyées par l'API (dont le cache implicite). */
+/** Token statistics returned by the API (including implicit cache). */
 export interface ProviderUsage {
   promptTokens?: number;
   completionTokens?: number;
-  /** Tokens du prompt servis depuis le cache (OpenAI/DeepSeek). */
+  /** Prompt tokens served from cache (OpenAI/DeepSeek). */
   cachedTokens?: number;
 }
 
@@ -30,11 +30,11 @@ export interface SendPromptResult {
   usage?: ProviderUsage;
 }
 
-/** Options par appel (le mode JSON n'est activé que pour la boucle agent). */
+/** Per-call options (JSON mode is only enabled for the agent loop). */
 export interface SendOptions {
   /**
-   * Force un JSON parsable via l'API (`response_format`/`format`), plutôt que de
-   * s'en remettre au prompt + json-cleaner. `text` = comportement par défaut.
+   * Forces parseable JSON via the API (`response_format`/`format`), instead of
+   * relying on the prompt + json-cleaner. `text` = default behaviour.
    */
   responseFormat?: 'json_object' | 'text';
 }

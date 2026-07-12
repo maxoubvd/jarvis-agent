@@ -2,16 +2,16 @@ import Parser from 'web-tree-sitter';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 
-// Compilation en ESM (Node16) : `__dirname` n'existe pas nativement, il faut le dériver de `import.meta.url`.
+// ESM compilation (Node16): `__dirname` doesn't exist natively, it must be derived from `import.meta.url`.
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export type PruneLevel = 'none' | 'function' | 'class' | 'module';
 
 export interface PruneOptions {
   level: PruneLevel;
-  /** Nom du symbole (fonction/classe) à conserver en entier. */
+  /** Name of the symbol (function/class) to keep in full. */
   symbol?: string;
-  /** Extension du fichier pour déterminer le langage (ex: .ts, .py) */
+  /** File extension used to determine the language (e.g. .ts, .py) */
   fileExtension?: string;
 }
 
@@ -23,19 +23,19 @@ interface CodeBlock {
   node: Parser.SyntaxNode;
 }
 
-/** Grammaire WASM (media/) à charger par extension de fichier. */
+/** WASM grammar (media/) to load per file extension. */
 const GRAMMAR_BY_EXTENSION: Record<string, string> = {
   '.ts': 'tree-sitter-typescript.wasm',
   '.tsx': 'tree-sitter-tsx.wasm',
-  '.jsx': 'tree-sitter-tsx.wasm', // grammaire TSX = TS + JSX, superset valide pour .jsx
+  '.jsx': 'tree-sitter-tsx.wasm', // TSX grammar = TS + JSX, valid superset for .jsx
   '.js': 'tree-sitter-javascript.wasm'
 };
 
 let parserInitPromise: Promise<void> | null = null;
-/** Une grammaire compilée est réutilisable pour tout parse ultérieur — évite de recharger le WASM à chaque appel. */
+/** A compiled grammar is reusable for any later parse — avoids reloading the WASM on every call. */
 const languageCache = new Map<string, Parser.Language>();
 
-/** Initialise web-tree-sitter (une seule fois) et charge/­met en cache la grammaire de `extension`. */
+/** Initializes web-tree-sitter (once) and loads/caches the grammar for `extension`. */
 async function ensureParser(extension: string): Promise<Parser | null> {
   const grammarFile = GRAMMAR_BY_EXTENSION[extension];
   if (!grammarFile) return null;
@@ -46,7 +46,7 @@ async function ensureParser(extension: string): Promise<Parser | null> {
 
     let lang = languageCache.get(grammarFile);
     if (!lang) {
-      // Depuis dist/backend/services/context/pruner.js : 4 niveaux pour remonter à la racine du package.
+      // From dist/backend/services/context/pruner.js: 4 levels up to reach the package root.
       const langWasmPath = path.join(__dirname, '..', '..', '..', '..', 'media', grammarFile);
       lang = await Parser.Language.load(langWasmPath);
       languageCache.set(grammarFile, lang);
@@ -56,13 +56,13 @@ async function ensureParser(extension: string): Promise<Parser | null> {
     parser.setLanguage(lang);
     return parser;
   } catch (err) {
-    console.error('Erreur initialisation tree-sitter:', err);
+    console.error('Tree-sitter initialization error:', err);
     return null;
   }
 }
 
-/** 
- * Extrait les blocs de premier niveau en utilisant l'AST Tree-sitter.
+/**
+ * Extracts top-level blocks using the Tree-sitter AST.
  */
 function extractBlocksAST(root: Parser.SyntaxNode): CodeBlock[] {
   const blocks: CodeBlock[] = [];
@@ -93,7 +93,7 @@ function extractBlocksAST(root: Parser.SyntaxNode): CodeBlock[] {
         });
       }
     } else if (child.type === 'lexical_declaration' || child.type === 'variable_declaration') {
-      // Pour les arrow functions de premier niveau (const x = () => {})
+      // For top-level arrow functions (const x = () => {})
       const declarator = child.children.find(c => c.type === 'variable_declarator');
       if (declarator) {
         const nameNode = declarator.childForFieldName('name');
@@ -114,7 +114,7 @@ function extractBlocksAST(root: Parser.SyntaxNode): CodeBlock[] {
   return blocks;
 }
 
-// Fallback Regex en cas d'absence de Tree-Sitter
+// Regex fallback when Tree-Sitter is unavailable
 const IMPORT_REGEX = /^\s*(import\s|from\s+\S+\s+import|const\s+\w+\s*=\s*require\(|using\s|#include\s)/;
 const DECLARATION_PATTERNS = [
   { kind: 'class' as const, regex: /^\s*(?:export\s+)?(?:default\s+)?(?:abstract\s+)?class\s+([A-Za-z_$][\w$]*)/ },
@@ -142,8 +142,8 @@ function findBlockEnd(lines: string[], startLine: number): number {
     return lines.length - 1;
   }
 
-  // Bloc à indentation (Python…) : la fin est la dernière ligne dont l'indentation
-  // dépasse celle de la déclaration ; les lignes vides intermédiaires n'y mettent pas fin.
+  // Indentation-based block (Python…): the end is the last line whose indentation
+  // exceeds that of the declaration; blank lines in between don't end it.
   const baseIndent = startText.match(/^\s*/)?.[0].length ?? 0;
   let end = startLine;
   for (let i = startLine + 1; i < lines.length; i++) {
@@ -218,14 +218,14 @@ export async function pruneContext(content: string, options: PruneOptions): Prom
     .map(b => `${lines[b.startLine].trim()} … // lignes ${b.startLine + 1}-${b.endLine + 1}`);
     
   if (signatures.length > 0) {
-    parts.push('// Autres définitions du fichier:\n' + signatures.join('\n'));
+    parts.push('// Other definitions in the file:\n' + signatures.join('\n'));
   }
 
   parts.push(lines.slice(target.startLine, target.endLine + 1).join('\n'));
   return parts.join('\n\n');
 }
 
-/** Choix automatique de stratégie selon la taille et le budget de tokens. */
+/** Automatic strategy choice based on size and token budget. */
 export function choosePruneLevel(contentChars: number, budgetTokens: number): PruneLevel {
   const estimatedTokens = Math.ceil(contentChars / 4);
   if (estimatedTokens <= budgetTokens * 0.25) return 'none';

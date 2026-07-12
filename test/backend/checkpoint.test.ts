@@ -143,7 +143,7 @@ describe('CheckpointManager.rollbackToLastCheckpoint', () => {
     const result = await manager.rollbackToLastCheckpoint();
 
     expect(result.success).toBe(false);
-    expect(result.error).toBe('Aucun checkpoint disponible');
+    expect(result.error).toBe('No checkpoint available');
     expect(executeTerminalCommand).toHaveBeenCalledTimes(1);
   });
 

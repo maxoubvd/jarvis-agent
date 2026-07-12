@@ -18,7 +18,7 @@
     onDefaultChange = () => {}
   }: Props = $props();
 
-  /** Ordre d'affichage du dropdown ; « autre » = openai-compatible. */
+  /** Dropdown display order; "other" = openai-compatible. */
   const PROVIDER_OPTIONS: Array<{ value: ProviderType; label: string }> = [
     { value: 'mistral', label: 'mistral' },
     { value: 'openrouter', label: 'openrouter' },
@@ -29,12 +29,12 @@
     { value: 'ollama', label: 'ollama' },
     { value: 'lmstudio', label: 'lmstudio' },
     { value: 'huggingface', label: 'huggingface' },
-    { value: 'openai-compatible', label: 'autre (openai-compatible)' }
+    { value: 'openai-compatible', label: 'other (openai-compatible)' }
   ];
 
   /**
-   * Rôles réellement consommés par le backend (`embed`/`rerank`/`summarize` n'ont
-   * aucun consommateur — cf. audit 2026-07-11 §1 — et ne sont donc pas exposés ici).
+   * Roles actually consumed by the backend (`embed`/`rerank`/`summarize` have
+   * no consumer — see 2026-07-11 audit §1 — and are therefore not exposed here).
    */
   const VISIBLE_MODEL_ROLES: ModelRole[] = ['chat', 'edit', 'apply', 'autocomplete'];
 
@@ -52,8 +52,8 @@
   };
 
   /**
-   * Cartes dépliées, indexées par position. Un nouvel item s'ouvre en mode
-   * édition ; « Validate » replie la carte vers la vue liste.
+   * Expanded cards, indexed by position. A new item opens in edit mode;
+   * "Validate" collapses the card back to the list view.
    */
   let expanded = $state<Record<number, boolean>>({});
 
@@ -76,7 +76,7 @@
 
   function removeModel(index: number) {
     const removed = items[index];
-    // Les index changent après suppression — on replie tout pour rester cohérent.
+    // Indexes shift after deletion — collapse everything to stay consistent.
     expanded = {};
     update(items.filter((_, i) => i !== index));
     if (removed?.name && removed.name === defaultModel) onDefaultChange('');
@@ -105,7 +105,7 @@
     return value.trim() !== '' && Number.isFinite(n) && n >= 0 && n <= 2 ? n : undefined;
   }
 
-  /** Température par défaut du profil détecté (devstral/codestral 0.1, qwen-coder 0.15). */
+  /** Default temperature for the detected profile (devstral/codestral 0.1, qwen-coder 0.15). */
   function profilePlaceholder(model: ModelItem): string {
     const haystack = `${model.model} ${model.name}`;
     if (/devstral|codestral/i.test(haystack)) return '0.1 (profile)';
@@ -197,7 +197,7 @@
 
         {#if PROVIDER_KEY_PAGE[model.provider]}
           {@const keyPage = PROVIDER_KEY_PAGE[model.provider]}
-          <!-- Les liens http(s) d'un webview s'ouvrent dans le navigateur externe. -->
+          <!-- http(s) links from a webview open in the external browser. -->
           <a class="key-link" href={keyPage?.url} title={keyPage?.url}>
             <Icon name="globe" size={12} /> {keyPage?.label} — {model.provider}
           </a>

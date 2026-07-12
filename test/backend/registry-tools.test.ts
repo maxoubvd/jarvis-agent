@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-/** Système de fichiers en mémoire injecté dans tool-registry via le mock du module fileSystem. */
+/** In-memory file system injected into tool-registry via fileSystem module mock. */
 const files = vi.hoisted(() => new Map<string, string>());
 
 vi.mock('vscode', () => ({
@@ -33,7 +33,7 @@ import { createBuiltinTools, ToolRegistry, type ToolDefinition } from '../../src
 
 function tool(name: string): ToolDefinition {
   const found = createBuiltinTools().find(t => t.name === name);
-  if (!found) throw new Error(`outil absent du registre: ${name}`);
+  if (!found) throw new Error(`tool not found in registry: ${name}`);
   return found;
 }
 
@@ -49,7 +49,7 @@ describe('single_find_and_replace', () => {
       old_string: 'const x = 1;',
       new_string: 'const x = 42;'
     });
-    expect(result).toContain('Remplacement effectué');
+    expect(result).toContain('Replacement done');
     expect(files.get('a.ts')).toBe('const x = 42;\nconst y = 2;');
   });
 
@@ -57,7 +57,7 @@ describe('single_find_and_replace', () => {
     files.set('a.ts', 'foo\nfoo');
     await expect(
       tool('single_find_and_replace').execute({ path: 'a.ts', old_string: 'bar', new_string: 'x' })
-    ).rejects.toThrow(/introuvable/);
+    ).rejects.toThrow(/not found/);
     await expect(
       tool('single_find_and_replace').execute({ path: 'a.ts', old_string: 'foo', new_string: 'x' })
     ).rejects.toThrow(/2 fois/);

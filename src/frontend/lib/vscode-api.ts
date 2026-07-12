@@ -1,6 +1,6 @@
 interface VsCodeApi {
   postMessage(message: unknown): void;
-  /** État léger persisté par la webview (survit au reload de la fenêtre). */
+  /** Lightweight state persisted by the webview (survives a window reload). */
   getState<T = unknown>(): T | undefined;
   setState<T = unknown>(state: T): void;
 }

@@ -11,9 +11,9 @@
   }
 
   interface Props {
-    /** Config existante (pour ne pas écraser les autres réglages en sauvegardant). */
+    /** Existing config (so saving doesn't overwrite the other settings). */
     baseConfig?: JarvisConfig | null;
-    /** Un modèle est déjà configuré → on démarre directement sur le tour. */
+    /** A model is already configured → start directly on the tour. */
     hasModel?: boolean;
     connectionResult?: ConnectionResult | null;
     testing?: boolean;
@@ -32,7 +32,7 @@
     onComplete = () => {}
   }: Props = $props();
 
-  /** 1 = provider, 2 = test/validation, 3 = tour des features (capture initiale). */
+  /** 1 = provider, 2 = test/validation, 3 = feature tour (initial capture). */
   let step = $state(untrack(() => hasModel) ? 3 : 1);
 
   const PROVIDERS: Array<{ value: ProviderType; label: string; blurb: string; local?: boolean; modelPlaceholder: string }> = [
@@ -94,7 +94,7 @@
     step = 3;
   }
 
-  // --- Tour des features ---
+  // --- Feature tour ---
   const SLIDES = [
     {
       icon: 'chat',

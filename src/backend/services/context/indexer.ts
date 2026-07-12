@@ -4,14 +4,14 @@ import { listDirectoryTool, readFileTool } from '../../core/mcp/tools/fileSystem
 const MAX_FILE_SIZE = 512 * 1024;
 
 /**
- * Indexation du workspace en arrière-plan (spec §5.2) : parcourt les fichiers
- * autorisés par le sandbox/.jarvisignore et alimente la base RAG locale.
+ * Background workspace indexing (spec §5.2): walks the files allowed by the
+ * sandbox/.jarvisignore and feeds the local RAG store.
  */
 export class WorkspaceIndexer {
   public readonly index = new RagIndex();
   private indexing = false;
   private indexedFiles = 0;
-  /** Indexation en cours, partagée entre appelants concurrents (palette de commandes + Settings). */
+  /** Indexing in progress, shared between concurrent callers (command palette + Settings). */
   private inFlight: Promise<number> | null = null;
 
   public get isIndexing(): boolean {
@@ -23,8 +23,8 @@ export class WorkspaceIndexer {
   }
 
   public async indexWorkspace(onProgress?: (indexed: number, total: number) => void): Promise<number> {
-    // Une indexation était déjà en cours (ex: lancée automatiquement à l'ouverture de la
-    // sidebar) : on attend SON résultat au lieu de renvoyer aussitôt le compteur encore à 0.
+    // An indexing run was already in progress (e.g. auto-started when the sidebar
+    // opened): wait for ITS result instead of immediately returning the counter still at 0.
     if (this.inFlight) return this.inFlight;
 
     this.indexing = true;
@@ -48,14 +48,14 @@ export class WorkspaceIndexer {
         await this.index.addDocument(files[i].path, content);
         this.indexedFiles++;
       } catch {
-        // fichier illisible ou bloqué — on continue
+        // unreadable or blocked file — skip and continue
       }
       onProgress?.(i + 1, files.length);
     }
     return this.indexedFiles;
   }
 
-  /** Ré-indexe un fichier après modification. */
+  /** Re-indexes a file after modification. */
   public async reindexFile(relativePath: string): Promise<void> {
     if (!isIndexableFile(relativePath)) return;
     try {
@@ -70,12 +70,12 @@ export class WorkspaceIndexer {
     return this.index.search(query, topK);
   }
 
-  /** Recherche par nom de fichier pour l'autocomplétion @ */
+  /** Search by file name for @ autocompletion */
   public searchFiles(query: string, maxResults = 50): string[] {
     return this.index.getFiles(query, maxResults);
   }
 
-  /** Recherche restreinte à la documentation Markdown (mentions @docs). */
+  /** Search restricted to Markdown documentation (@docs mentions). */
   public async searchDocs(query: string, topK = 5): Promise<RagSearchResult[]> {
     const results = await this.index.search(query, topK * 3);
     return results.filter(r => r.path.endsWith('.md')).slice(0, topK);

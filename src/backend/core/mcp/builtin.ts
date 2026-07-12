@@ -3,10 +3,10 @@ import * as path from 'path';
 import type { McpServerConfig } from '../../config/config-manager.js';
 
 /**
- * True si `folder` est LUI-MÊME la racine d'un dépôt git (a son propre
- * `.git`) — pas seulement un sous-dossier d'un repo parent. `git` CLI remonte
- * les dossiers parents pour trouver un `.git`, mais `mcp-server-git` vérifie
- * strictement le chemin donné et échoue sinon ("not a valid Git repository").
+ * True if `folder` is ITSELF the root of a git repository (has its own
+ * `.git`) — not just a subfolder of a parent repo. The `git` CLI walks up
+ * parent directories to find a `.git`, but `mcp-server-git` strictly checks
+ * the given path and fails otherwise ("not a valid Git repository").
  */
 export function isGitRepository(folder?: string): boolean {
   if (!folder) return false;
@@ -18,37 +18,36 @@ export function isGitRepository(folder?: string): boolean {
 }
 
 /**
- * Serveur MCP « de base » : défini dans le code, visible pour tous les
- * utilisateurs dans les Settings (spec §4.1), activable/désactivable mais ni
- * éditable ni supprimable — l'override d'activation vit dans
- * `config.builtinMcp[id].enabled`.
+ * A "built-in" MCP server: defined in code, visible to all users in Settings
+ * (spec §4.1), can be enabled/disabled but is neither editable nor
+ * removable — the enable override lives in `config.builtinMcp[id].enabled`.
  */
 export interface BuiltinMcpServer {
   id: string;
   label: string;
   description: string;
-  /** `config.enabled` = activation par défaut (avant override utilisateur). */
+  /** `config.enabled` = default activation (before user override). */
   config: McpServerConfig;
-  /** Serveur implémenté dans l'extension (paire InMemoryTransport, pas de process). */
+  /** Server implemented in the extension (InMemoryTransport pair, no process). */
   inProcess?: boolean;
-  /** Ne peut se connecter que si un dossier est ouvert (le manager force enabled=false sinon). */
+  /** Can only connect if a folder is open (the manager forces enabled=false otherwise). */
   requiresWorkspace?: boolean;
-  /** Ne peut se connecter que si le dossier ouvert est LUI-MÊME une racine de dépôt git (voir `isGitRepository`). */
+  /** Can only connect if the open folder is ITSELF a git repository root (see `isGitRepository`). */
   requiresOwnGitRepo?: boolean;
 }
 
 /**
- * Les 4 serveurs de base, toujours listés (même sans dossier ouvert) pour que
- * la Settings UI reste complète. memory/filesystem tournent via npx (Node
- * suffit), fetch est implémenté in-process dans l'extension ; git est le
- * serveur officiel Python (uvx), activé par défaut dès que le dossier ouvert
- * est LUI-MÊME un dépôt git (`isGitRepository`) — sinon `mcp-server-git`
- * échoue avec "not a valid Git repository" (il ne remonte pas vers un repo
- * parent comme le fait `git` CLI). Dans ce cas le serveur reste désactivé par
- * défaut ; l'active manuellement passe par le flow "git init" (extension.ts,
- * message `requestGitInit`). Si la connexion échoue quand même, le manager
- * isole l'erreur par serveur et les tools git natifs (git_status, git_log,
- * view_diff) restent disponibles (builtin-dedup.ts).
+ * The 4 built-in servers, always listed (even without an open folder) so the
+ * Settings UI stays complete. memory/filesystem run via npx (Node is
+ * enough), fetch is implemented in-process in the extension; git is the
+ * official Python server (uvx), enabled by default as soon as the open
+ * folder is ITSELF a git repository (`isGitRepository`) — otherwise
+ * `mcp-server-git` fails with "not a valid Git repository" (it doesn't walk
+ * up to a parent repo the way the `git` CLI does). In that case the server
+ * stays disabled by default; enabling it manually goes through the "git
+ * init" flow (extension.ts, `requestGitInit` message). If the connection
+ * still fails, the manager isolates the error per server and the native git
+ * tools (git_status, git_log, view_diff) remain available (builtin-dedup.ts).
  */
 export function getBuiltinMcpServers(workspaceFolder?: string): BuiltinMcpServer[] {
   return [
@@ -107,7 +106,7 @@ export function getBuiltinMcpServers(workspaceFolder?: string): BuiltinMcpServer
   ];
 }
 
-/** Représentation lisible de la commande (affichée dans les Settings). */
+/** Human-readable representation of the command (shown in Settings). */
 export function builtinCommandString(server: BuiltinMcpServer): string {
   if (server.inProcess) return '(built-in)';
   return [server.config.command, ...(server.config.args ?? [])].join(' ');

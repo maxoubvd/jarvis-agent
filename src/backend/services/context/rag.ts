@@ -15,21 +15,21 @@ export interface RagSearchResult {
   score: number;
 }
 
-/** Formatte des résultats de recherche RAG en bloc de contexte lisible (chemin, lignes, extrait). */
+/** Formats RAG search results into a readable context block (path, lines, snippet). */
 export function formatSearchResults(results: RagSearchResult[]): string {
-  return results.map(r => `— ${r.path} (lignes ${r.startLine}-${r.endLine}):\n${r.snippet}`).join('\n\n');
+  return results.map(r => `— ${r.path} (lines ${r.startLine}-${r.endLine}):\n${r.snippet}`).join('\n\n');
 }
 
 /**
- * Augmentation de contexte (spec §5.2) : ajoute au texte de la tâche les résultats de
- * recherche jugés pertinents. Un score de cosine similarity brut n'est pas un signal de
- * pertinence fiable dans l'absolu (cf. mesures empiriques) — le seuil ne filtre donc que
- * le bruit le plus net (score quasi nul/négatif), pas une vraie coupure de pertinence.
+ * Context augmentation (spec §5.2): appends search results judged relevant to the
+ * task text. A raw cosine similarity score is not a reliable relevance signal in
+ * absolute terms (per empirical measurements) — the threshold therefore only filters
+ * out the clearest noise (near-zero/negative score), not a true relevance cutoff.
  */
 export function augmentWithCodeContext(task: string, results: RagSearchResult[], minScore = 0.15): string {
   const relevant = results.filter(r => r.score > minScore);
   if (relevant.length === 0) return task;
-  return `${task}\n\n--- CONTEXTE DU PROJET (recherche automatique) ---\n${formatSearchResults(relevant)}`;
+  return `${task}\n\n--- PROJECT CONTEXT (automatic search) ---\n${formatSearchResults(relevant)}`;
 }
 
 const CHUNK_LINES = 40;
@@ -110,7 +110,7 @@ export class RagIndex {
           embedding
         });
       } catch (err) {
-        console.error(`Erreur d'embedding pour ${filePath}:`, err);
+        console.error(`Embedding error for ${filePath}:`, err);
       }
       if (end >= lines.length) break;
     }

@@ -15,7 +15,7 @@ export async function gitLog(limit = 10): Promise<string> {
 async function runGit(command: string): Promise<string> {
   const result: ExecutionResult = await executeTerminalCommand(command);
   if (!result.success) {
-    throw new Error(result.stderr || `Échec de la commande git: ${command}`);
+    throw new Error(result.stderr || `Git command failed: ${command}`);
   }
   return result.stdout;
 }

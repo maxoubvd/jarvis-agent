@@ -254,9 +254,9 @@ describe('JarvisInlineCompletionProvider', () => {
     await promise;
 
     const userMessage = sendPrompt.mock.calls[0][0][1].content as string;
-    // Ligne 0 (hors fenêtre de 60 lignes avant le curseur) ne doit pas apparaître.
+    // Line 0 (outside the 60-line window before the cursor) must not appear.
     expect(userMessage).not.toContain('line 0\n');
-    // Ligne juste avant/après le curseur doit apparaître.
+    // Lines right before/after the cursor must appear.
     expect(userMessage).toContain('line 99');
     expect(userMessage).toContain('line 101');
   });

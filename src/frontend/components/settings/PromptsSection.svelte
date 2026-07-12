@@ -15,7 +15,7 @@
     onChange(next);
   }
 
-  /** Cartes dépliées (nouveau prompt = ouvert en édition). */
+  /** Expanded cards (a new prompt opens in edit mode). */
   let expanded = $state<Record<string, boolean>>({});
 
   function addPrompt() {

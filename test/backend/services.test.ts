@@ -63,10 +63,10 @@ describe('TokenCounter (spec §3.2)', () => {
 describe('ResponseCache (spec §3.2)', () => {
   it('returns cached responses for identical requests', () => {
     const cache = new ResponseCache();
-    const key = ResponseCache.keyFor('m', [{ role: 'user', content: 'salut' }]);
+    const key = ResponseCache.keyFor('m', [{ role: 'user', content: 'hello' }]);
     expect(cache.get(key)).toBeUndefined();
-    cache.set(key, 'réponse');
-    expect(cache.get(key)).toBe('réponse');
+    cache.set(key, 'response');
+    expect(cache.get(key)).toBe('response');
   });
 
   it('produces different keys for different messages or models', () => {
@@ -88,7 +88,7 @@ describe('ResponseCache (spec §3.2)', () => {
   });
 });
 
-describe('Agents spécialisés (spec §5.1)', () => {
+describe('Specialized agents (spec §5.1)', () => {
   it('defines the 5 predefined agents', () => {
     expect(SPECIALIZED_AGENTS.map(a => a.mention)).toEqual([
       '@QA-Agent', '@Doc-Agent', '@Refactor-Agent', '@Security-Agent', '@Perf-Agent'
@@ -96,9 +96,9 @@ describe('Agents spécialisés (spec §5.1)', () => {
   });
 
   it('detects a mention and extracts the task', () => {
-    const mention = detectAgentMention('@QA-Agent vérifie le fichier utils.ts');
+    const mention = detectAgentMention('@QA-Agent check the utils.ts file');
     expect(mention?.agent.id).toBe('qa');
-    expect(mention?.task).toBe('vérifie le fichier utils.ts');
+    expect(mention?.task).toBe('check the utils.ts file');
   });
 
   it('is case-insensitive', () => {
@@ -106,13 +106,13 @@ describe('Agents spécialisés (spec §5.1)', () => {
   });
 
   it('returns null without mention', () => {
-    expect(detectAgentMention('bonjour')).toBeNull();
+    expect(detectAgentMention('hello')).toBeNull();
   });
 
   it('suggests an agent from keywords', () => {
-    expect(suggestAgent('il y a un bug dans les tests')?.id).toBe('qa');
-    expect(suggestAgent('audit de sécurité des secrets')?.id).toBe('security');
-    expect(suggestAgent('bonjour')).toBeNull();
+    expect(suggestAgent('there is a bug in the tests')?.id).toBe('qa');
+    expect(suggestAgent('security audit of secrets')?.id).toBe('security');
+    expect(suggestAgent('hello')).toBeNull();
   });
 
   it('restricts each predefined agent to a coherent, non-empty tool subset', () => {
@@ -145,7 +145,7 @@ describe('Agents spécialisés (spec §5.1)', () => {
 });
 
 describe('Workflows (spec §5.2)', () => {
-  it('defines the predefined workflows (5 fixes + le découpage dynamique par IA)', () => {
+  it('defines the predefined workflows (5 fixes + AI-driven dynamic decomposition)', () => {
     expect(WORKFLOWS.map(w => w.id)).toEqual([
       'dynamic', 'dev-feature', 'bug-fix', 'code-review', 'refactor', 'setup-project'
     ]);
@@ -157,16 +157,16 @@ describe('Workflows (spec §5.2)', () => {
     const orchestrator = {
       run: async (prompt: string) => {
         prompts.push(prompt);
-        return { success: true, finalText: `résultat-${prompts.length}`, steps: [], iterations: 1 };
+        return { success: true, finalText: `result-${prompts.length}`, steps: [], iterations: 1 };
       }
     };
     const runner = new WorkflowRunner(orchestrator as never);
-    const result = await runner.run('bug-fix', 'crash au démarrage');
+    const result = await runner.run('bug-fix', 'crash on startup');
 
     expect(result.success).toBe(true);
     expect(result.steps).toHaveLength(4);
-    expect(prompts[0]).toContain('crash au démarrage');
-    expect(prompts[1]).toContain('résultat-1');
+    expect(prompts[0]).toContain('crash on startup');
+    expect(prompts[1]).toContain('result-1');
   });
 
   it('stops at the first failed step', async () => {

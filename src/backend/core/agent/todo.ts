@@ -1,4 +1,4 @@
-/** Item de la TODO list visuelle (outil `update_todo_list`, façon Claude Code `TodoWrite`). */
+/** Item in the visual TODO list (tool `update_todo_list`, Claude Code `TodoWrite`-style). */
 export interface TodoItem {
   id: string;
   content: string;
@@ -7,7 +7,7 @@ export interface TodoItem {
 
 const VALID_STATUSES = new Set(['pending', 'in_progress', 'completed']);
 
-/** Valide/nettoie une liste brute (venant du modèle ou d'un run de workflow) en TodoItem[]. */
+/** Validates/sanitizes a raw list (from the model or a workflow run) into TodoItem[]. */
 export function sanitizeTodoItems(raw: unknown): TodoItem[] {
   if (!Array.isArray(raw)) return [];
   const items: TodoItem[] = [];

@@ -9,22 +9,22 @@ describe('JSON Cleaner (spec §8.2)', () => {
   });
 
   it('extracts JSON from markdown fences', () => {
-    const raw = 'Voici la réponse:\n```json\n{"tool": "read_file"}\n```\nfin';
+    const raw = 'Here is the answer:\n```json\n{"tool": "read_file"}\n```\nend';
     const result = extractJson<{ tool: string }>(raw);
     expect(result.ok).toBe(true);
     expect(result.value?.tool).toBe('read_file');
   });
 
   it('extracts JSON surrounded by prose', () => {
-    const raw = 'Je vais lire le fichier. {"action": {"tool": "read_file", "args": {"path": "a.ts"}}} Voilà.';
+    const raw = 'I will read the file. {"action": {"tool": "read_file", "args": {"path": "a.ts"}}} There.';
     const result = extractJson(raw);
     expect(result.ok).toBe(true);
     expect((result.value as Record<string, unknown>).action).toBeDefined();
   });
 
   it('strips <thinking> blocks and keeps them separately', () => {
-    const { text, thinking } = stripThinking('<thinking>je réfléchis</thinking>{"a":1}');
-    expect(thinking).toBe('je réfléchis');
+    const { text, thinking } = stripThinking('<thinking>thinking</thinking>{"a":1}');
+    expect(thinking).toBe('thinking');
     expect(text).toBe('{"a":1}');
   });
 

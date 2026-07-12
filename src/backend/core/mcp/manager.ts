@@ -7,19 +7,19 @@ import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import type { ToolDefinition, ToolParameter } from '../agent/tool-registry.js';
 import { operationLogger } from '../../services/logger.js';
 
-/** Statut d'un tool exposé par un serveur (politique auto/ask/excluded). */
+/** Status of a tool exposed by a server (auto/ask/excluded policy). */
 export interface McpToolStatus {
   name: string;
   description: string;
   enabled: boolean;
-  /** Politique effective (défaut MCP : `ask`). */
+  /** Effective policy (MCP default: `ask`). */
   policy: ToolPolicy;
 }
 
 /**
- * Politique effective d'un tool serveur : config explicite > legacy
- * `disabledTools` (= excluded) > défaut `ask` (tout tool MCP demande
- * confirmation tant que l'utilisateur ne l'a pas passé en auto).
+ * Effective policy for a server tool: explicit config > legacy
+ * `disabledTools` (= excluded) > default `ask` (every MCP tool asks for
+ * confirmation until the user switches it to auto).
  */
 export function mcpToolPolicy(config: McpServerConfig, tool: string): ToolPolicy {
   const explicit = config.toolPolicies?.[tool];
@@ -34,7 +34,7 @@ export interface McpServerStatus {
   connected: boolean;
   tools: McpToolStatus[];
   error?: string;
-  /** true = serveur de base (défini dans le code, non supprimable). */
+  /** true = built-in server (defined in code, not removable). */
   builtin?: boolean;
   description?: string;
 }
@@ -44,11 +44,11 @@ interface ResolvedServer {
   config: McpServerConfig;
   builtin: boolean;
   description?: string;
-  /** Fabrique du serveur in-process (builtins implémentés dans l'extension). */
+  /** Factory for the in-process server (builtins implemented in the extension). */
   inProcessFactory?: () => Server;
 }
 
-/** Convertit un JSON Schema MCP en liste de ToolParameter du registre. */
+/** Converts an MCP JSON Schema into a list of registry ToolParameters. */
 export function parametersFromJsonSchema(schema: Record<string, unknown>): ToolParameter[] {
   const properties = (schema.properties ?? {}) as Record<string, Record<string, unknown>>;
   const required = new Set((schema.required as string[] | undefined) ?? []);
@@ -94,41 +94,41 @@ interface ConnectedServer {
 }
 
 /**
- * Gère le cycle de vie des serveurs MCP configurés (`mcpServers` de la
- * config) : connexion, découverte des tools, adaptation en ToolDefinition
- * pour la boucle agentique, statuts pour la Settings UI.
+ * Manages the lifecycle of configured MCP servers (`mcpServers` in the
+ * config): connecting, discovering tools, adapting them into ToolDefinitions
+ * for the agentic loop, and reporting statuses for the Settings UI.
  */
 export class McpManager {
   private servers = new Map<string, ConnectedServer>();
   private errors = new Map<string, string>();
   /**
-   * Single-flight guard : `getSettings` et `getMcpStatus` arrivent quasi
-   * simultanément depuis le webview (handleTabChange poste les deux d'un
-   * coup) et chacun appelle `initialize()`. Avec un simple booléen, le second
-   * appel voyait "déjà initialisé" et repartait aussitôt lire des statuts
-   * vides — la connexion réelle (connectAll) n'avait pas eu le temps de
-   * s'exécuter. En gardant la Promise elle-même, tout appelant concurrent
-   * attend la même connexion en cours au lieu de lire un état pas encore prêt.
+   * Single-flight guard: `getSettings` and `getMcpStatus` arrive almost
+   * simultaneously from the webview (handleTabChange posts both at once)
+   * and each calls `initialize()`. With a plain boolean, the second call
+   * would see "already initialized" and immediately read back empty
+   * statuses — the actual connection (connectAll) hadn't had time to run
+   * yet. By keeping the Promise itself, any concurrent caller awaits the
+   * same in-flight connection instead of reading a not-yet-ready state.
    */
   private initPromise: Promise<void> | null = null;
 
   constructor(
     private readonly cfg: ConfigManager = getConfigManager(),
-    /** Fabrique injectable (tests). */
+    /** Injectable factory (tests). */
     private readonly clientFactory: (
       name: string,
       config: McpServerConfig,
       inProcessFactory?: () => Server
     ) => JarvisMcpClient = (name, config, inProcessFactory) =>
       new JarvisMcpClient(name, config, inProcessFactory),
-    /** Dossier du workspace ouvert (fourni par l'appelant — pas d'import vscode ici). */
+    /** Open workspace folder (provided by the caller — no vscode import here). */
     private readonly workspaceFolder?: string
   ) {}
 
   /**
-   * Serveurs effectifs : les serveurs de base (activation/tools surchargés par
-   * `config.builtinMcp`) puis les serveurs utilisateur. Un serveur utilisateur
-   * portant le nom d'un builtin masque ce dernier.
+   * Effective servers: the built-in servers (activation/tools overridden by
+   * `config.builtinMcp`) followed by user servers. A user server sharing a
+   * builtin's name shadows it.
    */
   private resolveServers(): ResolvedServer[] {
     const config = this.cfg.getConfig();
@@ -138,12 +138,12 @@ export class McpManager {
     const builtins: ResolvedServer[] = getBuiltinMcpServers(this.workspaceFolder)
       .filter(b => !(b.id in userServers))
       .map(b => {
-        // Un builtin lié au workspace reste listé mais inconnectable sans
-        // dossier ; un builtin lié à un dépôt git reste listé mais
-        // inconnectable si le dossier n'est pas lui-même une racine git
-        // (mcp-server-git échouerait avec "not a valid Git repository").
-        // Les deux gardes l'emportent sur un éventuel override utilisateur —
-        // sinon la connexion échoue quand même, juste plus tard.
+        // A workspace-bound builtin stays listed but is unconnectable
+        // without a folder; a builtin bound to a git repo stays listed but
+        // is unconnectable if the folder isn't itself a git root
+        // (mcp-server-git would fail with "not a valid Git repository").
+        // Both guards take precedence over any user override — otherwise
+        // the connection would fail anyway, just later.
         const blocked =
           (b.requiresWorkspace && !this.workspaceFolder) ||
           (b.requiresOwnGitRepo && !isGitRepository(this.workspaceFolder));
@@ -170,7 +170,7 @@ export class McpManager {
     return [...builtins, ...users];
   }
 
-  /** Connecte tous les serveurs activés ; les erreurs sont isolées par serveur. */
+  /** Connects all enabled servers; errors are isolated per server. */
   public async initialize(): Promise<void> {
     if (!this.initPromise) {
       this.initPromise = this.connectAll();
@@ -189,27 +189,27 @@ export class McpManager {
             const tools = await client.listTools();
             this.servers.set(name, { client, tools });
             this.errors.delete(name);
-            operationLogger.log('mcp', `Serveur ${name} connecté (${tools.length} tools)`, 'success');
+            operationLogger.log('mcp', `Server ${name} connected (${tools.length} tools)`, 'success');
           } catch (err) {
             let msg = err instanceof Error ? err.message : String(err);
-            // Erreur la plus fréquente sur les serveurs Python : uv absent du PATH.
+            // Most common error on Python servers: uv missing from PATH.
             if (config.command === 'uvx' && /enoent|not found|introuvable/i.test(msg)) {
-              msg = `uv (uvx) introuvable — installez uv : https://docs.astral.sh/uv/ (${msg})`;
+              msg = `uv (uvx) not found — install uv: https://docs.astral.sh/uv/ (${msg})`;
             }
             this.errors.set(name, msg);
-            operationLogger.log('mcp', `Serveur ${name} injoignable: ${msg}`, 'error');
+            operationLogger.log('mcp', `Server ${name} unreachable: ${msg}`, 'error');
           }
         })
     );
   }
 
-  /** Ferme tout puis reconnecte selon la config courante. */
+  /** Closes everything then reconnects according to the current config. */
   public async reload(): Promise<void> {
     await Promise.all([...this.servers.values()].map(s => s.client.close().catch(() => undefined)));
     this.servers.clear();
     this.errors.clear();
-    // Un appel concurrent à initialize() doit attendre CETTE reconnexion, pas
-    // l'ancienne (déjà résolue) ni repartir aussitôt.
+    // A concurrent call to initialize() must wait for THIS reconnection, not
+    // the old one (already resolved), and must not proceed immediately.
     this.initPromise = this.connectAll();
     await this.initPromise;
   }
@@ -239,9 +239,9 @@ export class McpManager {
   }
 
   /**
-   * Politique effective de chaque tool MCP connecté, indexée par le nom
-   * enregistré dans le registre agentique (`mcp__<serveur>__<tool>`).
-   * Fusionnée dans `OrchestratorOptions.toolPolicies` (défaut : `ask`).
+   * Effective policy of each connected MCP tool, indexed by the name
+   * registered in the agent registry (`mcp__<server>__<tool>`).
+   * Merged into `OrchestratorOptions.toolPolicies` (default: `ask`).
    */
   public toolPolicies(): Record<string, ToolPolicy> {
     const configs = new Map(this.resolveServers().map(s => [s.name, s.config]));
@@ -256,10 +256,10 @@ export class McpManager {
   }
 
   /**
-   * Noms bruts des tools par serveur CONNECTÉ, hors politique `excluded`.
-   * Alimente la déduplication des builtins doublonnés (builtin-dedup.ts) :
-   * un serveur désactivé ou injoignable n'apparaît pas ici, donc ses
-   * équivalents builtin restent disponibles.
+   * Raw tool names per CONNECTED server, excluding `excluded` policy.
+   * Feeds the builtin deduplication (builtin-dedup.ts):
+   * a disabled or unreachable server does not appear here, so its
+   * builtin equivalents remain available.
    */
   public activeToolNames(): Map<string, Set<string>> {
     const configs = new Map(this.resolveServers().map(s => [s.name, s.config]));
@@ -274,7 +274,7 @@ export class McpManager {
     return map;
   }
 
-  /** Tools MCP découverts, adaptés au registre agentique (HITL `mcp`). */
+  /** MCP tools discovered, adapted to the agent registry (HITL `mcp`). */
   public toToolDefinitions(): ToolDefinition[] {
     const configByServer = new Map(this.resolveServers().map(s => [s.name, s.config]));
     const definitions: ToolDefinition[] = [];

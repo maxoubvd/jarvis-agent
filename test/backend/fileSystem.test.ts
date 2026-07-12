@@ -23,21 +23,21 @@ describe('FileSystem Tools', () => {
     it('should block path traversal', () => {
       expect(() =>
         assertPathWithinWorkspace('/test-workspace', '/etc/passwd')
-      ).toThrow('Accès hors workspace interdit');
+      ).toThrow('Access outside workspace forbidden');
     });
   });
 
   describe('readFileTool', () => {
     it('should throw error if workspace not found', async () => {
       vi.spyOn(vscode.workspace, 'workspaceFolders', 'get').mockReturnValue(undefined);
-      await expect(readFileTool('test.txt')).rejects.toThrow('Workspace introuvable');
+      await expect(readFileTool('test.txt')).rejects.toThrow('Workspace not found');
     });
 
     it('should prevent path traversal', async () => {
       vi.spyOn(vscode.workspace, 'workspaceFolders', 'get').mockReturnValue([
         { uri: { fsPath: '/test-workspace' }, name: 'test', index: 0 }
       ]);
-      await expect(readFileTool('../../../etc/passwd')).rejects.toThrow(/Accès refusé/);
+      await expect(readFileTool('../../../etc/passwd')).rejects.toThrow(/Access denied/);
     });
   });
 
@@ -49,12 +49,12 @@ describe('FileSystem Tools', () => {
     it('should prevent path traversal', async () => {
       await expect(writeFileTool('../../../etc/passwd', 'test content'))
         .rejects
-        .toThrow(/Accès refusé/);
+        .toThrow(/Access denied/);
     });
 
     it('should throw error if workspace not found', async () => {
       vi.spyOn(vscode.workspace, 'workspaceFolders', 'get').mockReturnValue(undefined);
-      await expect(writeFileTool('test.txt', 'content')).rejects.toThrow('Workspace introuvable');
+      await expect(writeFileTool('test.txt', 'content')).rejects.toThrow('Workspace not found');
     });
   });
 });

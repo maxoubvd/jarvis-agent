@@ -7,11 +7,11 @@
   }
 
   interface Props {
-    /** Outils intégrés de l'agent (envoyés par le backend). */
+    /** Agent's built-in tools (sent by the backend). */
     builtinTools?: ToolInfo[];
-    /** Outils personnalisés jarvis-tools/*.json. */
+    /** Custom tools from jarvis-tools/*.json. */
     customTools?: ToolInfo[];
-    /** Politique par nom d'outil ; absent = comportement du mode HITL. */
+    /** Policy per tool name; absent = HITL mode behavior. */
     policies?: Record<string, ToolPolicy>;
     onChange?: (next: Record<string, ToolPolicy>) => void;
   }
@@ -53,7 +53,7 @@
   {/each}
 {/snippet}
 
-<!-- Fragment embarqué dans la section « Tools & MCP Servers » (McpSection). -->
+<!-- Fragment embedded in the "Tools & MCP Servers" section (McpSection). -->
 <p class="j-hint">
   Execution policy per agent tool. <strong>default</strong> follows the current HITL mode;
   <strong>auto</strong> never asks; <strong>ask first</strong> always asks (even in free mode);
@@ -97,8 +97,8 @@
   }
 
   .tool-info {
-    /* En sidebar étroite, le select ne rentre plus sur la ligne et passe en
-       dessous (flex-wrap) au lieu d'écraser/masquer la description. */
+    /* In a narrow sidebar, the select no longer fits on the line and wraps
+       below (flex-wrap) instead of crushing/hiding the description. */
     flex: 1 1 55%;
     display: flex;
     flex-direction: column;

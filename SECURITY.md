@@ -1,6 +1,6 @@
 # Security Policy
 
-Jarvis Agent is an agentic coding assistant: it can read/write files in your workspace and, depending on the HITL mode you configure, run terminal commands. Please read this before reporting an issue or relying on it in a sensitive environment.
+Jarvis Agent is an agentic coding assistant: it can read/write files in your workspace and, depending on the HITL (Human In the Loop) mode you configure, run terminal commands. Please read this before reporting an issue or relying on it in a sensitive environment.
 
 ## Reporting a Vulnerability
 

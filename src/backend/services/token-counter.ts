@@ -2,7 +2,7 @@ export interface RequestTokenRecord {
   model: string;
   inputTokens: number;
   outputTokens: number;
-  /** Tokens du prompt servis depuis le cache implicite du provider (0 si aucun). */
+  /** Prompt tokens served from the provider's implicit cache (0 if none). */
   cachedTokens?: number;
   timestamp: string;
 }
@@ -13,17 +13,17 @@ export interface TokenUsage {
   used: number;
   inputTokens: number;
   outputTokens: number;
-  /** Cumul des tokens servis depuis le cache du provider (économie de coût/latence). */
+  /** Total tokens served from the provider's cache (cost/latency savings). */
   cachedTokens: number;
-  /** Longueur de contexte du modèle configuré ; `null` si aucun modèle. */
+  /** Context length of the configured model; `null` if no model. */
   limit: number | null;
   percentage: number;
   level: UsageLevel;
-  /** Historique des 5 dernières requêtes (spec §2.1). */
+  /** History of the last 5 requests (spec §2.1). */
   history: RequestTokenRecord[];
 }
 
-/** État sérialisable persisté dans `workspaceState` (survit reload + redémarrage). */
+/** Serializable state persisted in `workspaceState` (survives reload + restart). */
 export interface TokenSnapshot {
   inputTokens: number;
   outputTokens: number;
@@ -33,14 +33,14 @@ export interface TokenSnapshot {
 
 const HISTORY_SIZE = 5;
 
-/** Estimation approximative sans tokenizer (≈ 4 caractères / token). */
+/** Rough estimate without a tokenizer (≈ 4 characters / token). */
 export function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
 
 /**
- * Compteur de tokens bidirectionnel de session (spec §3.2) :
- * input/output séparés, limite du modèle, seuils visuels, historique.
+ * Bidirectional session token counter (spec §3.2):
+ * separate input/output, model limit, visual thresholds, history.
  */
 export class TokenCounter {
   private inputTokens = 0;
@@ -53,7 +53,7 @@ export class TokenCounter {
     this.limit = limit;
   }
 
-  /** `null` = aucun modèle configuré (la jauge affiche « 0 / — »). */
+  /** `null` = no model configured (the gauge shows "0 / —"). */
   public setLimit(limit: number | null): void {
     this.limit = limit !== null && limit > 0 ? limit : null;
   }
@@ -79,7 +79,7 @@ export class TokenCounter {
     this.history = [];
   }
 
-  /** Instantané sérialisable pour la persistance (`workspaceState`). */
+  /** Serializable snapshot for persistence (`workspaceState`). */
   public serialize(): TokenSnapshot {
     return {
       inputTokens: this.inputTokens,
@@ -90,8 +90,8 @@ export class TokenCounter {
   }
 
   /**
-   * Restaure un instantané (reprise de session). Ne touche pas à `limit` :
-   * celle-ci est toujours dérivée du modèle courant via {@link setLimit}.
+   * Restores a snapshot (session resume). Does not touch `limit`:
+   * it is always derived from the current model via {@link setLimit}.
    */
   public restore(snapshot: TokenSnapshot | null | undefined): void {
     if (!snapshot) return;
@@ -118,7 +118,7 @@ export class TokenCounter {
     };
   }
 
-  /** Avertissement à l'approche de la limite du modèle (spec §3.2). */
+  /** Warning near the model's limit (spec §3.2). */
   public isNearLimit(): boolean {
     return this.getUsage().percentage >= 80;
   }

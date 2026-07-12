@@ -16,7 +16,7 @@ export class SandboxManager {
   constructor(workspaceRoot?: string) {
     const folder = workspaceRoot ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     if (!folder) {
-      throw new Error('Workspace introuvable');
+      throw new Error('Workspace not found');
     }
     this.workspaceRoot = path.resolve(folder).replace(/\\/g, '/');
     this.ignorePath = path.join(folder, '.jarvisignore');
@@ -60,16 +60,16 @@ export class SandboxManager {
 
   private async generateDefaultIgnoreAsync(): Promise<void> {
     const content = [
-      '# Jarvis Ignore File — fichiers invisibles pour l\'IA',
-      '# Généré automatiquement — modifiable manuellement',
+      '# Jarvis Ignore File — files hidden from the AI',
+      '# Auto-generated — can be edited manually',
       '',
-      '# Environnement et secrets',
+      '# Environment and secrets',
       '.env',
       '.env.*',
       '*.env',
       '!.env.example',
       '',
-      '# Dépendances',
+      '# Dependencies',
       'node_modules/',
       'vendor/',
       'bower_components/',
@@ -79,7 +79,7 @@ export class SandboxManager {
       'build/',
       'out/',
       '',
-      '# Cache et temporaires',
+      '# Cache and temp files',
       '.cache/',
       '.tmp/',
       '*.tmp',
@@ -89,7 +89,7 @@ export class SandboxManager {
       '.idea/',
       '.vscode/',
       '',
-      '# Sécurité',
+      '# Security',
       '*.pem',
       '*.key',
       '*.crt',
@@ -97,12 +97,12 @@ export class SandboxManager {
       'secrets/',
       'credentials/',
       '',
-      '# Bases de données',
+      '# Databases',
       '*.db',
       '*.sqlite',
       '*.sqlite3',
       '',
-      '# Jarvis interne',
+      '# Jarvis internals',
       '.jarvis/',
       '.jarvisignore',
       'jarvis-*.json'
@@ -118,19 +118,19 @@ export class SandboxManager {
   }
 
   private generateDefaultIgnoreSync(): void {
-    // Version synchrone utilisée dans le constructeur ; ensureIgnoreFile() (async, appelée
-    // depuis activate()) régénère ensuite le contenu complet via generateDefaultIgnoreAsync().
+    // Synchronous version used in the constructor; ensureIgnoreFile() (async, called
+    // from activate()) then regenerates the full content via generateDefaultIgnoreAsync().
     const content = [
-      '# Jarvis Ignore File — fichiers invisibles pour l\'IA',
-      '# Généré automatiquement — modifiable manuellement',
+      '# Jarvis Ignore File — files hidden from the AI',
+      '# Auto-generated — can be edited manually',
       '',
-      '# Environnement et secrets',
+      '# Environment and secrets',
       '.env',
       '.env.*',
       '*.env',
       '!.env.example',
       '',
-      '# Dépendances',
+      '# Dependencies',
       'node_modules/',
       'vendor/',
       'bower_components/',
@@ -140,7 +140,7 @@ export class SandboxManager {
       'build/',
       'out/',
       '',
-      '# Cache et temporaires',
+      '# Cache and temp files',
       '.cache/',
       '.tmp/',
       '*.tmp',
@@ -150,7 +150,7 @@ export class SandboxManager {
       '.idea/',
       '.vscode/',
       '',
-      '# Sécurité',
+      '# Security',
       '*.pem',
       '*.key',
       '*.crt',
@@ -158,12 +158,12 @@ export class SandboxManager {
       'secrets/',
       'credentials/',
       '',
-      '# Bases de données',
+      '# Databases',
       '*.db',
       '*.sqlite',
       '*.sqlite3',
       '',
-      '# Jarvis interne',
+      '# Jarvis internals',
       '.jarvis/',
       '.jarvisignore',
       'jarvis-*.json'
@@ -172,7 +172,7 @@ export class SandboxManager {
     try {
       fsSync.writeFileSync(this.ignorePath, content, 'utf-8');
     } catch (err) {
-      console.error('Jarvis: échec de l\'écriture synchrone de .jarvisignore:', err);
+      console.error('Jarvis: failed to write .jarvisignore synchronously:', err);
     }
     this.ignorePatterns = this.getDefaultPatterns();
   }
@@ -187,7 +187,7 @@ export class SandboxManager {
     }
   }
 
-  /** Régénère le fichier .jarvisignore avec les patterns recommandés. */
+  /** Regenerates the .jarvisignore file with the recommended patterns. */
   public async regenerateIgnoreFile(): Promise<void> {
     await this.generateDefaultIgnoreAsync();
   }
@@ -196,7 +196,7 @@ export class SandboxManager {
     return [...this.ignorePatterns];
   }
 
-  /** Ajoute un pattern à .jarvisignore (commande "Add to .jarvisignore"). */
+  /** Adds a pattern to .jarvisignore ("Add to .jarvisignore" command). */
   public async addIgnorePattern(pattern: string): Promise<void> {
     const trimmed = pattern.trim();
     if (!trimmed || this.ignorePatterns.includes(trimmed)) return;
@@ -204,7 +204,7 @@ export class SandboxManager {
     await this.persistPatterns();
   }
 
-  /** Retire un pattern de .jarvisignore (commande "Remove from .jarvisignore"). */
+  /** Removes a pattern from .jarvisignore ("Remove from .jarvisignore" command). */
   public async removeIgnorePattern(pattern: string): Promise<void> {
     this.ignorePatterns = this.ignorePatterns.filter(p => p !== pattern);
     await this.persistPatterns();
@@ -215,7 +215,7 @@ export class SandboxManager {
     try {
       content = await fs.readFile(this.ignorePath, 'utf-8');
     } catch {
-      content = '# Jarvis Ignore File — fichiers invisibles pour l\'IA\n';
+      content = '# Jarvis Ignore File — files hidden from the AI\n';
     }
     const existing = new Set(
       content.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'))
@@ -254,12 +254,12 @@ export class SandboxManager {
     const compWorkspace = isWindows ? workspaceNorm.toLowerCase() : workspaceNorm;
 
     if (compNormalized !== compWorkspace && !compNormalized.startsWith(compWorkspace + '/')) {
-      return { allowed: false, reason: `Chemin hors du workspace: ${filePath}` };
+      return { allowed: false, reason: `Path outside workspace: ${filePath}` };
     }
 
     const relative = normalized.slice(workspaceNorm.length).replace(/^\//, '');
 
-    // Patterns de négation (!pattern) : ré-autorisent explicitement (ex: !.env.example)
+    // Negation patterns (!pattern): explicitly re-allow (e.g. !.env.example)
     for (const pattern of this.ignorePatterns) {
       if (pattern.startsWith('!') && this.matchesPattern(relative, pattern.slice(1))) {
         return this.checkSymlink(filePath);
@@ -271,7 +271,7 @@ export class SandboxManager {
         continue;
       }
       if (this.matchesPattern(relative, pattern)) {
-        return { allowed: false, reason: `Chemin ignoré par .jarvisignore (pattern: ${pattern})` };
+        return { allowed: false, reason: `Path blocked by .jarvisignore (pattern: ${pattern})` };
       }
     }
 
@@ -279,8 +279,8 @@ export class SandboxManager {
   }
 
   /**
-   * Protection symlink (spec §6.1) : bloque les liens symboliques qui
-   * pourraient pointer hors du workspace.
+   * Symlink protection (spec §6.1): blocks symbolic links that
+   * could point outside the workspace.
    */
   private checkSymlink(filePath: string): AccessResult {
     try {
@@ -288,14 +288,14 @@ export class SandboxManager {
       const root = path.resolve(this.workspaceRoot);
       while (current.replace(/\\/g, '/').startsWith(root.replace(/\\/g, '/')) && current !== root) {
         if (fsSync.existsSync(current) && fsSync.lstatSync(current).isSymbolicLink()) {
-          return { allowed: false, reason: `Lien symbolique détecté: ${current}` };
+          return { allowed: false, reason: `Symbolic link detected: ${current}` };
         }
         const parent = path.dirname(current);
         if (parent === current) break;
         current = parent;
       }
     } catch {
-      // lstat impossible → on n'empêche pas l'accès pour autant
+      // lstat failed — do not block access
     }
     return { allowed: true };
   }

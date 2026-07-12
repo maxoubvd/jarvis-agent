@@ -25,7 +25,7 @@ describe('AutoTDDLoop (spec §3.3)', () => {
       writeFile,
       runCommand
     });
-    const result = await loop.run('implémente sum');
+    const result = await loop.run('implement sum');
 
     expect(result.success).toBe(true);
     expect(result.attempts).toBe(1);
@@ -57,22 +57,22 @@ describe('AutoTDDLoop (spec §3.3)', () => {
       writeFile: vi.fn().mockResolvedValue(undefined),
       runCommand: async () => ({ success: false, stdout: '', stderr: 'fail', timedOut: false })
     });
-    const result = await loop.run('tâche impossible', { maxAttempts: 3 });
+    const result = await loop.run('impossible task', { maxAttempts: 3 });
 
     expect(result.success).toBe(false);
     expect(result.attempts).toBe(3);
-    expect(result.error).toContain('3 tentatives');
+    expect(result.error).toContain('3 attempts');
   });
 
   it('asks for valid JSON again when generation is unparseable', async () => {
     const loop = new AutoTDDLoop(
-      fakeProvider(['pas du json', generation('ok')]),
+      fakeProvider(['not json', generation('ok')]),
       {
         writeFile: vi.fn().mockResolvedValue(undefined),
         runCommand: async () => ({ success: true, stdout: '', stderr: '', timedOut: false })
       }
     );
-    const result = await loop.run('tâche', { maxAttempts: 3 });
+    const result = await loop.run('task', { maxAttempts: 3 });
 
     expect(result.success).toBe(true);
     expect(result.attempts).toBe(2);
@@ -87,7 +87,7 @@ describe('AutoTDDLoop (spec §3.3)', () => {
         return { success: false, stdout: '', stderr: '', timedOut: true };
       }
     });
-    await loop.run('tâche lente', { maxAttempts: 3, timeout: 1000 });
+    await loop.run('slow task', { maxAttempts: 3, timeout: 1000 });
 
     expect(timeouts).toEqual([1000, 2000, 4000]);
   });
@@ -95,9 +95,9 @@ describe('AutoTDDLoop (spec §3.3)', () => {
 
 describe('summarizeTestOutput', () => {
   it('keeps the tail of long outputs', () => {
-    const long = 'x'.repeat(5000) + 'ERREUR FINALE';
+    const long = 'x'.repeat(5000) + 'FINAL ERROR';
     const summary = summarizeTestOutput(long, '', 100);
-    expect(summary).toContain('ERREUR FINALE');
-    expect(summary).toContain('tronqué');
+    expect(summary).toContain('FINAL ERROR');
+    expect(summary).toContain('truncated');
   });
 });

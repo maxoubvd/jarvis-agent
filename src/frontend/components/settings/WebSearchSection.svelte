@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { WebSearchConfig } from '../../shared/types';
+  import { DEFAULT_WEB_SEARCH_SITES, type WebSearchConfig } from '../../shared/types';
   import Icon from '../Icon.svelte';
   import Toggle from '../Toggle.svelte';
 
@@ -8,17 +8,17 @@
     onChange?: (next: WebSearchConfig) => void;
   }
 
-  let { config = { provider: 'brave' }, onChange = () => {} }: Props = $props();
+  let { config = { provider: 'duckduckgo', defaultSites: DEFAULT_WEB_SEARCH_SITES }, onChange = () => {} }: Props = $props();
 
-  /** Sources courantes proposées par défaut — l'utilisateur peut aussi taper des domaines libres. */
-  const PRESET_SITES = ['stackoverflow.com', 'developer.mozilla.org', 'github.com', 'devdocs.io'];
+  /** Common sources offered by default — the user can also type free-form domains. */
+  const PRESET_SITES = DEFAULT_WEB_SEARCH_SITES;
 
   function extraSitesText(cfg: WebSearchConfig): string {
     return (cfg.defaultSites ?? []).filter(s => !PRESET_SITES.includes(s)).join(', ');
   }
 
   function patch(partial: Partial<WebSearchConfig>) {
-    onChange({ provider: 'brave', ...config, ...partial });
+    onChange({ provider: 'duckduckgo', ...config, ...partial });
   }
 
   function toggleSite(site: string, on: boolean) {
@@ -39,25 +39,9 @@
   </div>
 
   <p class="j-hint">
-    Backs the agent's <code>search_web</code> tool with the Brave Search API. Without an API key,
-    the tool reports itself as unconfigured instead of failing silently.
+    Backs the agent's <code>search_web</code> tool with DuckDuckGo's public search — entirely
+    free, no API key, no account, no quota to manage.
   </p>
-
-  <a class="key-link" href="https://api-dashboard.search.brave.com/" title="https://api-dashboard.search.brave.com/">
-    <Icon name="globe" size={12} /> Get a Brave Search API key
-  </a>
-
-  <label class="j-field">
-    <span>API key</span>
-    <input
-      class="j-input"
-      type="password"
-      autocomplete="off"
-      placeholder="BSA…"
-      value={config.apiKey ?? ''}
-      oninput={e => patch({ apiKey: (e.target as HTMLInputElement).value || undefined })}
-    />
-  </label>
 
   <div class="j-field">
     <span>Default sources (applied when the model doesn't specify any)</span>
@@ -103,19 +87,5 @@
 
   code {
     font-family: var(--vscode-editor-font-family, monospace);
-  }
-
-  .key-link {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--jarvis-space-1);
-    align-self: flex-start;
-    font-size: var(--jarvis-text-xs);
-    color: var(--vscode-textLink-foreground, var(--jarvis-accent));
-    text-decoration: none;
-  }
-
-  .key-link:hover {
-    text-decoration: underline;
   }
 </style>

@@ -5,23 +5,23 @@ export interface OpenAICompatibleConfig {
   baseUrl: string;
   model: string;
   apiKey?: string;
-  /** Limite de tokens de complétion (`max_tokens`), omise si non configurée. */
+  /** Completion token limit (`max_tokens`), omitted if not configured. */
   maxTokens?: number;
-  /** Température d'échantillonnage, omise si non configurée (défaut de l'API). */
+  /** Sampling temperature, omitted if not configured (API default). */
   temperature?: number;
   extraHeaders?: Record<string, string>;
 }
 
-/** Forme brute du bloc `usage` OpenAI/DeepSeek (champs de cache selon le provider). */
+/** Raw shape of the OpenAI/DeepSeek `usage` block (cache fields vary by provider). */
 interface RawUsage {
   prompt_tokens?: number;
   completion_tokens?: number;
   prompt_tokens_details?: { cached_tokens?: number };
-  /** DeepSeek expose le cache via ces deux champs plats. */
+  /** DeepSeek exposes the cache via these two flat fields. */
   prompt_cache_hit_tokens?: number;
 }
 
-/** Normalise le bloc `usage` (OpenAI: `prompt_tokens_details.cached_tokens`, DeepSeek: `prompt_cache_hit_tokens`). */
+/** Normalises the `usage` block (OpenAI: `prompt_tokens_details.cached_tokens`, DeepSeek: `prompt_cache_hit_tokens`). */
 function extractUsage(usage: RawUsage | undefined): ProviderUsage | undefined {
   if (!usage) return undefined;
   const cachedTokens = usage.prompt_tokens_details?.cached_tokens ?? usage.prompt_cache_hit_tokens;
@@ -32,7 +32,7 @@ function extractUsage(usage: RawUsage | undefined): ProviderUsage | undefined {
   };
 }
 
-/** Corps commun aux deux modes ; `response_format` n'est ajouté que sur demande explicite. */
+/** Common body for both modes; `response_format` is only added on explicit request. */
 function buildBody(
   config: OpenAICompatibleConfig,
   messages: ChatMessage[],
@@ -52,7 +52,7 @@ function buildBody(
     ...(config.maxTokens ? { max_tokens: config.maxTokens } : {}),
     ...(config.temperature !== undefined ? { temperature: config.temperature } : {}),
     ...(options?.responseFormat === 'json_object' ? { response_format: { type: 'json_object' } } : {}),
-    // Nécessaire pour que l'API émette `usage` (donc les cached_tokens) en streaming.
+    // Required so that the API emits `usage` (and thus cached_tokens) in streaming mode.
     ...(stream ? { stream: true, stream_options: { include_usage: true } } : { stream: false })
   };
 }
@@ -115,7 +115,7 @@ export async function openaiCompatibleStream(
       throw new Error(`HTTP ${response.status}: ${await response.text()}`);
     }
     if (!response.body) {
-      throw new Error('Réponse sans corps de flux');
+      throw new Error('Response without a streaming body');
     }
 
     const reader = response.body.getReader();
@@ -145,7 +145,7 @@ export async function openaiCompatibleStream(
 
         try {
           const parsed = JSON.parse(payload) as any;
-          // Avec `include_usage`, l'API émet un chunk final `choices: []` + `usage`.
+          // With `include_usage`, the API emits a final chunk `choices: []` + `usage`.
           if (parsed.usage) usage = extractUsage(parsed.usage);
           const delta = parsed.choices?.[0]?.delta;
           if (!delta) continue;

@@ -88,7 +88,7 @@ describe('DocsService', () => {
     enabled: true
   };
 
-  /** Faux site web : Map url → html, servie par un fetch injecté. */
+  /** Fake website: url → html mapping, served via injected fetch. */
   const pages = new Map<string, string>([
     [
       'https://docs.example/guide/',

@@ -17,7 +17,7 @@
     onReindex = () => {}
   }: Props = $props();
 
-  /** Cartes dépliées (nouveau workspace = ouvert en édition). */
+  /** Expanded cards (a new workspace opens in edit mode). */
   let expanded = $state<Record<string, boolean>>({});
 
   function addWorkspace() {

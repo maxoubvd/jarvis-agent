@@ -12,7 +12,7 @@ import { webSearch } from '../mcp/tools/webSearch.js';
 import { globToRegex } from '../utils/glob.js';
 import { sanitizeTodoItems } from './todo.js';
 
-/** @deprecated importer depuis `core/utils/glob.js` — ré-exporté ici pour compat arrière. */
+/** @deprecated import from `core/utils/glob.js` — re-exported here for backward compat. */
 export { globToRegex };
 
 export interface ToolParameter {
@@ -20,7 +20,7 @@ export interface ToolParameter {
   type: 'string' | 'number' | 'boolean' | 'array' | 'object';
   description: string;
   required: boolean;
-  /** JSON Schema complet pour les paramètres de type array/object (types complexes MCP). */
+  /** Full JSON Schema for array/object parameters (complex MCP types). */
   jsonSchema?: Record<string, unknown>;
 }
 
@@ -28,12 +28,12 @@ export interface ToolDefinition {
   name: string;
   description: string;
   parameters: ToolParameter[];
-  /** Type d'action HITL correspondant (terminal, write_file, read_file...). */
+  /** HITL action type for this tool (terminal, write_file, read_file, ...). */
   hitlAction: string;
   /**
-   * Provenance de l'outil : `restrictTo` ne filtre jamais les outils `mcp`/`custom`
-   * (l'utilisateur les a explicitement configurés), seuls les `builtin` (ou non taggés,
-   * pour compat arrière) sont soumis aux préfixes autorisés.
+   * Tool origin: `restrictTo` never filters `mcp`/`custom` tools
+   * (the user explicitly configured them); only `builtin` tools (or untagged ones,
+   * for backward compat) are subject to allowed prefixes.
    */
   origin?: 'builtin' | 'custom' | 'mcp';
   execute(args: Record<string, unknown>, signal?: AbortSignal): Promise<string>;
@@ -54,7 +54,7 @@ export class ToolRegistry {
     return [...this.tools.values()];
   }
 
-  /** Crée une copie du registre d'outils. */
+  /** Creates a copy of the tool registry. */
   public clone(): ToolRegistry {
     const cloned = new ToolRegistry();
     for (const tool of this.tools.values()) {
@@ -64,9 +64,9 @@ export class ToolRegistry {
   }
 
   /**
-   * Conserve uniquement les outils builtin correspondants aux préfixes autorisés.
-   * Les outils `mcp`/`custom` sont toujours conservés — l'utilisateur les a
-   * explicitement configurés, une restriction par persona ne doit pas les masquer.
+   * Keeps only builtin tools matching the allowed prefixes.
+   * `mcp`/`custom` tools are always kept — the user explicitly configured them,
+   * and a persona-level restriction should not hide them.
    */
   public restrictTo(allowedPrefixes: string[]): void {
     for (const [name, tool] of this.tools) {
@@ -78,7 +78,7 @@ export class ToolRegistry {
     }
   }
 
-  /** Description compacte des outils, injectée dans le prompt système. */
+  /** Compact description of the tools, injected into the system prompt. */
   public describeForPrompt(): string {
     return this.list()
       .map(tool => {
@@ -118,39 +118,39 @@ function strArray(args: Record<string, unknown>, key: string): string[] | undefi
   return list.length > 0 ? list : undefined;
 }
 
-/** Outils intégrés (spec §4.1), tous sandboxés via fileSystem/terminal. */
+/** Built-in tools (spec §4.1), all sandboxed via fileSystem/terminal. */
 export function createBuiltinTools(): ToolDefinition[] {
   return [
     {
       name: 'read_file',
-      description: 'Lit le contenu d\'un fichier existant du workspace',
+      description: 'Reads the content of an existing workspace file',
       parameters: [
-        { name: 'path', type: 'string', description: 'chemin relatif au workspace', required: true }
+        { name: 'path', type: 'string', description: 'path relative to workspace', required: true }
       ],
       hitlAction: 'read_file',
       execute: async args => readFileTool(str(args, 'path'))
     },
     {
       name: 'create_new_file',
-      description: 'Crée ou remplace un fichier avec le contenu fourni',
+      description: 'Creates or overwrites a file with the given content',
       parameters: [
-        { name: 'path', type: 'string', description: 'chemin relatif au workspace', required: true },
-        { name: 'content', type: 'string', description: 'contenu complet du fichier', required: true }
+        { name: 'path', type: 'string', description: 'path relative to workspace', required: true },
+        { name: 'content', type: 'string', description: 'full file content', required: true }
       ],
       hitlAction: 'write_file',
       execute: async args => {
         await writeFileTool(str(args, 'path'), str(args, 'content'));
-        return `Fichier écrit: ${str(args, 'path')}`;
+        return `File written: ${str(args, 'path')}`;
       }
     },
     {
       name: 'edit_existing_file',
-      description: 'Remplace les lignes [startLine, endLine] (1-indexées) d\'un fichier par newText',
+      description: 'Replaces lines [startLine, endLine] (1-indexed) of a file with newText',
       parameters: [
-        { name: 'path', type: 'string', description: 'chemin relatif au workspace', required: true },
-        { name: 'startLine', type: 'number', description: 'première ligne à remplacer', required: true },
-        { name: 'endLine', type: 'number', description: 'dernière ligne à remplacer', required: true },
-        { name: 'newText', type: 'string', description: 'nouveau texte', required: true }
+        { name: 'path', type: 'string', description: 'path relative to workspace', required: true },
+        { name: 'startLine', type: 'number', description: 'first line to replace', required: true },
+        { name: 'endLine', type: 'number', description: 'last line to replace', required: true },
+        { name: 'newText', type: 'string', description: 'replacement text', required: true }
       ],
       hitlAction: 'edit_file',
       execute: async args => {
@@ -160,64 +160,64 @@ export function createBuiltinTools(): ToolDefinition[] {
           num(args, 'endLine', num(args, 'startLine', 1)),
           str(args, 'newText')
         );
-        return `Fichier modifié: ${str(args, 'path')}`;
+        return `File edited: ${str(args, 'path')}`;
       }
     },
     {
       name: 'single_find_and_replace',
       description:
-        'Remplace une chaîne exacte dans un fichier. Échoue si old_string est absent ou non unique (utilise replace_all pour remplacer toutes les occurrences). Préfère cet outil à edit_existing_file pour les petites modifications ciblées.',
+        'Replaces an exact string in a file. Fails if old_string is absent or not unique (use replace_all to replace all occurrences). Prefer this tool over edit_existing_file for small, targeted changes.',
       parameters: [
-        { name: 'path', type: 'string', description: 'chemin relatif au workspace', required: true },
-        { name: 'old_string', type: 'string', description: 'texte exact à remplacer', required: true },
-        { name: 'new_string', type: 'string', description: 'texte de remplacement', required: true },
-        { name: 'replace_all', type: 'boolean', description: 'remplacer toutes les occurrences (défaut false)', required: false }
+        { name: 'path', type: 'string', description: 'path relative to workspace', required: true },
+        { name: 'old_string', type: 'string', description: 'exact text to replace', required: true },
+        { name: 'new_string', type: 'string', description: 'replacement text', required: true },
+        { name: 'replace_all', type: 'boolean', description: 'replace all occurrences (default false)', required: false }
       ],
       hitlAction: 'edit_file',
       execute: async args => {
         const path = str(args, 'path');
         const oldString = str(args, 'old_string');
         const newString = str(args, 'new_string');
-        if (!oldString) throw new Error('single_find_and_replace: old_string vide');
+        if (!oldString) throw new Error('single_find_and_replace: old_string is empty');
         const content = await readFileTool(path);
         const occurrences = content.split(oldString).length - 1;
         if (occurrences === 0) {
-          throw new Error(`old_string introuvable dans ${path} — relis le fichier pour copier le texte exact`);
+          throw new Error(`old_string not found in ${path} — re-read the file to copy the exact text`);
         }
         if (occurrences > 1 && !bool(args, 'replace_all')) {
           throw new Error(
-            `old_string présent ${occurrences} fois dans ${path} — élargis le contexte pour le rendre unique ou passe replace_all=true`
+            `old_string appears ${occurrences} times in ${path} — widen the context to make it unique or pass replace_all=true`
           );
         }
         const updated = bool(args, 'replace_all')
           ? content.split(oldString).join(newString)
           : content.replace(oldString, newString);
         await writeFileTool(path, updated);
-        return `Remplacement effectué dans ${path} (${occurrences} occurrence${occurrences > 1 ? 's' : ''})`;
+        return `Replacement done in ${path} (${occurrences} occurrence${occurrences > 1 ? 's' : ''})`;
       }
     },
     {
       name: 'read_currently_open_file',
       description:
-        'Lit le fichier actuellement ouvert dans l\'éditeur VS Code. Utile quand l\'utilisateur parle de « ce fichier » sans donner de chemin.',
+        'Reads the file currently open in the VS Code editor. Useful when the user refers to "this file" without giving a path.',
       parameters: [],
       hitlAction: 'read_file',
       execute: async () => {
         const editor = vscode.window.activeTextEditor;
-        if (!editor) return '(aucun fichier ouvert dans l\'éditeur)';
+        if (!editor) return '(no file open in the editor)';
         const relPath = vscode.workspace.asRelativePath(editor.document.uri, false);
         const text = editor.document.getText();
-        const truncated = text.length > 20_000 ? text.slice(0, 20_000) + '\n… (tronqué)' : text;
-        return `Fichier ouvert: ${relPath}\n\n${truncated}`;
+        const truncated = text.length > 20_000 ? text.slice(0, 20_000) + '\n… (truncated)' : text;
+        return `Open file: ${relPath}\n\n${truncated}`;
       }
     },
     {
       name: 'grep_search',
       description:
-        'Recherche une expression régulière dans les fichiers du workspace (max 50 résultats, format chemin:ligne: texte)',
+        'Searches a regular expression across workspace files (max 50 results, format path:line: text)',
       parameters: [
-        { name: 'pattern', type: 'string', description: 'expression régulière (insensible à la casse)', required: true },
-        { name: 'glob', type: 'string', description: 'filtre optionnel, ex: src/**/*.ts', required: false }
+        { name: 'pattern', type: 'string', description: 'regular expression (case-insensitive)', required: true },
+        { name: 'glob', type: 'string', description: 'optional filter, e.g. src/**/*.ts', required: false }
       ],
       hitlAction: 'read_file',
       execute: async args => {
@@ -226,7 +226,7 @@ export function createBuiltinTools(): ToolDefinition[] {
         try {
           regex = new RegExp(pattern, 'i');
         } catch (err) {
-          throw new Error(`Regex invalide: ${err instanceof Error ? err.message : err}`);
+          throw new Error(`Invalid regex: ${err instanceof Error ? err.message : err}`);
         }
         const glob = str(args, 'glob');
         const globRegex = glob ? globToRegex(glob) : null;
@@ -241,7 +241,7 @@ export function createBuiltinTools(): ToolDefinition[] {
           try {
             content = await readFileTool(file.path);
           } catch {
-            continue; // fichier bloqué par le sandbox ou illisible
+            continue; // file blocked by sandbox or unreadable
           }
           const lines = content.split('\n');
           for (let l = 0; l < lines.length && matches.length < 50; l++) {
@@ -250,26 +250,26 @@ export function createBuiltinTools(): ToolDefinition[] {
             }
           }
         }
-        return matches.join('\n') || '(aucune correspondance)';
+        return matches.join('\n') || '(no matches)';
       }
     },
     {
       name: 'ls',
-      description: 'Liste les fichiers et dossiers d\'un répertoire du workspace',
+      description: 'Lists files and folders in a workspace directory',
       parameters: [
-        { name: 'path', type: 'string', description: 'chemin relatif (défaut: racine)', required: false }
+        { name: 'path', type: 'string', description: 'relative path (default: root)', required: false }
       ],
       hitlAction: 'list_directory',
       execute: async args => {
         const items = await listDirectoryTool(str(args, 'path', '.'));
-        return items.map(i => `${i.isDirectory ? '[dir] ' : ''}${i.path}`).join('\n') || '(vide)';
+        return items.map(i => `${i.isDirectory ? '[dir] ' : ''}${i.path}`).join('\n') || '(empty)';
       }
     },
     {
       name: 'file_glob_search',
-      description: 'Recherche récursive de fichiers par motif glob simple (* et **)',
+      description: 'Recursively searches files by simple glob pattern (* and **)',
       parameters: [
-        { name: 'pattern', type: 'string', description: 'ex: src/**/*.ts', required: true }
+        { name: 'pattern', type: 'string', description: 'e.g. src/**/*.ts', required: true }
       ],
       hitlAction: 'list_directory',
       execute: async args => {
@@ -280,21 +280,21 @@ export function createBuiltinTools(): ToolDefinition[] {
           .filter(i => !i.isDirectory && regex.test(i.path))
           .map(i => i.path)
           .slice(0, 200);
-        return matches.join('\n') || '(aucun fichier trouvé)';
+        return matches.join('\n') || '(no files found)';
       }
     },
     {
       name: 'run_terminal_command',
-      description: 'Exécute une commande shell dans le workspace (stdout/stderr capturés, timeout 30s)',
+      description: 'Runs a shell command in the workspace (stdout/stderr captured, 30s timeout)',
       parameters: [
-        { name: 'command', type: 'string', description: 'commande à exécuter', required: true }
+        { name: 'command', type: 'string', description: 'command to run', required: true }
       ],
       hitlAction: 'terminal',
       execute: async (args, signal) => {
         const result = await executeTerminalCommand(str(args, 'command'), { signal });
         const output = `${result.stdout}${result.stderr}`.trim();
         return [
-          output || '(aucune sortie)',
+          output || '(no output)',
           result.timedOut ? '[TIMEOUT]' : `[exit code: ${result.exitCode}]`
         ].join('\n');
       }
@@ -302,87 +302,87 @@ export function createBuiltinTools(): ToolDefinition[] {
     {
       name: 'run_in_background',
       description:
-        'Lance une commande shell en arrière-plan (serveur de dev, watcher, tâche longue) et retourne immédiatement son id. Utilise check_background_process pour lire sa sortie et stop_background_process pour l\'arrêter — jamais Ctrl+C.',
+        'Starts a shell command in the background (dev server, watcher, long-running task) and returns its id immediately. Use check_background_process to read its output and stop_background_process to stop it — never Ctrl+C.',
       parameters: [
-        { name: 'command', type: 'string', description: 'commande à lancer en arrière-plan', required: true }
+        { name: 'command', type: 'string', description: 'command to run in the background', required: true }
       ],
       hitlAction: 'terminal',
       execute: async args => {
         const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
         const status = backgroundProcesses.start(str(args, 'command'), cwd);
-        return `Processus lancé en arrière-plan: id=${status.id}, pid=${status.pid ?? '?'} — ${status.command}`;
+        return `Background process started: id=${status.id}, pid=${status.pid ?? '?'} — ${status.command}`;
       }
     },
     {
       name: 'check_background_process',
-      description: 'Statut et sortie récente d\'un processus lancé avec run_in_background (sans id: liste tous les processus)',
+      description: 'Status and recent output of a process started with run_in_background (no id: lists all processes)',
       parameters: [
-        { name: 'id', type: 'string', description: 'id retourné par run_in_background', required: false }
+        { name: 'id', type: 'string', description: 'id returned by run_in_background', required: false }
       ],
       hitlAction: 'read_file',
       execute: async args => {
         const id = str(args, 'id');
         if (!id) {
           const all = backgroundProcesses.list();
-          if (all.length === 0) return '(aucun processus en arrière-plan)';
+          if (all.length === 0) return '(no background processes)';
           return all
             .map(p => `${p.id} [${p.running ? 'running' : `exit ${p.exitCode}`}] ${p.command}`)
             .join('\n');
         }
         const status = backgroundProcesses.status(id);
-        if (!status) return `Processus inconnu: ${id}`;
+        if (!status) return `Unknown process: ${id}`;
         return [
           `${status.id} [${status.running ? 'running' : `exit ${status.exitCode}`}] ${status.command}`,
-          status.output.trim() || '(aucune sortie pour l\'instant)'
+          status.output.trim() || '(no output yet)'
         ].join('\n---\n');
       }
     },
     {
       name: 'stop_background_process',
-      description: 'Arrête un processus lancé avec run_in_background',
+      description: 'Stops a process started with run_in_background',
       parameters: [
-        { name: 'id', type: 'string', description: 'id retourné par run_in_background', required: true }
+        { name: 'id', type: 'string', description: 'id returned by run_in_background', required: true }
       ],
       hitlAction: 'terminal',
       execute: async args => {
         const id = str(args, 'id');
         return backgroundProcesses.stop(id)
-          ? `Processus ${id} arrêté.`
-          : `Processus ${id} introuvable ou déjà terminé.`;
+          ? `Process ${id} stopped.`
+          : `Process ${id} not found or already stopped.`;
       }
     },
     {
       name: 'view_diff',
-      description: 'Affiche le diff git des changements en cours',
+      description: 'Shows the git diff of current changes',
       parameters: [],
       hitlAction: 'read_file',
-      execute: async () => (await gitDiff()) || '(aucun changement)'
+      execute: async () => (await gitDiff()) || '(no changes)'
     },
     {
       name: 'git_status',
-      description: 'Affiche le statut git du workspace',
+      description: 'Shows the git status of the workspace',
       parameters: [],
       hitlAction: 'read_file',
-      execute: async () => (await gitStatus()) || '(arbre de travail propre)'
+      execute: async () => (await gitStatus()) || '(clean working tree)'
     },
     {
       name: 'git_log',
-      description: 'Affiche les derniers commits',
+      description: 'Shows recent commits',
       parameters: [
-        { name: 'limit', type: 'number', description: 'nombre de commits (défaut 10)', required: false }
+        { name: 'limit', type: 'number', description: 'number of commits (default 10)', required: false }
       ],
       hitlAction: 'read_file',
       execute: async args => gitLog(num(args, 'limit', 10))
     },
     {
       name: 'search_web',
-      description: 'Recherche web pour documentation ou connaissances externes',
+      description: 'Web search for documentation or external knowledge',
       parameters: [
-        { name: 'query', type: 'string', description: 'requête de recherche', required: true },
+        { name: 'query', type: 'string', description: 'search query', required: true },
         {
           name: 'sites',
           type: 'array',
-          description: 'domaines à privilégier (ex: ["stackoverflow.com", "developer.mozilla.org"]), optionnel',
+          description: 'domains to prefer (e.g. ["stackoverflow.com", "developer.mozilla.org"]), optional',
           required: false,
           jsonSchema: { type: 'array', items: { type: 'string' } }
         }
@@ -393,16 +393,16 @@ export function createBuiltinTools(): ToolDefinition[] {
     {
       name: 'update_todo_list',
       description:
-        'Met à jour la checklist de tâches affichée à l\'utilisateur au-dessus du chat. ' +
-        'Remplace la liste complète à chaque appel (pas de fusion) — renvoie tous les items à chaque fois, ' +
-        'y compris ceux déjà marqués "completed". Utilise-le pour les tâches à plusieurs étapes : ' +
-        'appelle-le à nouveau à chaque changement de statut (passe une tâche à "in_progress" juste avant ' +
-        'de la commencer, puis à "completed" juste après l\'avoir terminée) pour que la progression soit visible en direct.',
+        'Updates the task checklist displayed to the user above the chat. ' +
+        'Replaces the full list on every call (no merging) — send all items each time, ' +
+        'including those already marked "completed". Use it for multi-step tasks: ' +
+        'call it again on every status change (set a task to "in_progress" just before ' +
+        'starting it, then to "completed" right after finishing it) so progress is visible in real time.',
       parameters: [
         {
           name: 'items',
           type: 'array',
-          description: 'liste complète des tâches: [{id, content, status: "pending"|"in_progress"|"completed"}]',
+          description: 'full task list: [{id, content, status: "pending"|"in_progress"|"completed"}]',
           required: true,
           jsonSchema: {
             type: 'array',
@@ -421,7 +421,7 @@ export function createBuiltinTools(): ToolDefinition[] {
       hitlAction: 'update_todo_list',
       execute: async args => {
         const items = sanitizeTodoItems(args.items);
-        return `Checklist mise à jour (${items.length} tâche(s)).`;
+        return `Checklist updated (${items.length} task(s)).`;
       }
     }
   ];

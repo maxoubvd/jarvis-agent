@@ -1,12 +1,12 @@
 /**
- * Fichier d'instructions projet `JARVIS.md` (façon CLAUDE.md), lu à la racine du
- * workspace et injecté dans le prompt système au même titre que les rules et le
- * profil de workspace actif (cf. `getPromptExtras` dans extension.ts). Contrairement
- * aux rules, versionné avec le code — partagé entre membres d'une équipe.
- * Pur (pas de vscode) — testable ; la lecture réelle/le cache/le watcher restent côté extension.ts.
+ * Project instructions file `JARVIS.md` (CLAUDE.md-style), read from the
+ * workspace root and injected into the system prompt alongside the rules and
+ * the active workspace profile (see `getPromptExtras` in extension.ts). Unlike
+ * rules, it's versioned with the code — shared across team members.
+ * Pure (no vscode) — testable; the actual reading/cache/watcher stay in extension.ts.
  */
 
-/** Lit `JARVIS.md` via la fonction de lecture fournie (sandboxée côté appelant). Vide si absent. */
+/** Reads `JARVIS.md` via the provided read function (sandboxed by the caller). Empty if missing. */
 export async function loadJarvisMd(readFile: (path: string) => Promise<string>): Promise<string> {
   try {
     const content = await readFile('JARVIS.md');
@@ -16,7 +16,7 @@ export async function loadJarvisMd(readFile: (path: string) => Promise<string>):
   }
 }
 
-/** Bloc d'instructions projet injecté dans le prompt système (style renderRules). */
+/** Project instructions block injected into the system prompt (renderRules-style). */
 export function renderJarvisMd(content: string): string {
   if (!content.trim()) return '';
   return `PROJECT INSTRUCTIONS (JARVIS.md):\n${content.trim()}`;

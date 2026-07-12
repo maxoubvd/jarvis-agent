@@ -25,11 +25,11 @@ describe('RagIndex (spec §5.2 — RAG local)', () => {
     const index = new RagIndex();
     await index.addDocument('a.ts', 'const alpha = 1;');
     await index.addDocument('a.ts', 'const beta = 2;');
-    // Ré-indexer le même chemin remplace le chunk existant (pas de doublon).
+    // Re-indexing the same path replaces the existing chunk (no duplicate).
     expect(index.size).toBe(1);
-    // La similarité par embedding est continue (pas de "0 match" garanti comme en TF-IDF) :
-    // on vérifie plutôt que le contenu a bien été remplacé — le terme du nouveau contenu
-    // doit scorer nettement plus haut que celui de l'ancien.
+    // Embedding similarity is continuous (no guaranteed "0 match" like with TF-IDF):
+    // we check instead that the content was properly replaced — the new content's
+    // term must score significantly higher than the old one's.
     const alphaScore = (await index.search('alpha'))[0]?.score ?? 0;
     const betaScore = (await index.search('beta'))[0]?.score ?? 0;
     expect(betaScore).toBeGreaterThan(alphaScore);
@@ -55,7 +55,7 @@ describe('RagIndex (spec §5.2 — RAG local)', () => {
   });
 });
 
-describe('augmentWithCodeContext (spec §5.2 — augmentation de contexte)', () => {
+describe('augmentWithCodeContext (spec §5.2 — context augmentation)', () => {
   const result = (score: number, path = 'auth.ts'): RagSearchResult => ({
     path,
     startLine: 1,
@@ -65,26 +65,26 @@ describe('augmentWithCodeContext (spec §5.2 — augmentation de contexte)', () 
   });
 
   it('appends relevant snippets to the task under a labeled context block', () => {
-    const task = 'Ajoute une validation du mot de passe';
+    const task = 'Add password validation';
     const augmented = augmentWithCodeContext(task, [result(0.55)]);
     expect(augmented).toContain(task);
-    expect(augmented).toContain('--- CONTEXTE DU PROJET (recherche automatique) ---');
-    expect(augmented).toContain('auth.ts (lignes 1-5)');
+    expect(augmented).toContain('--- PROJECT CONTEXT (automatic search) ---');
+    expect(augmented).toContain('auth.ts (lines 1-5)');
   });
 
   it('returns the task unchanged when no result clears the noise floor', () => {
-    const task = 'Ajoute une validation du mot de passe';
+    const task = 'Add password validation';
     const augmented = augmentWithCodeContext(task, [result(0.05), result(-0.02)]);
     expect(augmented).toBe(task);
   });
 
   it('returns the task unchanged for an empty result set', () => {
-    const task = 'Ajoute une validation du mot de passe';
+    const task = 'Add password validation';
     expect(augmentWithCodeContext(task, [])).toBe(task);
   });
 
   it('only includes results above the noise floor, not the weak ones', () => {
-    const task = 'Ajoute une validation du mot de passe';
+    const task = 'Add password validation';
     const augmented = augmentWithCodeContext(task, [result(0.5, 'auth.ts'), result(0.05, 'unrelated.ts')]);
     expect(augmented).toContain('auth.ts');
     expect(augmented).not.toContain('unrelated.ts');
@@ -118,8 +118,8 @@ describe('ContextPruner (spec §8.3)', () => {
   });
 
   it('uses the Tree-sitter AST path, not the naive-brace regex fallback', async () => {
-    // Une accolade dans une chaîne casserait le compteur d'accolades naïf du fallback regex
-    // (fin de bloc prématurée) ; l'AST Tree-sitter ne s'y trompe pas.
+    // A brace inside a string would break the naive brace counter of the regex fallback
+    // (premature block end); the Tree-sitter AST does not make this mistake.
     const tricky = [
       'export function tricky() {',
       '  const s = "a } b";',
@@ -140,7 +140,7 @@ describe('ContextPruner (spec §8.3)', () => {
   });
 
   it('level module strips comments and blank lines', async () => {
-    const withComments = '// commentaire\nconst a = 1;\n\n// autre\nconst b = 2;';
+    const withComments = '// comment\nconst a = 1;\n\n// other\nconst b = 2;';
     const pruned = await pruneContext(withComments, { level: 'module' });
     expect(pruned).toBe('const a = 1;\nconst b = 2;');
   });
@@ -170,20 +170,20 @@ describe('Mentions @file / @docs (spec Phase 4)', () => {
   });
 
   it('reports unreadable files without failing', async () => {
-    const result = await expandMentions('Lis @file:.env', {
+    const result = await expandMentions('Read @file:.env', {
       readFile: async () => {
-        throw new Error('Accès refusé');
+        throw new Error('Access denied');
       }
     });
     expect(result.mentions[0].ok).toBe(false);
-    expect(result.expanded).toContain('Accès refusé');
+    expect(result.expanded).toContain('Access denied');
   });
 
   it('injects docs search results', async () => {
-    const result = await expandMentions('Comment configurer? @docs:configuration', {
+    const result = await expandMentions('How to configure? @docs:configuration', {
       readFile: async () => '',
       searchDocs: async () => [
-        { path: 'README.md', startLine: 1, endLine: 10, snippet: 'La configuration se fait via jarvis-config.json', score: 0.9 }
+        { path: 'README.md', startLine: 1, endLine: 10, snippet: 'Configuration is done via jarvis-config.json', score: 0.9 }
       ]
     });
     expect(result.expanded).toContain('jarvis-config.json');
@@ -191,24 +191,24 @@ describe('Mentions @file / @docs (spec Phase 4)', () => {
   });
 
   it('returns the prompt unchanged without mentions', async () => {
-    const result = await expandMentions('bonjour', { readFile: async () => '' });
-    expect(result.expanded).toBe('bonjour');
+    const result = await expandMentions('hello', { readFile: async () => '' });
+    expect(result.expanded).toBe('hello');
     expect(result.mentions).toHaveLength(0);
   });
 
-  it('supports quoted paths with spaces (@file:"…")', async () => {
-    const result = await expandMentions('Explique @file:"my folder/read me.md"', {
-      readFile: async p => `contenu de ${p}`
+  it('supports quoted paths with spaces (@file:"...")', async () => {
+    const result = await expandMentions('Explain @file:"my folder/read me.md"', {
+      readFile: async p => `content of ${p}`
     });
-    expect(result.expanded).toContain('contenu de my folder/read me.md');
+    expect(result.expanded).toContain('content of my folder/read me.md');
     expect(result.mentions).toEqual([{ kind: 'file', value: 'my folder/read me.md', ok: true }]);
   });
 
-  it('supports quoted docs queries with spaces (@docs:"…")', async () => {
-    const result = await expandMentions('Comment faire ? @docs:"hitl config"', {
+  it('supports quoted docs queries with spaces (@docs:"...")', async () => {
+    const result = await expandMentions('How to do it? @docs:"hitl config"', {
       readFile: async () => '',
       searchDocs: async () => [
-        { path: 'README.md', startLine: 1, endLine: 5, snippet: 'Le HITL se configure via jarvis.hitl.mode', score: 0.8 }
+        { path: 'README.md', startLine: 1, endLine: 5, snippet: 'HITL is configured via jarvis.hitl.mode', score: 0.8 }
       ]
     });
     expect(result.expanded).toContain('jarvis.hitl.mode');

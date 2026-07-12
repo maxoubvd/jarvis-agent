@@ -27,7 +27,7 @@ export class MistralProvider implements IModelProvider {
 
   public async sendPrompt(messages: ChatMessage[], tools?: ToolDefinition[], signal?: AbortSignal, options?: SendOptions): Promise<SendPromptResult> {
     if (!this.config.apiKey) {
-      throw new Error('Mistral: clé API manquante dans jarvis-config.json');
+      throw new Error('Mistral: API key missing from jarvis-config.json');
     }
     return openaiCompatibleSend(this.config, messages, tools, signal, options);
   }
@@ -42,7 +42,7 @@ export class MistralProvider implements IModelProvider {
     options?: SendOptions
   ): Promise<void> {
     if (!this.config.apiKey) {
-      onError(new Error('Mistral: clé API manquante dans jarvis-config.json'));
+      onError(new Error('Mistral: API key missing from jarvis-config.json'));
       return;
     }
     return openaiCompatibleStream(this.config, messages, onChunk, onDone, onError, tools, signal, options);

@@ -1,13 +1,13 @@
 <script lang="ts" module>
   import type { McpServerConfig } from '../../shared/types';
 
-  /** Entrée éditable d'un serveur MCP utilisateur (args/env en texte brut). */
+  /** Editable entry for a custom MCP server (args/env as plain text). */
   export interface McpEntry {
     key: string;
     value: McpServerConfig;
-    /** Représentation éditable de args (une par ligne). */
+    /** Editable representation of args (one per line). */
     argsText: string;
-    /** Représentation éditable de env (KEY=value, une par ligne). */
+    /** Editable representation of env (KEY=value, one per line). */
     envText: string;
   }
 </script>
@@ -21,11 +21,11 @@
   interface Props {
     builtins?: NonNullable<SettingsDefaults['builtinMcp']>;
     builtinToggles?: Record<string, boolean>;
-    /** Politique par tool des serveurs intégrés (id → tool → policy ; absent = ask). */
+    /** Per-tool policy for built-in servers (id → tool → policy; absent = ask). */
     builtinToolPolicies?: Record<string, Record<string, ToolPolicy>>;
     entries?: McpEntry[];
     statuses?: McpServerStatus[];
-    /** Outils intégrés de l'agent — politiques auto/ask/excluded. */
+    /** Agent's built-in tools — auto/ask/excluded policies. */
     agentTools?: Array<{ name: string; description: string }>;
     customTools?: Array<{ name: string; description: string }>;
     toolPolicies?: Record<string, ToolPolicy>;
@@ -33,7 +33,7 @@
     onBuiltinToggle?: (id: string, enabled: boolean) => void;
     onBuiltinToolPolicy?: (id: string, tool: string, policy: ToolPolicy) => void;
     onEntriesChange?: (next: McpEntry[]) => void;
-    /** Demande au backend le flow "confirmer + git init" (serveur `requiresGitInit`). */
+    /** Asks the backend for the "confirm + git init" flow (`requiresGitInit` server). */
     onRequestGitInit?: (id: string) => void;
   }
 
@@ -68,7 +68,7 @@
     let i = 1;
     const used = new Set(entries.map(e => e.key));
     while (used.has(key)) key = `server-${++i}`;
-    // Nouveau serveur : carte ouverte en mode édition.
+    // New server: card opened in edit mode.
     expanded[`custom:${entries.length}`] = true;
     onEntriesChange([
       ...entries,
@@ -77,7 +77,7 @@
   }
 
   function removeServer(index: number) {
-    // Les clés custom:<index> se décalent après suppression — on les replie toutes.
+    // custom:<index> keys shift after deletion — collapse them all.
     expanded = Object.fromEntries(
       Object.entries(expanded).filter(([key]) => !key.startsWith('custom:'))
     );
@@ -102,7 +102,7 @@
 
   function setEntryToolPolicy(index: number, tool: string, policy: ToolPolicy) {
     const current = { ...(entries[index].value.toolPolicies ?? {}) };
-    // `ask` est le défaut MCP — on n'écrit que les écarts.
+    // `ask` is the MCP default — only deviations are written.
     if (policy === 'ask') delete current[tool];
     else current[tool] = policy;
     patchEntryValue(index, { toolPolicies: Object.keys(current).length > 0 ? current : undefined });
@@ -204,13 +204,12 @@
             title={builtin.requiresGitInit ? 'This folder isn\'t a git repository — enabling will offer to run git init' : undefined}
             onchange={on => {
               if (on && builtin.requiresGitInit) {
-                // Ne pas activer localement : le backend affiche une
-                // confirmation modale puis lance `git init` avant d'activer
-                // réellement le serveur (settings/mcpStatus rafraîchis après).
-                // On force explicitement `false` (au lieu de ne rien faire)
-                // pour que le switch — déjà basculé visuellement par le clic
-                // natif du checkbox — revienne bien à l'état éteint tant que
-                // le backend n'a pas confirmé.
+                // Don't enable locally: the backend shows a confirmation
+                // modal then runs `git init` before actually enabling the
+                // server (settings/mcpStatus refreshed afterwards). We
+                // explicitly force `false` (instead of doing nothing) so the
+                // switch — already toggled visually by the native checkbox
+                // click — properly reverts to off until the backend confirms.
                 onBuiltinToggle(builtin.id, false);
                 onRequestGitInit(builtin.id);
                 return;

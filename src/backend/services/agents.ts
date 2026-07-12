@@ -1,4 +1,4 @@
-/** Agents spécialisés prédéfinis (spec §5.1). */
+/** Predefined specialized agents (spec §5.1). */
 
 export interface SpecializedAgent {
   id: string;
@@ -6,13 +6,13 @@ export interface SpecializedAgent {
   label: string;
   description: string;
   systemPrompt: string;
-  /** Mots-clés pour l'auto-détection d'agent. */
+  /** Keywords for agent auto-detection. */
   keywords: string[];
   /**
-   * Sous-ensemble d'outils autorisés (noms exacts ou préfixes, cf. ToolRegistry.restrictTo).
-   * Absent/vide = registre complet (comportement historique, notamment pour les agents
-   * custom définis en config qui ne renseignent pas ce champ). Ne restreint jamais les
-   * outils MCP/custom, seulement les outils builtin.
+   * Subset of allowed tools (exact names or prefixes, see ToolRegistry.restrictTo).
+   * Absent/empty = full registry (historical behavior, notably for custom agents
+   * defined in config that don't set this field). Never restricts
+   * MCP/custom tools, only builtin tools.
    */
   allowedToolPrefixes?: string[];
 }
@@ -23,84 +23,84 @@ const TERMINAL_TOOLS = ['run_terminal_command', 'run_in_background', 'check_back
 const EDIT_TOOLS = ['create_new_file', 'edit_existing_file', 'single_find_and_replace'];
 
 const BASE_RULES =
-  'Tu réponds en JSON selon le protocole d\'agent (outil ou final). ' +
-  'Tu restes dans ton domaine de spécialité et tu es précis et actionnable.';
+  'You respond in JSON following the agent protocol (tool or final). ' +
+  'You stay within your area of specialty and you are precise and actionable.';
 
 export const SPECIALIZED_AGENTS: SpecializedAgent[] = [
   {
     id: 'qa',
     mention: '@QA-Agent',
-    label: 'Agent de Qualité',
-    description: 'Revue de code, détection de bugs, tests, coverage',
+    label: 'QA Agent',
+    description: 'Code review, bug detection, tests, coverage',
     systemPrompt:
-      'Tu es @QA-Agent, l\'agent Qualité de Jarvis. Tu fais des revues de code rigoureuses : ' +
-      'tu lis le code, exécutes les tests et le linter, identifies les bugs, les cas limites non gérés ' +
-      'et les manques de couverture. Tu classes tes trouvailles par sévérité (Haute/Moyenne/Basse). ' + BASE_RULES,
-    keywords: ['bug', 'test', 'revue', 'review', 'qualité', 'coverage', 'lint'],
-    // Lit, lance les tests/le linter — ne modifie jamais de code.
+      'You are @QA-Agent, Jarvis\'s QA agent. You perform rigorous code reviews: ' +
+      'you read the code, run the tests and the linter, identify bugs, unhandled edge cases, ' +
+      'and coverage gaps. You rank your findings by severity (High/Medium/Low). ' + BASE_RULES,
+    keywords: ['bug', 'test', 'review', 'quality', 'coverage', 'lint'],
+    // Reads, runs tests/linter — never edits code.
     allowedToolPrefixes: [...READ_TOOLS, ...TERMINAL_TOOLS, ...GIT_READ_TOOLS]
   },
   {
     id: 'doc',
     mention: '@Doc-Agent',
-    label: 'Agent de Documentation',
-    description: 'Génération de docs, commentaires, README',
+    label: 'Documentation Agent',
+    description: 'Docs, comments, and README generation',
     systemPrompt:
-      'Tu es @Doc-Agent, l\'agent Documentation de Jarvis. Tu génères et améliores la documentation : ' +
-      'README, docstrings/JSDoc, guides d\'utilisation. Tu documentes le POURQUOI, pas seulement le comment. ' + BASE_RULES,
-    keywords: ['document', 'readme', 'commentaire', 'jsdoc', 'doc'],
-    // Écrit la doc, peut vérifier la terminologie sur le web — pas de terminal.
+      'You are @Doc-Agent, Jarvis\'s Documentation agent. You generate and improve documentation: ' +
+      'READMEs, docstrings/JSDoc, usage guides. You document the WHY, not just the how. ' + BASE_RULES,
+    keywords: ['document', 'readme', 'comment', 'jsdoc', 'doc'],
+    // Writes docs, may check terminology on the web — no terminal.
     allowedToolPrefixes: [...READ_TOOLS, ...EDIT_TOOLS, 'search_web']
   },
   {
     id: 'refactor',
     mention: '@Refactor-Agent',
-    label: 'Agent de Refactoring',
-    description: 'Amélioration du code existant sans changer le comportement',
+    label: 'Refactoring Agent',
+    description: 'Improving existing code without changing behavior',
     systemPrompt:
-      'Tu es @Refactor-Agent, l\'agent Refactoring de Jarvis. Tu améliores le code existant sans changer ' +
-      'son comportement : lisibilité, duplication, complexité, nommage. Tu procèdes par petites étapes vérifiables ' +
-      'et tu exécutes les tests après chaque changement. ' + BASE_RULES,
-    keywords: ['refactor', 'refactoring', 'simplifie', 'nettoie', 'dette', 'legacy'],
-    // Édite le code et revalide par les tests.
+      'You are @Refactor-Agent, Jarvis\'s Refactoring agent. You improve existing code without changing ' +
+      'its behavior: readability, duplication, complexity, naming. You proceed in small, verifiable steps ' +
+      'and run the tests after each change. ' + BASE_RULES,
+    keywords: ['refactor', 'refactoring', 'simplify', 'cleanup', 'debt', 'legacy'],
+    // Edits code and revalidates via tests.
     allowedToolPrefixes: [...READ_TOOLS, ...EDIT_TOOLS, ...TERMINAL_TOOLS, ...GIT_READ_TOOLS]
   },
   {
     id: 'security',
     mention: '@Security-Agent',
-    label: 'Agent de Sécurité',
-    description: 'Détection de vulnérabilités, audit, secrets',
+    label: 'Security Agent',
+    description: 'Vulnerability detection, audit, secrets',
     systemPrompt:
-      'Tu es @Security-Agent, l\'agent Sécurité de Jarvis. Tu audites le code : injections, secrets en dur, ' +
-      'dépendances vulnérables, validation d\'entrées, permissions. Tu proposes des correctifs concrets ' +
-      'et tu cites la ligne exacte de chaque problème. ' +
-      'Tu n\'as pas accès au terminal : tu ne peux pas exécuter npm audit ni équivalent. ' +
-      'Pour les dépendances, limite-toi à examiner package.json (jamais les lockfiles, trop volumineux et non faits ' +
-      'pour une lecture manuelle) et signale les versions qui te semblent obsolètes ou à risque, en recommandant ' +
-      'explicitement à l\'utilisateur de lancer npm audit lui-même pour une vérification exhaustive des CVE. ' + BASE_RULES,
-    keywords: ['sécurité', 'security', 'vulnérab', 'audit', 'secret', 'injection', 'cve'],
-    // Audit en lecture seule par conception — ni édition, ni exécution de commande.
+      'You are @Security-Agent, Jarvis\'s Security agent. You audit the code: injections, hardcoded secrets, ' +
+      'vulnerable dependencies, input validation, permissions. You propose concrete fixes ' +
+      'and cite the exact line of each issue. ' +
+      'You do not have terminal access: you cannot run npm audit or equivalent. ' +
+      'For dependencies, limit yourself to examining package.json (never lockfiles, which are too large and not meant ' +
+      'for manual reading) and flag versions that look outdated or risky, explicitly recommending ' +
+      'that the user run npm audit themselves for an exhaustive CVE check. ' + BASE_RULES,
+    keywords: ['security', 'vulnerab', 'audit', 'secret', 'injection', 'cve'],
+    // Read-only audit by design — no editing, no command execution.
     allowedToolPrefixes: [...READ_TOOLS, ...GIT_READ_TOOLS]
   },
   {
     id: 'perf',
     mention: '@Perf-Agent',
-    label: 'Agent de Performance',
-    description: 'Profiling, benchmark, optimisation',
+    label: 'Performance Agent',
+    description: 'Profiling, benchmarking, optimization',
     systemPrompt:
-      'Tu es @Perf-Agent, l\'agent Performance de Jarvis. Tu identifies les goulots d\'étranglement : ' +
-      'complexité algorithmique, allocations inutiles, I/O bloquantes, requêtes N+1. Tu mesures avant/après ' +
-      'et tu n\'optimises que ce qui compte. ' + BASE_RULES,
-    keywords: ['performance', 'perf', 'lent', 'optimis', 'benchmark', 'profil', 'mémoire'],
-    // Profilage/reporting — ne modifie pas le code directement (rapporte les optimisations).
+      'You are @Perf-Agent, Jarvis\'s Performance agent. You identify bottlenecks: ' +
+      'algorithmic complexity, unnecessary allocations, blocking I/O, N+1 queries. You measure before/after ' +
+      'and only optimize what matters. ' + BASE_RULES,
+    keywords: ['performance', 'perf', 'slow', 'optimiz', 'benchmark', 'profil', 'memory'],
+    // Profiling/reporting — does not modify code directly (reports the optimizations).
     allowedToolPrefixes: [...READ_TOOLS, ...TERMINAL_TOOLS, ...GIT_READ_TOOLS]
   }
 ];
 
-/** Alias explicite : les agents codés en dur servent de défauts. */
+/** Explicit alias: the hardcoded agents act as defaults. */
 export const DEFAULT_AGENTS = SPECIALIZED_AGENTS;
 
-/** Agents effectifs : ceux de la config s'ils existent, sinon les défauts. */
+/** Effective agents: those from config if present, otherwise the defaults. */
 export function getAgents(config?: { agents?: SpecializedAgent[] }): SpecializedAgent[] {
   const fromConfig = config?.agents;
   return fromConfig && fromConfig.length > 0 ? fromConfig : DEFAULT_AGENTS;
@@ -108,11 +108,11 @@ export function getAgents(config?: { agents?: SpecializedAgent[] }): Specialized
 
 export interface AgentMention {
   agent: SpecializedAgent;
-  /** Texte de la demande sans la mention. */
+  /** Request text with the mention removed. */
   task: string;
 }
 
-/** Détecte une mention `@Nom-Agent` en début ou dans le message (spec §5.1). */
+/** Detects an `@Agent-Name` mention at the start of or within the message (spec §5.1). */
 export function detectAgentMention(text: string, agents: SpecializedAgent[] = DEFAULT_AGENTS): AgentMention | null {
   for (const agent of agents) {
     const regex = new RegExp(agent.mention.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
@@ -123,7 +123,7 @@ export function detectAgentMention(text: string, agents: SpecializedAgent[] = DE
   return null;
 }
 
-/** Suggestion d'agent basée sur le contenu du message (auto-détection). */
+/** Agent suggestion based on message content (auto-detection). */
 export function suggestAgent(text: string, agents: SpecializedAgent[] = DEFAULT_AGENTS): SpecializedAgent | null {
   const lower = text.toLowerCase();
   let best: { agent: SpecializedAgent; score: number } | null = null;

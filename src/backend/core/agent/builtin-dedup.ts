@@ -1,27 +1,27 @@
 /**
- * Déduplication des outils intégrés doublonnés par un serveur MCP connecté :
- * quand le serveur `filesystem` ou `git` expose un équivalent, le builtin est
- * masqué (registre + Settings > Agent tools) au profit du tool MCP. Serveur
- * désactivé, injoignable ou tool exclu → le builtin reste, l'agent ne perd
- * jamais de capacité.
+ * Deduplication of built-in tools duplicated by a connected MCP server:
+ * when the `filesystem` or `git` server exposes an equivalent, the builtin is
+ * hidden (registry + Settings > Agent tools) in favor of the MCP tool. If the
+ * server is disabled, unreachable, or the tool is excluded, the builtin stays —
+ * the agent never loses capability.
  *
- * Limites documentées : les builtins fichiers passent par le SandboxManager
- * (.jarvisignore, symlinks) et le ChangeTracker (diff review) ; le serveur MCP
- * filesystem est confiné au workspace mais n'honore ni l'un ni l'autre — la
- * politique HITL `ask` par défaut des tools MCP sert de garde-fou.
+ * Documented limitations: the file builtins go through the SandboxManager
+ * (.jarvisignore, symlinks) and the ChangeTracker (diff review); the MCP
+ * filesystem server is confined to the workspace but honors neither of these —
+ * the MCP tools' default `ask` HITL policy acts as the safety net.
  */
 
 export interface BuiltinEquivalent {
-  /** Id du serveur MCP (builtin.ts) fournissant l'équivalent. */
+  /** Id of the MCP server (builtin.ts) providing the equivalent. */
   server: string;
-  /** Noms possibles du tool équivalent (les noms upstream dérivent entre versions). */
+  /** Possible names of the equivalent tool (upstream names drift between versions). */
   anyOf: string[];
 }
 
-/** builtin → équivalent MCP. Un builtin absent d'ici n'est jamais masqué. */
+/** builtin → MCP equivalent. A builtin absent from here is never hidden. */
 export const BUILTIN_MCP_EQUIVALENTS: Record<string, BuiltinEquivalent> = {
-  // `read_file` est l'alias déprécié de `read_text_file` dans les versions
-  // récentes de @modelcontextprotocol/server-filesystem.
+  // `read_file` is the deprecated alias for `read_text_file` in recent
+  // versions of @modelcontextprotocol/server-filesystem.
   read_file: { server: 'filesystem', anyOf: ['read_text_file', 'read_file'] },
   create_new_file: { server: 'filesystem', anyOf: ['write_file'] },
   edit_existing_file: { server: 'filesystem', anyOf: ['edit_file'] },
@@ -32,10 +32,10 @@ export const BUILTIN_MCP_EQUIVALENTS: Record<string, BuiltinEquivalent> = {
   view_diff: { server: 'git', anyOf: ['git_diff_unstaged', 'git_diff'] }
 };
 
-/** Tools réellement disponibles par serveur MCP connecté (voir `McpManager.activeToolNames`). */
+/** Tools actually available per connected MCP server (see `McpManager.activeToolNames`). */
 export type ActiveMcpTools = ReadonlyMap<string, ReadonlySet<string>>;
 
-/** True si un serveur MCP connecté expose un équivalent actif de ce builtin. */
+/** True if a connected MCP server exposes an active equivalent of this builtin. */
 export function isBuiltinShadowed(builtinName: string, active: ActiveMcpTools): boolean {
   const eq = BUILTIN_MCP_EQUIVALENTS[builtinName];
   if (!eq) return false;

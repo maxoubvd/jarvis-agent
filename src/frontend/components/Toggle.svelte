@@ -2,7 +2,7 @@
   interface Props {
     checked?: boolean;
     disabled?: boolean;
-    /** Libellé affiché à droite du switch (optionnel). */
+    /** Label displayed to the right of the switch (optional). */
     label?: string;
     title?: string;
     onchange?: (checked: boolean) => void;
@@ -20,13 +20,13 @@
     onchange={e => {
       const target = e.target as HTMLInputElement;
       onchange(target.checked);
-      // Le navigateur a déjà basculé la checkbox visuellement avant que ce
-      // handler ne s'exécute. Si le parent refuse le changement (`onchange`
-      // ne met pas `checked` à jour, ex: toggle intercepté par une
-      // confirmation), Svelte ne réapplique `checked` sur le DOM que si sa
-      // VALEUR change — donc rien ne corrige la checkbox sinon. On la
-      // resynchronise explicitement ici, après l'appel synchrone à
-      // `onchange` (qui a déjà eu l'occasion de mettre à jour l'état).
+      // The browser has already toggled the checkbox visually before this
+      // handler runs. If the parent refuses the change (`onchange` doesn't
+      // update `checked`, e.g. a toggle intercepted by a confirmation),
+      // Svelte only reapplies `checked` to the DOM if its VALUE changes —
+      // so nothing else fixes the checkbox. We resync it explicitly here,
+      // after the synchronous call to `onchange` (which already had a
+      // chance to update the state).
       target.checked = checked;
     }}
   />
@@ -36,9 +36,9 @@
 
 <style>
   .toggle {
-    /* position:relative ancre la checkbox masquée (position:absolute) DANS le
-       switch. Sans ça, l'input est ancré en haut du conteneur scrollable et le
-       focus au clic fait « sauter » la vue vers le haut. */
+    /* position:relative anchors the hidden checkbox (position:absolute) INSIDE
+       the switch. Without this, the input anchors to the top of the scrollable
+       container and clicking to focus makes the view "jump" to the top. */
     position: relative;
     display: inline-flex;
     align-items: center;
@@ -54,7 +54,7 @@
     opacity: 0.5;
   }
 
-  /* Checkbox réelle masquée visuellement mais focusable (a11y). */
+  /* Real checkbox, visually hidden but still focusable (a11y). */
   input {
     position: absolute;
     width: 1px;

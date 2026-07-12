@@ -40,9 +40,8 @@
 }
 
 /*
- * Le scroll vit dans .main-content (App.svelte), jamais sur le document :
- * le header (bouton ☰ en mode étroit) doit rester visible en toutes
- * circonstances.
+ * Scrolling lives in .main-content (App.svelte), never on the document:
+ * the header (☰ button in narrow mode) must remain visible at all times.
  */
 html,
 body {
@@ -189,7 +188,7 @@ body {
   accent-color: var(--jarvis-accent);
 }
 
-/* Bouton chevron repli/dépli d'une carte (rules, models, MCP…). */
+/* Chevron button to collapse/expand a card (rules, models, MCP...). */
 .j-expand {
   display: inline-flex;
   align-items: center;
@@ -207,7 +206,7 @@ body {
   background: var(--vscode-list-hoverBackground);
 }
 
-/* Titre d'une carte repliée (nom de l'item). */
+/* Title of a collapsed card (item name). */
 .j-title {
   font-weight: 600;
   font-size: var(--jarvis-text-sm);
@@ -216,7 +215,7 @@ body {
   white-space: nowrap;
 }
 
-/* Détail secondaire à côté du titre (provider, url…). */
+/* Secondary detail next to the title (provider, url...). */
 .j-sub {
   font-size: var(--jarvis-text-xs);
   color: var(--vscode-descriptionForeground);

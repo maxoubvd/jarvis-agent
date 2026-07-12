@@ -1,6 +1,6 @@
 <script lang="ts" module>
-  // Icônes trait 16×16 dessinées à la main (stroke currentColor), style
-  // feather/lucide — remplace les emojis pour un rendu homogène.
+  // Hand-drawn 16×16 stroke icons (stroke currentColor), feather/lucide
+  // style — replaces emojis for a consistent look.
   const CIRCLE = 'M13.5 8A5.5 5.5 0 1 1 2.5 8a5.5 5.5 0 0 1 11 0Z';
 
   const PATHS: Record<string, string> = {

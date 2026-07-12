@@ -42,7 +42,7 @@ describe('HITLManager', () => {
     expect(first.granted).toBe(true);
     expect(handler).toHaveBeenCalledTimes(1);
 
-    // Même action : l'autorisation de session court-circuite le prompt.
+    // Same action: the session allowance short-circuits the prompt.
     const second = await hitl.checkApproval('terminal', { command: 'npm run build' });
     expect(second.granted).toBe(true);
     expect(handler).toHaveBeenCalledTimes(1);
@@ -50,17 +50,17 @@ describe('HITLManager', () => {
 
   it('a denial through the handler carries the user instructions', async () => {
     const hitl = new HITLManager('strict');
-    hitl.setPromptHandler(async () => ({ decision: 'deny', feedback: 'corrige le lint d\'abord' }));
+    hitl.setPromptHandler(async () => ({ decision: 'deny', feedback: 'fix the lint first' }));
 
     const result = await hitl.askApproval('terminal', { command: 'npm test' });
     expect(result.granted).toBe(false);
-    expect(result.feedback).toBe('corrige le lint d\'abord');
+    expect(result.feedback).toBe('fix the lint first');
   });
 
   it('falls back to the native dialog when the handler returns null', async () => {
     const hitl = new HITLManager('strict');
     hitl.setPromptHandler(async () => null);
-    // Le mock vscode répond « Refuser » → refus via le dialogue natif.
+    // The vscode mock responds "Deny" → denied via the native dialog.
     const result = await hitl.checkApproval('terminal', { command: 'npm test' });
     expect(result.granted).toBe(false);
     expect(result.feedback).toBeUndefined();

@@ -10,15 +10,15 @@ export class TaskDecomposer {
   constructor(private provider: IModelProvider) {}
 
   public async decompose(task: string): Promise<WorkflowStep[]> {
-    const systemPrompt = `Tu es un architecte logiciel expert. Découpe la tâche complexe de l'utilisateur en micro-tâches ordonnées.
-Chaque micro-tâche doit être atomique et exécutable par un agent autonome.
-Tu DOIS répondre UNIQUEMENT avec un objet JSON de ce format:
+    const systemPrompt = `You are an expert software architect. Break down the user's complex task into ordered micro-tasks.
+Each micro-task must be atomic and executable by an autonomous agent.
+You MUST respond ONLY with a JSON object in this format:
 {
   "steps": [
-    { "name": "Nom court de l'étape", "prompt": "Instructions précises pour l'agent pour cette étape. Mentionne '{task}' pour rappeler la tâche globale et '{previous}' pour le contexte précédent." }
+    { "name": "Short step name", "prompt": "Precise instructions for the agent for this step. Mention '{task}' to reference the overall task and '{previous}' for previous context." }
   ]
 }
-Assure-toi de fournir entre 2 et 8 étapes maximum selon la complexité. N'ajoute AUCUN texte en dehors du JSON.`;
+Provide between 2 and 8 steps maximum depending on complexity. Do NOT add any text outside the JSON.`;
 
     const messages: ChatMessage[] = [
       { role: 'system', content: systemPrompt },
@@ -30,7 +30,7 @@ Assure-toi de fournir entre 2 et 8 étapes maximum selon la complexité. N'ajout
       const res = await this.provider.sendPrompt(messages);
       raw = typeof res === 'string' ? res : res.text;
     } catch (err) {
-      console.error('Erreur lors de la décomposition :', err);
+      console.error('Error during task decomposition:', err);
       return this.getFallback(task);
     }
 
@@ -44,9 +44,9 @@ Assure-toi de fournir entre 2 et 8 étapes maximum selon la complexité. N'ajout
   
   private getFallback(task: string): WorkflowStep[] {
     return [
-      { name: 'Planifier', prompt: `Analyse et planifie la tâche: ${task}` },
-      { name: 'Exécution', prompt: `Implémente le plan pour la tâche: ${task}\nPlan précédent:\n{previous}` },
-      { name: 'Test & Vérification', prompt: `Vérifie que la tâche est correctement implémentée.\nContexte:\n{previous}` }
+      { name: 'Plan', prompt: `Analyse and plan the task: ${task}` },
+      { name: 'Execute', prompt: `Implement the plan for the task: ${task}\nPrevious plan:\n{previous}` },
+      { name: 'Test & Verify', prompt: `Verify that the task is correctly implemented.\nContext:\n{previous}` }
     ];
   }
 }

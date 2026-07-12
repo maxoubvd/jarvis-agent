@@ -40,7 +40,7 @@ describe('prompts service', () => {
   it('expands /name into the prompt content, appending the arguments', () => {
     expect(expandPrompt('/review', [review])).toBe(review.content);
     expect(expandPrompt('/review src/app.ts', [review])).toBe(`${review.content}\n\nsrc/app.ts`);
-    // Insensible à la casse.
+    // Case-insensitive.
     expect(expandPrompt('/REVIEW ok', [review])).toBe(`${review.content}\n\nok`);
   });
 

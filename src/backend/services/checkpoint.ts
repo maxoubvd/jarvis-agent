@@ -46,7 +46,7 @@ export class CheckpointManager {
     await executeTerminalCommand('git reset'); // undo the staging above, working tree untouched
 
     if (!create.success) {
-      throw new Error(create.stderr || 'Échec de création du checkpoint');
+      throw new Error(create.stderr || 'Failed to create checkpoint');
     }
 
     const sha = create.stdout.trim();
@@ -56,7 +56,7 @@ export class CheckpointManager {
 
     const store = await executeTerminalCommand(`git stash store -m "${name}" ${sha}`);
     if (!store.success) {
-      throw new Error(store.stderr || 'Échec de l\'enregistrement du checkpoint');
+      throw new Error(store.stderr || 'Failed to save checkpoint');
     }
 
     return {
@@ -122,7 +122,7 @@ export class CheckpointManager {
     }
 
     if (!result.success) {
-      return { success: false, error: result.stderr || 'Échec du rollback' };
+      return { success: false, error: result.stderr || 'Rollback failed' };
     }
 
     // The stash's index reflects the `git add -A` done at checkpoint time,
@@ -147,7 +147,7 @@ export class CheckpointManager {
   public async rollbackToLastCheckpoint(): Promise<RollbackResult> {
     const checkpoints = await this.listCheckpoints();
     if (checkpoints.length === 0) {
-      return { success: false, error: 'Aucun checkpoint disponible' };
+      return { success: false, error: 'No checkpoint available' };
     }
 
     await executeTerminalCommand('git checkout -- .');

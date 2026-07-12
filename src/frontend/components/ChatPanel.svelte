@@ -38,21 +38,21 @@
     messages?: Message[];
     isSending?: boolean;
     showThinking?: boolean;
-    /** Items dynamiques (agents/workflows) fusionnés dans l'autocomplétion. */
+    /** Dynamic items (agents/workflows) merged into autocompletion. */
     extraCommands?: CommandItem[];
-    /** Suggestions de fichiers du workspace pour la mention `@`. */
+    /** Workspace file suggestions for the `@` mention. */
     fileSuggestions?: string[];
-    /** Sites de documentation configurés (Settings > Docs) pour la mention `@docs:`. */
+    /** Documentation sites configured (Settings > Docs) for the `@docs:` mention. */
     docsSuggestions?: string[];
-    /** Profils de workspace sélectionnables (Settings > Workspaces). */
+    /** Selectable workspace profiles (Settings > Workspaces). */
     workspaces?: Array<{ id: string; name: string }>;
     activeWorkspaceId?: string | null;
-    /** Demande d'approbation HITL en attente (carte dans le chat). */
+    /** Pending HITL approval request (card shown in the chat). */
     approvalRequest?: ApprovalRequest | null;
     onSend?: (text: string) => void;
-    /** Demande au backend les fichiers correspondant à la saisie. */
+    /** Asks the backend for files matching the input. */
     onQueryFiles?: (query: string) => void;
-    /** Demande au backend les sources de documentation correspondant à la saisie. */
+    /** Asks the backend for documentation sources matching the input. */
     onQueryDocs?: (query: string) => void;
     onWorkspaceChange?: (id: string | null) => void;
     onApprovalRespond?: (decision: 'allow' | 'allow-session' | 'deny', feedback?: string) => void;
@@ -62,7 +62,7 @@
     onPlanProceed?: () => void;
     firstName?: string;
     todos?: TodoItem[];
-    /** Vidéo d'avatar (media/), affichée à la place de l'icône dans le badge "Working…". */
+    /** Avatar video (media/), shown in place of the icon in the "Working…" badge. */
     avatarUri?: string | null;
   }
 
@@ -105,37 +105,37 @@
   });
 
   let inputText = $state('');
-  /** id du message plan pour lequel Proceed/Review a déjà été cliqué — masque les actions tant qu'un nouveau plan n'arrive pas. */
+  /** id of the plan message for which Proceed/Review was already clicked — hides the actions until a new plan arrives. */
   let dismissedPlanActionsId = $state<string | null>(null);
   let listEl: HTMLUListElement | undefined = $state();
   let textareaEl: HTMLTextAreaElement | undefined = $state();
 
-  // Autocomplétion des commandes `/` et mentions `@`.
+  // `/` command and `@` mention autocompletion.
   let showMenu = $state(false);
   let menuItems = $state<CommandItem[]>([]);
   let selectedIndex = $state(0);
   let tokenStart = $state(0);
   let acListEl: HTMLUListElement | undefined = $state();
 
-  // Garde l'item survolé au clavier visible dans la liste (le scroll ne suit
-  // pas tout seul la sélection sur ArrowUp/ArrowDown sinon).
+  // Keeps the keyboard-hovered item visible in the list (scroll doesn't
+  // follow the selection on its own on ArrowUp/ArrowDown otherwise).
   $effect(() => {
     void selectedIndex;
     if (!showMenu || !acListEl) return;
     acListEl.querySelector('.selected')?.scrollIntoView({ block: 'nearest' });
   });
 
-  /** Dernière requête fichiers envoyée — évite de re-demander à chaque re-rendu. */
+  /** Last file query sent — avoids re-requesting on every re-render. */
   let lastFileQuery: string | null = null;
-  /** Dernière requête docs envoyée — évite de re-demander à chaque re-rendu. */
+  /** Last docs query sent — avoids re-requesting on every re-render. */
   let lastDocsQuery: string | null = null;
 
-  /** Requête fichiers dérivée du token `@` courant (`@file:src/a` → `src/a`). */
+  /** File query derived from the current `@` token (`@file:src/a` → `src/a`). */
   function fileQueryFor(partial: string): string {
     return partial.startsWith('file:') ? partial.slice('file:'.length) : partial;
   }
 
-  /** Un chemin avec espaces doit être cité pour rester une seule mention. */
+  /** A path with spaces must be quoted to remain a single mention. */
   function fileInsert(path: string): string {
     return /\s/.test(path) ? `@file:"${path}" ` : `@file:${path} `;
   }
@@ -151,18 +151,19 @@
       return;
     }
     let items = filterCommands(match, extraCommands);
-    // "docs" (4 lettres) suffit à désambiguïser de `@Doc-Agent` (qui diverge au
-    // 4e caractère : 's' vs '-'), donc le gabarit apparaît dès `@docs`, avant
-    // même le `:` — sinon valider l'entrée générique statique insère juste
-    // `@docs:` et referme le menu (accept() ne redéclenche pas refreshMenu),
-    // ce qui pousse à taper la question hors mention ou à envoyer trop tôt.
+    // "docs" (4 letters) is enough to disambiguate from `@Doc-Agent` (which
+    // diverges at the 4th character: 's' vs '-'), so the template appears as
+    // soon as `@docs` is typed, even before the `:` — otherwise accepting the
+    // static generic entry would just insert `@docs:` and close the menu
+    // (accept() doesn't re-trigger refreshMenu), forcing the user to type the
+    // query outside the mention or to send too early.
     if (match.trigger === '@' && match.partial.toLowerCase().startsWith('docs')) {
-      // Mention de doc : la recherche est globale (toutes les sources indexées
-      // + les .md du workspace, cf. searchAllDocs côté backend) — il n'y a pas
-      // de sélection "par site". Entrée insère directement le format valide
-      // `@docs:"..."` avec le caret entre les guillemets, en conservant ce qui
-      // est déjà tapé (sinon une requête multi-mots non citée serait tronquée
-      // au premier espace côté backend, cf. mentions.ts).
+      // Doc mention: the search is global (all indexed sources + the
+      // workspace's .md files, see searchAllDocs on the backend) — there's no
+      // "per site" selection. Enter directly inserts the valid format
+      // `@docs:"..."` with the caret between the quotes, keeping what's
+      // already typed (otherwise an unquoted multi-word query would be
+      // truncated at the first space on the backend, see mentions.ts).
       const rest = match.partial.slice('docs'.length);
       const query = rest.startsWith(':') ? rest.slice(1) : '';
       if (query !== lastDocsQuery) {
@@ -170,19 +171,19 @@
         onQueryDocs(query);
       }
       const detail = docsSuggestions.length
-        ? `Recherche dans toutes les sources indexées : ${docsSuggestions.join(', ')}`
-        : 'Aucune source indexée (Settings > Docs)';
+        ? `Searching all indexed sources: ${docsSuggestions.join(', ')}`
+        : 'No indexed source (Settings > Docs)';
       const docItem: CommandItem = {
         trigger: '@',
         insert: `@docs:"${query}" `,
-        label: query ? `Rechercher : "${query}"` : 'Rechercher dans la doc',
+        label: query ? `Search: "${query}"` : 'Search the docs',
         detail,
         caretBack: 2
       };
       items = [...items.filter(i => i.insert !== '@docs:'), docItem];
     } else if (match.trigger === '@') {
-      // Mention de fichier : les fichiers du workspace sont proposés
-      // directement sous les commandes @.
+      // File mention: workspace files are offered directly below the @
+      // commands.
       const query = fileQueryFor(match.partial);
       if (query !== lastFileQuery) {
         lastFileQuery = query;
@@ -192,7 +193,7 @@
       const fileItems: CommandItem[] = fileSuggestions
         .filter(p => !q || p.toLowerCase().includes(q))
         .map(p => ({ trigger: '@' as const, insert: fileInsert(p), label: p, detail: 'Workspace file' }));
-      // Dédoublonne au cas où un chemin serait déjà présent.
+      // Dedupes in case a path is already present.
       const seen = new Set(items.map(i => i.insert));
       items = [...items, ...fileItems.filter(i => !seen.has(i.insert))];
     }
@@ -211,9 +212,9 @@
     refreshMenu();
   }
 
-  // Les suggestions arrivent en asynchrone : on rafraîchit le menu ouvert.
-  // untrack : l'effet ne doit dépendre QUE de fileSuggestions/docsSuggestions (refreshMenu
-  // lit/écrit selectedIndex & co, ce qui re-déclencherait l'effet).
+  // Suggestions arrive asynchronously: refresh the open menu.
+  // untrack: the effect must depend ONLY on fileSuggestions/docsSuggestions (refreshMenu
+  // reads/writes selectedIndex & co, which would re-trigger the effect).
   $effect(() => {
     void fileSuggestions;
     void docsSuggestions;
@@ -225,7 +226,7 @@
     inputText = inputText.slice(0, tokenStart) + item.insert + inputText.slice(caret);
     showMenu = false;
     const newCaret = tokenStart + item.insert.length - (item.caretBack ?? 0);
-    // Repositionne le caret après insertion (au prochain tick).
+    // Repositions the caret after insertion (on the next tick).
     queueMicrotask(() => {
       if (textareaEl) {
         textareaEl.focus();
@@ -234,7 +235,7 @@
     });
   }
 
-  /** Alias courants vers les noms de grammaire Prism enregistrés ci-dessus. */
+  /** Common aliases to the Prism grammar names registered above. */
   const PRISM_LANG_ALIASES: Record<string, string> = {
     js: 'javascript',
     mjs: 'javascript',
@@ -262,7 +263,7 @@
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
-  /** Coloration syntaxique des blocs de code via Prism (spec §8.1). */
+  /** Syntax highlighting for code blocks via Prism (spec §8.1). */
   function highlightCode(code: string, lang: string): string {
     const key = lang.toLowerCase();
     const grammarName = PRISM_LANG_ALIASES[key] ?? key;
@@ -291,7 +292,7 @@
     content: string;
   }
 
-  /** Sépare les blocs <thinking> du reste (spec §2.1 — chaîne de pensée). */
+  /** Splits <thinking> blocks from the rest (spec §2.1 — chain of thought). */
   function segment(content: string): Segment[] {
     const segments: Segment[] = [];
     const regex = /<thinking>([\s\S]*?)(?:<\/thinking>|$)/gi;
@@ -318,11 +319,11 @@
     }
   }
 
-  /** Copie de code en un clic et interception des liens de fichiers. */
+  /** One-click code copy and file link interception. */
   function handleListClick(event: MouseEvent) {
     const target = event.target as HTMLElement;
 
-    // Interception des clics sur les liens file:// pour ouvrir le fichier dans VS Code
+    // Intercept clicks on file:// links to open the file in VS Code
     const link = target.closest('a');
     if (link && listEl?.contains(link)) {
       const href = link.getAttribute('href');
@@ -554,7 +555,7 @@
     {#if mode === 'Plan' && messages.length > 0 && messages[messages.length - 1].kind === 'plan' && !isSending}
       <div class="review-indicator">
         <Icon name="edit" size={12} />
-        <span>Mode Review : vos instructions modifieront le plan actuel.</span>
+        <span>Review mode: your instructions will modify the current plan.</span>
       </div>
     {/if}
     <div class="input-actions">
@@ -687,7 +688,7 @@
     min-width: 0;
   }
 
-  /* Message utilisateur : bulle compacte alignée à droite (style Le Chat). */
+  /* User message: compact bubble right-aligned (Le Chat style). */
   .message.user {
     align-self: flex-end;
     max-width: 85%;
@@ -698,7 +699,7 @@
     border: 1px solid var(--vscode-editorWidget-border);
   }
 
-  /* Réponse assistant : pleine largeur, sans bulle. */
+  /* Assistant reply: full width, no bubble. */
   .message.assistant {
     align-self: stretch;
   }
@@ -722,7 +723,7 @@
     padding: 0;
   }
 
-  /* Prompt Ctrl+K (édition inline) : même bulle utilisateur, fond distinctif + accent doré. */
+  /* Ctrl+K prompt (inline edit): same user bubble, distinct background + gold accent. */
   .message.user.inline-edit {
     background: color-mix(in srgb, var(--jarvis-gold) 8%, var(--vscode-input-background));
     border-left: 2px solid var(--jarvis-gold);
@@ -775,7 +776,7 @@
     word-break: break-word;
   }
 
-  /* Chaîne de pensée : fond distinct, monospace (spec §2.1) */
+  /* Chain of thought: distinct background, monospace (spec §2.1) */
   .thinking-details {
     margin: 0.25rem 0;
   }
@@ -849,7 +850,7 @@
   }
 
   .markdown :global(pre::after) {
-    content: 'copier';
+    content: 'copy';
     position: absolute;
     top: 0.3rem;
     right: 0.5rem;
@@ -864,7 +865,7 @@
   }
 
   .markdown :global(pre.copied::after) {
-    content: '✓ copié';
+    content: '✓ copied';
     color: var(--vscode-terminal-ansiGreen);
     opacity: 1;
   }
@@ -886,7 +887,7 @@
     color: var(--jarvis-gold);
   }
 
-  /* Coloration syntaxique Prism (spec §8.1) — palette Iron Man (or/rouge) sur fond éditeur. */
+  /* Prism syntax highlighting (spec §8.1) — Iron Man palette (gold/red) on the editor background. */
   .markdown :global(.token.comment),
   .markdown :global(.token.prolog),
   .markdown :global(.token.doctype),

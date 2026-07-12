@@ -9,20 +9,20 @@
 
   let { request, onRespond = () => {} }: Props = $props();
 
-  /** Le refus ouvre un champ d'instructions renvoyées à l'agent. */
+  /** Denying opens a field for instructions sent back to the agent. */
   let denying = $state(false);
   let feedback = $state('');
-  /** Conteneur des boutons (scope la navigation clavier à cette carte). */
+  /** Button container (scopes keyboard navigation to this card). */
   let actionsEl = $state<HTMLElement | null>(null);
 
   function deny() {
     onRespond('deny', feedback.trim() || undefined);
   }
 
-  // Auto-focus le premier bouton pour que les flèches marchent dès l'affichage.
-  // (En mode « deny », c'est la textarea autofocus qui prend le focus.)
+  // Auto-focus the first button so arrow keys work as soon as it's shown.
+  // (In "deny" mode, the autofocus textarea takes the focus instead.)
   $effect(() => {
-    void request.id; // re-focus à chaque nouvelle demande
+    void request.id; // re-focus on every new request
     if (!denying) (actionsEl?.querySelector('.j-btn') as HTMLElement | null)?.focus();
   });
 

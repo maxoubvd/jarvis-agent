@@ -12,7 +12,7 @@ async function waitFor(condition: () => boolean, timeoutMs = 8000): Promise<void
 describe('BackgroundProcessManager', () => {
   it('runs a command detached and captures output + exit code', async () => {
     const mgr = new BackgroundProcessManager();
-    // Sans guillemets imbriqués : cmd.exe /c les mangle.
+    // Without nested quotes: cmd.exe /c mangles them.
     const started = mgr.start('node -p 40+2', process.cwd());
     expect(started.id).toBe('bg-1');
 

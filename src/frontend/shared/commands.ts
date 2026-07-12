@@ -1,29 +1,29 @@
 /**
- * Registre partagé des commandes `/` et mentions `@` proposées par
- * l'autocomplétion du chat. Reflète le routage backend (extension.ts).
+ * Shared registry of `/` commands and `@` mentions offered by chat
+ * autocompletion. Mirrors the backend routing (extension.ts).
  */
 
 export type TriggerChar = '/' | '@';
 
 export interface CommandItem {
   trigger: TriggerChar;
-  /** Texte inséré à l'acceptation (avec espace/`:` final si pertinent). */
+  /** Text inserted on acceptance (with trailing space/`:` if relevant). */
   insert: string;
-  /** Libellé affiché. */
+  /** Displayed label. */
   label: string;
-  /** Courte description affichée à droite. */
+  /** Short description shown to the right. */
   detail: string;
-  /** Recule le caret de N caractères depuis la fin d'`insert` (ex: se placer entre guillemets). */
+  /** Moves the caret back N characters from the end of `insert` (e.g. to position between quotes). */
   caretBack?: number;
 }
 
 export const SLASH_COMMANDS: CommandItem[] = [
-  { trigger: '/', insert: '/new ', label: '/new', detail: 'Nouvelle discussion' },
-  { trigger: '/', insert: '/resume ', label: '/resume', detail: 'Reprendre une ancienne discussion' },
+  { trigger: '/', insert: '/new ', label: '/new', detail: 'New conversation' },
+  { trigger: '/', insert: '/resume ', label: '/resume', detail: 'Resume a past conversation' },
   { trigger: '/', insert: '/agent ', label: '/agent', detail: 'Agentic mode on a task' },
   { trigger: '/', insert: '/tdd ', label: '/tdd', detail: 'Auto-TDD loop' },
   { trigger: '/', insert: '/workflow ', label: '/workflow', detail: 'Run a predefined workflow' },
-  { trigger: '/', insert: '/rollback', label: '/rollback', detail: 'Annuler les modifications depuis le dernier message' },
+  { trigger: '/', insert: '/rollback', label: '/rollback', detail: 'Undo changes since the last message' },
   { trigger: '/', insert: '/init', label: '/init', detail: 'Initialize project (git init + generate JARVIS.md)' }
 ];
 
@@ -43,9 +43,9 @@ export const AT_MENTIONS: CommandItem[] = [
 
 export interface TriggerMatch {
   trigger: TriggerChar;
-  /** Index du caractère déclencheur dans le texte. */
+  /** Index of the trigger character in the text. */
   tokenStart: number;
-  /** Texte saisi après le déclencheur, jusqu'au caret. */
+  /** Text typed after the trigger, up to the caret. */
   partial: string;
 }
 
@@ -54,10 +54,10 @@ function isWhitespace(ch: string): boolean {
 }
 
 /**
- * Détecte si le caret se trouve dans un token déclenché par `/` ou `@`.
- * - `/` n'est actif qu'en tout début de saisie (commande).
- * - `@` est actif en début de saisie ou après une espace.
- * Retourne `null` si le token courant contient une espace (token terminé).
+ * Detects whether the caret sits inside a token triggered by `/` or `@`.
+ * - `/` is only active at the very start of the input (command).
+ * - `@` is active at the start of the input or after a space.
+ * Returns `null` if the current token contains a space (token finished).
  */
 export function matchTrigger(text: string, caret: number): TriggerMatch | null {
   let i = caret - 1;
@@ -77,14 +77,14 @@ export function matchTrigger(text: string, caret: number): TriggerMatch | null {
 }
 
 /**
- * Items du registre correspondant au token en cours (préfixe insensible à la
- * casse). `extra` permet d'injecter des items dynamiques (agents/workflows
- * envoyés par le backend via le message `capabilities`).
+ * Registry items matching the current token (case-insensitive prefix).
+ * `extra` allows injecting dynamic items (agents/workflows
+ * sent by the backend via the `capabilities` message).
  */
 export function filterCommands(match: TriggerMatch, extra: CommandItem[] = []): CommandItem[] {
   const statics = match.trigger === '/' ? SLASH_COMMANDS : AT_MENTIONS;
   const dynamics = extra.filter(c => c.trigger === match.trigger);
-  // Les items dynamiques remplacent un éventuel doublon statique (même insert).
+  // Dynamic items replace any matching static item (same insert).
   const seen = new Set(dynamics.map(c => c.insert));
   const pool = [...dynamics, ...statics.filter(c => !seen.has(c.insert))];
   const query = (match.trigger + match.partial).toLowerCase();

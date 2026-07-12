@@ -51,7 +51,7 @@ describe('TokenCounter serialize/restore (session persistence)', () => {
 
   it('restore does not overwrite the current model limit', () => {
     const tc = new TokenCounter();
-    tc.setLimit(16000); // limite du modèle courant
+    tc.setLimit(16000); // current model limit
     tc.restore({ inputTokens: 10, outputTokens: 5, cachedTokens: 2, history: [] });
     expect(tc.getUsage().limit).toBe(16000);
     expect(tc.getUsage().cachedTokens).toBe(2);

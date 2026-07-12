@@ -5,7 +5,7 @@ describe('SecretScrubber', () => {
   const scrubber = new SecretScrubber();
 
   it('redacts OpenAI-style API keys', () => {
-    const input = 'Voici ma clé sk-abcdef1234567890abcdef1234567890abcd et le reste.';
+    const input = 'Here is my key sk-abcdef1234567890abcdef1234567890abcd and the rest.';
     const { cleaned, foundSecrets } = scrubber.scrub(input);
     expect(cleaned).not.toContain('sk-abcdef1234567890');
     expect(foundSecrets.length).toBeGreaterThan(0);

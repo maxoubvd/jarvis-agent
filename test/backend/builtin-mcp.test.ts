@@ -12,9 +12,9 @@ import { McpManager } from '../../src/backend/core/mcp/manager.js';
 import type { JarvisMcpClient, McpToolInfo } from '../../src/backend/core/mcp/client.js';
 import type { ConfigManager, JarvisConfig } from '../../src/backend/config/config-manager.js';
 
-// `isGitRepository()` (builtin.ts) fait un vrai `fs.existsSync`, donc les
-// dossiers "C:\\proj" fictifs d'avant ne suffisent plus pour tester le
-// comportement du builtin git — il faut de vrais dossiers sur disque.
+// `isGitRepository()` (builtin.ts) does a real `fs.existsSync`, so the
+// old fake "C:\\proj" folders are no longer sufficient to test the
+// builtin git behavior — we need real directories on disk.
 let gitRepoDir: string;
 let plainDir: string;
 
@@ -50,7 +50,7 @@ function fakeClient(tools: McpToolInfo[] = []): JarvisMcpClient {
   } as unknown as JarvisMcpClient;
 }
 
-/** Comme fakeClient, mais `connect()` ne résout qu'après un micro-délai — simule le temps réel de spawn/handshake d'un serveur MCP. */
+/** Like fakeClient, but `connect()` only resolves after a micro-delay — simulates real spawn/handshake time of an MCP server. */
 function slowFakeClient(tools: McpToolInfo[] = [], delayMs = 20): JarvisMcpClient {
   return {
     connect: vi.fn(() => new Promise<void>(resolve => setTimeout(resolve, delayMs))),
@@ -92,11 +92,11 @@ describe('getBuiltinMcpServers', () => {
   });
 
   it('keeps git disabled by default when the open folder is not itself a git repository', () => {
-    // Régression : "Recette Jarvis" est un sous-dossier d'un repo parent —
-    // `git` CLI le résout via auto-discovery, mais mcp-server-git non, donc il
-    // échouait toujours avec "not a valid Git repository". Le builtin doit
-    // rester désactivé par défaut dans ce cas précis, alors que filesystem
-    // (qui ne dépend pas de git) reste activé normalement.
+    // Regression: "Recette Jarvis" is a subfolder of a parent repo —
+    // `git` CLI resolves it via auto-discovery, but mcp-server-git does not, so it
+    // always failed with "not a valid Git repository". The builtin must
+    // remain disabled by default in this specific case, while filesystem
+    // (which does not depend on git) remains normally enabled.
     const byId = new Map(getBuiltinMcpServers(plainDir).map(b => [b.id, b]));
     expect(byId.get('filesystem')!.config.enabled).toBe(true);
     expect(byId.get('git')!.config.enabled).toBe(false);
@@ -120,26 +120,25 @@ describe('McpManager with builtins', () => {
     const names = factory.mock.calls.map(c => c[0]);
     expect(names).toContain('memory');
     expect(names).toContain('fetch');
-    // fetch reçoit sa fabrique in-process
+    // fetch receives its in-process factory
     const fetchCall = factory.mock.calls.find(c => c[0] === 'fetch')!;
     expect(typeof fetchCall[2]).toBe('function');
-    // filesystem/git nécessitent un dossier ouvert
+    // filesystem/git require an open folder
     expect(names).not.toContain('filesystem');
     expect(names).not.toContain('git');
   });
 
   it('lets concurrent initialize() callers wait for the same in-flight connection', async () => {
-    // Régression : `getSettings` et `getMcpStatus` sont postés quasi
-    // simultanément par le webview (handleTabChange) et appellent chacun,
-    // indépendamment, `await mcp.initialize()` puis lisent les statuts tout de
-    // suite après. Avec un simple booléen "initialized", le second appelant
-    // voyait déjà true et son `await` résolvait aussitôt — avant que
-    // connectAll() n'ait fini de se connecter — donc il lisait des statuts
-    // vides. En pratique ça se traduisait par "je ne vois plus les tools des
-    // serveurs" dans les Settings. Chaque branche ci-dessous lit SES PROPRES
-    // statuts juste après SON `await`, sans jamais attendre l'autre branche
-    // (contrairement à un `Promise.all`, qui masquerait le bug en attendant
-    // de toute façon la branche la plus lente).
+    // Regression: `getSettings` and `getMcpStatus` are posted almost
+    // simultaneously by the webview (handleTabChange) and each calls,
+    // independently, `await mcp.initialize()` then reads the statuses right
+    // after. With a simple "initialized" boolean, the second caller
+    // would already see true and its `await` would resolve immediately — before
+    // connectAll() finished connecting — so it would read empty statuses.
+    // In practice this resulted in "I no longer see server tools" in Settings.
+    // Each branch below reads ITS OWN statuses right after ITS `await`, without
+    // ever waiting for the other branch (unlike `Promise.all`, which would hide
+    // the bug by waiting for the slowest branch anyway).
     const factory = vi.fn(() => slowFakeClient([{ name: 'create_entities', description: '', inputSchema: {} }]));
     const manager = new McpManager(fakeConfigManager({}), factory);
 
@@ -153,7 +152,7 @@ describe('McpManager with builtins', () => {
     await second;
 
     expect(toolsSeenBySecondCaller).toBe(1);
-    // Une seule connexion réelle par serveur malgré les deux appels concurrents.
+    // Only one real connection per server despite the two concurrent calls.
     expect(factory.mock.calls.filter(c => c[0] === 'memory')).toHaveLength(1);
   });
 
@@ -179,7 +178,7 @@ describe('McpManager with builtins', () => {
     const names = factory.mock.calls.map(c => c[0]);
     expect(names).not.toContain('filesystem');
     expect(names).not.toContain('git');
-    // ...mais ils restent listés dans les statuts.
+    // ...but they remain listed in the statuses.
     const statusNames = manager.getStatuses().map(s => s.name);
     expect(statusNames).toContain('filesystem');
     expect(statusNames).toContain('git');
@@ -220,7 +219,7 @@ describe('McpManager with builtins', () => {
     await manager.initialize();
     const names = factory.mock.calls.map(c => c[0]);
     expect(names).toContain('filesystem');
-    // git est activé par défaut dès que le dossier est lui-même un repo git
+    // git is enabled by default as soon as the folder itself is a git repo
     expect(names).toContain('git');
     const statusNames = manager.getStatuses().map(s => s.name);
     expect(statusNames).toContain('git');
@@ -235,10 +234,10 @@ describe('McpManager with builtins', () => {
     );
     await manager.initialize();
     const names = factory.mock.calls.map(c => c[0]);
-    // filesystem ne dépend pas de git : il se connecte normalement.
+    // filesystem does not depend on git: it connects normally.
     expect(names).toContain('filesystem');
     expect(names).not.toContain('git');
-    // ...mais reste listé dans les statuts (pour proposer le flow "git init").
+    // ...but remains listed in the statuses (to offer the "git init" flow).
     const statusNames = manager.getStatuses().map(s => s.name);
     expect(statusNames).toContain('git');
   });

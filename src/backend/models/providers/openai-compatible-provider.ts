@@ -13,8 +13,8 @@ export interface OpenAICompatibleProviderOptions {
 }
 
 /**
- * Provider générique pour tout endpoint OpenAI-compatible ajouté par
- * l'utilisateur (façon Continue). Enveloppe les helpers partagés.
+ * Generic provider for any OpenAI-compatible endpoint added by
+ * the user (Continue-style). Wraps the shared helpers.
  */
 export class OpenAICompatibleProvider implements IModelProvider {
   public name: string;
@@ -34,7 +34,7 @@ export class OpenAICompatibleProvider implements IModelProvider {
 
   public async sendPrompt(messages: ChatMessage[], tools?: ToolDefinition[], signal?: AbortSignal, options?: SendOptions): Promise<SendPromptResult> {
     if (!this.config.apiKey) {
-      throw new Error('OpenAI Compatible: clé API manquante dans jarvis-config.json');
+      throw new Error('OpenAI Compatible: API key missing from jarvis-config.json');
     }
     return openaiCompatibleSend(this.config, messages, tools, signal, options);
   }
@@ -49,7 +49,7 @@ export class OpenAICompatibleProvider implements IModelProvider {
     options?: SendOptions
   ): Promise<void> {
     if (!this.config.apiKey) {
-      onError(new Error('OpenAI Compatible: clé API manquante dans jarvis-config.json'));
+      onError(new Error('OpenAI Compatible: API key missing from jarvis-config.json'));
       return;
     }
     return openaiCompatibleStream(this.config, messages, onChunk, onDone, onError, tools, signal, options);

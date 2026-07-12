@@ -13,7 +13,7 @@ export interface ProcessStep {
   badges?: Badge[];
 }
 
-/** Item de la checklist TODO persistante (outil `update_todo_list` / synthèse de workflow). */
+/** Item in the persistent TODO checklist (tool `update_todo_list` / workflow synthesis). */
 export interface TodoItem {
   id: string;
   content: string;
@@ -34,7 +34,7 @@ export interface RequestTokenRecord {
   model: string;
   inputTokens: number;
   outputTokens: number;
-  /** Tokens du prompt servis depuis le cache du provider (0/absent si aucun). */
+  /** Prompt tokens served from the provider cache (0/absent if none). */
   cachedTokens?: number;
   timestamp: string;
 }
@@ -43,16 +43,16 @@ export interface TokenUsage {
   used: number;
   inputTokens: number;
   outputTokens: number;
-  /** Cumul des tokens servis depuis le cache du provider (économie coût/latence). */
+  /** Cumulative tokens served from the provider cache (cost/latency saving). */
   cachedTokens: number;
-  /** Longueur de contexte du modèle configuré ; `null` si aucun modèle. */
+  /** Context length of the configured model; `null` if no model. */
   limit: number | null;
   percentage: number;
   level: 'green' | 'orange' | 'red';
   history: RequestTokenRecord[];
 }
 
-// --- Config (miroir de src/backend/config/config-manager.ts — garder synchronisé) ---
+// --- Config (mirror of src/backend/config/config-manager.ts — keep in sync) ---
 
 export type ProviderType =
   | 'ollama'
@@ -92,7 +92,7 @@ export const DEFAULT_BASE_URL: Record<ProviderType, string> = {
   'openai-compatible': 'https://api.openai.com/v1'
 };
 
-/** Page de création de clé API (ou docs) de chaque provider connu. */
+/** API key creation page (or docs) for each known provider. */
 export const PROVIDER_KEY_PAGE: Partial<Record<ProviderType, { url: string; label: string }>> = {
   mistral: { url: 'https://console.mistral.ai/api-keys', label: 'Get API key' },
   openrouter: { url: 'https://openrouter.ai/settings/keys', label: 'Get API key' },
@@ -117,7 +117,7 @@ export const MODEL_ROLES: ModelRole[] = [
   'summarize'
 ];
 
-/** Entrée de configuration centrée « modèle » (provider + clé portés par le modèle). */
+/** Model-centric configuration entry (provider + key carried by the model). */
 export interface ModelItem {
   name: string;
   provider: ProviderType;
@@ -127,7 +127,7 @@ export interface ModelItem {
   roles?: ModelRole[];
   contextLength?: number;
   maxTokens?: number;
-  /** Température d'échantillonnage ; défaut : profil du modèle, sinon défaut de l'API. */
+  /** Sampling temperature; default: model profile, otherwise API default. */
   temperature?: number;
   enabled?: boolean;
 }
@@ -140,22 +140,22 @@ export interface McpServerConfig {
   env?: Record<string, string>;
   url?: string;
   headers?: Record<string, string>;
-  /** @deprecated Legacy — un tool listé ici équivaut à `toolPolicies[tool] = 'excluded'`. */
+  /** @deprecated Legacy — a tool listed here is equivalent to `toolPolicies[tool] = 'excluded'`. */
   disabledTools?: string[];
-  /** Politique par tool du serveur (défaut MCP : `ask`). */
+  /** Per-tool policy for the server (MCP default: `ask`). */
   toolPolicies?: Record<string, ToolPolicy>;
 }
 
-/** Override d'un serveur MCP intégré (activation + politiques par tool). */
+/** Override for a built-in MCP server (activation + per-tool policies). */
 export interface BuiltinMcpOverride {
   enabled?: boolean;
-  /** @deprecated Legacy — un tool listé ici équivaut à `toolPolicies[tool] = 'excluded'`. */
+  /** @deprecated Legacy — a tool listed here is equivalent to `toolPolicies[tool] = 'excluded'`. */
   disabledTools?: string[];
-  /** Politique par tool du serveur (défaut MCP : `ask`). */
+  /** Per-tool policy for the server (MCP default: `ask`). */
   toolPolicies?: Record<string, ToolPolicy>;
 }
 
-/** Prompt enregistré, invocable via `/nom` dans le chat. */
+/** Saved prompt, invocable via `/name` in the chat. */
 export interface PromptItem {
   id: string;
   name: string;
@@ -163,16 +163,16 @@ export interface PromptItem {
   content: string;
 }
 
-/** Statut d'un tool exposé par un serveur MCP (message `mcpStatus`). */
+/** Status of a tool exposed by an MCP server (message `mcpStatus`). */
 export interface McpToolStatus {
   name: string;
   description: string;
   enabled: boolean;
-  /** Politique effective (défaut MCP : `ask`). */
+  /** Effective policy (MCP default: `ask`). */
   policy: ToolPolicy;
 }
 
-/** Statut d'un serveur MCP (message `mcpStatus`). */
+/** Status of an MCP server (message `mcpStatus`). */
 export interface McpServerStatus {
   name: string;
   enabled: boolean;
@@ -184,8 +184,8 @@ export interface McpServerStatus {
 }
 
 /**
- * Politique d'exécution d'un outil de l'agent (façon Continue) :
- * auto = sans confirmation, ask = toujours demander, excluded = retiré du registre.
+ * Execution policy for an agent tool (Continue-style):
+ * auto = no confirmation, ask = always confirm, excluded = removed from registry.
  */
 export type ToolPolicy = 'auto' | 'ask' | 'excluded';
 
@@ -194,24 +194,24 @@ export interface RuleItem {
   name: string;
   enabled: boolean;
   content: string;
-  /** Glob optionnel : la règle ne s'applique qu'au fichier actif matché. Absent = globale. */
+  /** Optional glob: the rule applies only to the active matched file. Absent = global. */
   scope?: string;
 }
 
 export interface OptimizationConfig {
   hitlMode?: 'strict' | 'moderate' | 'free';
-  /** Mode du chat par défaut : `agent` (boucle outillée, défaut) ou `chat` (texte seul). */
+  /** Default chat mode: `agent` (tooled loop, default) or `chat` (text only). */
   chatMode?: 'agent' | 'chat';
   agentMaxIterations?: number;
   tddMaxAttempts?: number;
   tddTestCommand?: string;
   terminalTimeout?: number;
   showThinking?: boolean;
-  /** Verbosité des réponses (défaut : `normal`). */
+  /** Response verbosity (default: `normal`). */
   verbosity?: 'concise' | 'normal' | 'detailed';
-  /** Ouverture automatique du fichier édité par l'agent. Défaut : `always`. */
+  /** Auto-open of files edited by the agent. Default: `always`. */
   autoOpenMode?: 'always' | 'never' | 'strict-hitl-only';
-  /** Autocomplete inline (Tab / ghost text). Désactivé par défaut. */
+  /** Inline autocomplete (Tab / ghost text). Disabled by default. */
   autocompleteEnabled?: boolean;
 }
 
@@ -234,7 +234,7 @@ export interface SpecializedAgent {
   description: string;
   systemPrompt: string;
   keywords: string[];
-  /** Sous-ensemble d'outils autorisés (noms exacts). Vide/absent = registre complet. */
+  /** Subset of allowed tools (exact names). Empty/absent = full registry. */
   allowedToolPrefixes?: string[];
 }
 
@@ -260,7 +260,7 @@ export interface JarvisConfig {
   };
   mcpServers?: Record<string, McpServerConfig>;
   builtinMcp?: Record<string, BuiltinMcpOverride>;
-  /** Politique par outil de l'agent (nom → auto/ask/excluded). */
+  /** Per-agent-tool policy (name → auto/ask/excluded). */
   toolPolicies?: Record<string, ToolPolicy>;
   rules?: RuleItem[];
   workflows?: Workflow[];
@@ -274,15 +274,17 @@ export interface JarvisConfig {
   webSearch?: WebSearchConfig;
 }
 
-/** Configuration de l'outil `search_web`. Un seul provider supporté pour l'instant. */
+/** Configuration for the `search_web` tool. Free — DuckDuckGo, no API key needed. */
 export interface WebSearchConfig {
-  provider: 'brave';
-  apiKey?: string;
-  /** Domaines appliqués par défaut (`site:` OR) quand le modèle n'en précise pas. */
+  provider: 'duckduckgo';
+  /** Domains applied by default (`site:` OR) when the model doesn't specify any. */
   defaultSites?: string[];
 }
 
-/** Statut d'indexation d'un site de docs (message `docsStatus`). */
+/** Sources checked by default in Settings > Web Search — mirror of `config-manager.ts`. */
+export const DEFAULT_WEB_SEARCH_SITES = ['stackoverflow.com', 'developer.mozilla.org', 'github.com', 'devdocs.io'];
+
+/** Indexing status of a docs site (message `docsStatus`). */
 export interface DocsSiteStatus {
   id: string;
   state: 'idle' | 'indexing' | 'done' | 'error';
@@ -291,7 +293,7 @@ export interface DocsSiteStatus {
   error?: string;
 }
 
-/** Défauts codés en dur envoyés par le backend avec le message `settings`. */
+/** Hard-coded defaults sent by the backend with the `settings` message. */
 export interface SettingsDefaults {
   agents: SpecializedAgent[];
   workflows: Workflow[];
@@ -301,16 +303,16 @@ export interface SettingsDefaults {
     description: string;
     command: string;
     defaultEnabled: boolean;
-    /** Dossier ouvert mais pas un dépôt git — activer requiert un "git init" (confirmation). */
+    /** Folder opened but not a git repo — enabling requires a "git init" (confirmation). */
     requiresGitInit?: boolean;
   }>;
-  /** Outils intégrés de l'agent — pour l'éditeur de politiques. */
+  /** Built-in agent tools — for the policy editor. */
   agentTools?: Array<{ name: string; description: string }>;
-  /** Outils personnalisés jarvis-tools/*.json (lecture seule dans l'UI). */
+  /** Custom tools from jarvis-tools/*.json (read-only in the UI). */
   customTools?: Array<{ name: string; description: string }>;
 }
 
-/** Demande d'approbation HITL affichée dans le chat (message `approvalRequest`). */
+/** HITL approval request displayed in the chat (message `approvalRequest`). */
 export interface ApprovalRequest {
   id: string;
   actionType: string;
@@ -318,7 +320,7 @@ export interface ApprovalRequest {
   detail: string;
 }
 
-/** Hunk d'un diff en attente de revue (miroir de services/diff.ts). */
+/** Hunk of a diff awaiting review (mirror of services/diff.ts). */
 export interface DiffHunkView {
   id: number;
   beforeStart: number;
@@ -329,7 +331,7 @@ export interface DiffHunkView {
   contextAfter: string[];
 }
 
-/** Fichier modifié par l'IA en attente de revue (message `pendingChanges`). */
+/** File modified by the AI awaiting review (message `pendingChanges`). */
 export interface PendingFileChange {
   path: string;
   isNew: boolean;

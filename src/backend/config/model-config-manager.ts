@@ -15,12 +15,12 @@ import {
   type ProviderType
 } from './config-manager.js';
 
-// Réexport pour compat ascendante (consommateurs dans src/backend/models/*).
+// Re-exported for backward compatibility (consumers in src/backend/models/*).
 export type { JarvisConfig, ModelItem, ModelRole, ProviderType };
 
 const LOCAL_PROVIDERS: ProviderType[] = ['ollama', 'lmstudio'];
 
-/** Instancie un provider isolé depuis une config de modèle (test de connexion onboarding). */
+/** Instantiates a standalone provider from a model config (onboarding connection test). */
 export function createProviderFromItem(item: ModelItem): IModelProvider {
   return createProvider(item);
 }
@@ -32,7 +32,7 @@ function createProvider(item: ModelItem): IModelProvider {
     apiKey: item.apiKey,
     model: item.model,
     maxTokens: item.maxTokens,
-    // Réglage utilisateur > profil du modèle (devstral/codestral/qwen-coder) > défaut API.
+    // User setting > model profile (devstral/codestral/qwen-coder) > API default.
     temperature: effectiveTemperature(item)
   };
   switch (item.provider) {
@@ -45,18 +45,18 @@ function createProvider(item: ModelItem): IModelProvider {
     case 'mistral':
       return new MistralProvider(common);
     default:
-      // 'openai' et 'openai-compatible' partagent le même protocole.
+      // 'openai' and 'openai-compatible' share the same protocol.
       return new OpenAICompatibleProvider({ name: item.provider, ...common });
   }
 }
 
 /**
- * Consommateur de {@link ConfigManager} : instancie un provider par modèle
- * activé (schéma centré modèle, façon Continue). Ne lit plus le disque et ne
- * throw plus — une config vide (aucun modèle) est un état valide (onboarding).
+ * Consumer of {@link ConfigManager}: instantiates one provider per enabled model
+ * (model-centric schema, Continue-style). No longer reads from disk and no longer
+ * throws — an empty config (no models) is a valid state (onboarding).
  */
 export class ModelConfigManager {
-  /** Un provider par modèle activé, indexé par `ModelItem.name`. */
+  /** One provider per enabled model, indexed by `ModelItem.name`. */
   private providers: Map<string, IModelProvider> = new Map();
 
   constructor(private cfg: ConfigManager = getConfigManager()) {
@@ -78,38 +78,38 @@ export class ModelConfigManager {
     }
   }
 
-  /** Provider instancié pour le modèle donné (clé = `ModelItem.name`). */
+  /** Provider instantiated for the given model (key = `ModelItem.name`). */
   public getProvider(modelName: string): IModelProvider | undefined {
     return this.providers.get(modelName);
   }
 
-  /** Entrée de config du modèle donné (activé ou non). */
+  /** Config entry for the given model (enabled or not). */
   public getModelItem(modelName: string | null): ModelItem | undefined {
     if (!modelName) return undefined;
     return this.config.models.items.find(m => m.name === modelName);
   }
 
-  /** Modèle par défaut, ou `null` si aucun modèle n'est configuré. */
+  /** Default model, or `null` if no model is configured. */
   public getDefaultModel(): string | null {
     return this.config.models.default;
   }
 
-  /** Modèle effectif : défaut si valide (activé), sinon premier modèle activé, sinon `null`. */
+  /** Effective model: the default if valid (enabled), otherwise the first enabled model, otherwise `null`. */
   public getEffectiveModel(): string | null {
     const preferred = this.config.models.default;
     if (preferred && this.providers.has(preferred)) return preferred;
     return this.getAvailableModels()[0]?.name ?? null;
   }
 
-  /** Modèles activés (le sélecteur du header + la jauge en dépendent). */
+  /** Enabled models (the header selector + the gauge depend on this). */
   public getAvailableModels(): ModelItem[] {
     return this.enabledItems();
   }
 
   /**
-   * Premier modèle activé portant le rôle demandé. Pour `chat`/`autocomplete`, retombe sur
-   * le modèle effectif (un modèle sans `roles` est considéré généraliste ; l'autocomplete a
-   * besoin d'un modèle par défaut même si aucun n'a été explicitement taggé `autocomplete`).
+   * First enabled model carrying the requested role. For `chat`/`autocomplete`, falls back to
+   * the effective model (a model without `roles` is considered general-purpose; autocomplete
+   * needs a default model even if none has been explicitly tagged `autocomplete`).
    */
   public getModelForRole(role: ModelRole): ModelItem | null {
     const explicit = this.enabledItems().find(m => m.roles?.includes(role));
@@ -126,7 +126,7 @@ export class ModelConfigManager {
     this.initializeProviders();
   }
 
-  /** Ré-instancie les providers depuis la config courante (après un changement externe). */
+  /** Re-instantiates the providers from the current config (after an external change). */
   public refresh(): void {
     this.initializeProviders();
   }
@@ -135,22 +135,22 @@ export class ModelConfigManager {
     return this.config;
   }
 
-  /** Type de provider du modèle donné (défaut : premier modèle activé). */
+  /** Provider type for the given model (default: first enabled model). */
   public getProviderNameForModel(modelName: string | null): ProviderType | undefined {
     const item = this.getModelItem(modelName) ?? this.enabledItems()[0];
     return item?.provider;
   }
 
   /**
-   * Longueur de contexte du modèle : uniquement celle explicitement réglée en config
-   * (Settings > Models). `null` si absente — la jauge de contexte reste alors masquée
-   * plutôt que d'afficher une estimation non garantie par l'utilisateur.
+   * Context length of the model: only the value explicitly set in the config
+   * (Settings > Models). `null` if absent — the context gauge stays hidden
+   * rather than displaying an estimate not guaranteed by the user.
    */
   public getContextLength(modelName: string | null): number | null {
     return this.getModelItem(modelName)?.contextLength ?? null;
   }
 
-  /** Change le modèle par défaut (persisté dans la config globale) et ré-instancie. */
+  /** Changes the default model (persisted in the global config) and re-instantiates. */
   public async setDefaultModel(modelName: string): Promise<void> {
     const next = this.cfg.getGlobalConfig();
     const updated: JarvisConfig = {
@@ -162,9 +162,9 @@ export class ModelConfigManager {
   }
 
   /**
-   * True si le provider envoie les données hors de la machine (spec §6.1).
-   * Accepte un type de provider ou un nom de modèle ; par sécurité, tout ce qui
-   * n'est pas identifié local (ollama/lmstudio) est considéré cloud.
+   * True if the provider sends data outside the machine (spec §6.1).
+   * Accepts a provider type or a model name; for safety, anything not
+   * identified as local (ollama/lmstudio) is considered cloud.
    */
   public isCloudProvider(providerOrModel: string): boolean {
     if (LOCAL_PROVIDERS.includes(providerOrModel as ProviderType)) return false;

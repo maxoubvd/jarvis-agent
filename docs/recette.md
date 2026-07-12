@@ -1,292 +1,290 @@
-# Cahier de Recette - Jarvis Agent
+# Test Book (Recette) - Jarvis Agent
 
-Ce document liste l'intégralité des scénarios de test pour s'assurer du parfait fonctionnement de toutes les briques de l'extension Jarvis. Suivez ces étapes chronologiquement pour valider l'architecture et les cas d'usages.
-
----
-
-## 1. Paramétrage et Modèles (Providers)
-
-### 1.1 Modèle distant (ex: OpenAI / OpenRouter)
-- [X] **Action** : Dans l'onglet "Settings" de la webview, configurez un fournisseur (ex: OpenAI), ajoutez une clé API valide et sélectionnez un modèle (ex: `gpt-4o`).
-- [X] **Test** : Posez une question simple comme "Bonjour, qui es-tu ?".
-- [X] **Résultat attendu** : Jarvis répond rapidement en s'identifiant comme un assistant de code.
-
-### 1.2 Modèle local (Ollama / LMStudio)
-- [X] **Action** : Démarrez Ollama avec un modèle (ex: `ollama run llama3:8b`). Dans les Settings Jarvis, ajoutez un fournisseur Ollama (URL par défaut `http://localhost:11434`), et sélectionnez le modèle `llama3:8b`.
-- [X] **Test** : Posez une question dans le chat en mode "Rapide".
-- [X] **Résultat attendu** : Le modèle local répond. Aucune erreur réseau n'apparaît.
+This document lists the full set of test scenarios to ensure all parts of the Jarvis extension work correctly. Follow these steps in order to validate the architecture and use cases.
 
 ---
 
-## 2. Modes de Chat et Routage Intelligent
+## 1. Setup and Models (Providers)
 
-### 2.1 Mode Rapide
-- [X] **Action** : Sélectionnez le mode "Rapide". Demandez "Donne-moi une fonction pour faire une addition en JS".
-- [X] **Résultat attendu** : Jarvis donne le code en texte. Il n'essaie pas d'exécuter des outils ni de créer de fichiers.
+### 1.1 Remote model (e.g. OpenAI / OpenRouter)
+- [X] **Action**: In the webview's "Settings" tab, configure a provider (e.g. OpenAI), add a valid API key, and select a model (e.g. `gpt-4o`).
+- [X] **Test**: Ask a simple question like "Hello, who are you?".
+- [X] **Expected result**: Jarvis responds quickly, identifying itself as a coding assistant.
 
-### 2.2 Mode Plan (Workflow strict)
-- [X] **Action** : Sélectionnez le mode "Plan". Demandez "Je veux créer une API avec Express".
-- [X] **Résultat attendu** : Jarvis n'écrit aucun code direct. Il utilise l'outil d'écriture pour générer un fichier `implementation_plan.md` décrivant les étapes, puis vous demande "Mon plan te convient-il ?" dans le chat.
-
-### 2.3 Mode Automatique (Petit Modèle + Routage Dynamique)
-- [X] **Action** : Activez un petit modèle local (ex: Ollama `llama3:8b`) ou un modèle contenant "7b"/"8b". Assurez-vous d'être en mode "Automatique". Demandez "Crée-moi un composant React Button complet".
-- [X] **Résultat attendu** : L'extension détecte la présence d'un petit modèle et déclenche le workflow `dynamic`. Dans le chat ou via des logs d'étape, on doit voir le *Task Decomposer* créer des sous-étapes (Analyse, Exécution, Test) et les valider séquentiellement. 
-
-### 2.4 Mode Automatique (Gros Modèle)
-- [X] **Action** : Activez un modèle puissant (GPT-4, Claude-3.5-Sonnet) en mode "Automatique". Donnez une instruction de code simple.
-- [X] **Résultat attendu** : Le modèle utilise directement ses outils (boucle agentique classique) sans passer par le workflow de décomposition `dynamic`.
+### 1.2 Local model (Ollama / LMStudio)
+- [X] **Action**: Start Ollama with a model (e.g. `ollama run llama3:8b`). In Jarvis Settings, add an Ollama provider (default URL `http://localhost:11434`), and select the `llama3:8b` model.
+- [X] **Test**: Ask a question in the chat in "Fast" mode.
+- [X] **Expected result**: The local model responds. No network error appears.
 
 ---
 
-## 3. Revue de Diff et CodeLens (Modifications de Fichiers)
+## 2. Chat Modes and Smart Routing
 
-### 3.1 Édition et Apparition des CodeLens
-- [X] **Action** : Demandez à Jarvis de modifier un fichier existant (ex: "Ajoute un commentaire au début de index.ts").
-- [X] **Résultat attendu** : Le fichier s'édite. VS Code affiche instantanément un fond vert sur la nouvelle ligne ajoutée. Au-dessus de la modification, les CodeLens cliquables `✓ Accept Hunk` et `✗ Reject Hunk` apparaissent. (En haut du fichier, `✓ Accept All Changes` doit apparaître).
+### 2.1 Fast mode
+- [X] **Action**: Select "Fast" mode. Ask "Give me a function to add two numbers in JS".
+- [X] **Expected result**: Jarvis gives the code as text. It doesn't try to run tools or create files.
 
-### 3.2 Acceptation via CodeLens
-- [X] **Action** : Cliquez sur `✓ Accept Hunk` dans l'éditeur.
-- [X] **Résultat attendu** : Le fond vert disparaît. Le texte cliquable CodeLens disparaît. Le fichier est considéré comme validé et sauvé.
+### 2.2 Plan mode (strict workflow)
+- [X] **Action**: Select "Plan" mode. Ask "I want to build an API with Express".
+- [X] **Expected result**: Jarvis writes no direct code. It uses the write tool to generate an `implementation_plan.md` file describing the steps, then asks "Does my plan work for you?" in the chat.
 
-### 3.3 Rejet via CodeLens
-- [X] **Action** : Demandez une autre modification. Cliquez sur `✗ Reject Hunk`.
-- [X] **Résultat attendu** : Le texte ajouté par l'IA disparaît immédiatement de l'éditeur. Le fichier retourne à son état d'origine.
+### 2.3 Automatic mode (small model + dynamic routing)
+- [X] **Action**: Enable a small local model (e.g. Ollama `llama3:8b`) or a model containing "7b"/"8b". Make sure you're in "Automatic" mode. Ask "Create a complete React Button component for me".
+- [X] **Expected result**: The extension detects the presence of a small model and triggers the `dynamic` workflow. In the chat or via step logs, you should see the *Task Decomposer* create sub-steps (Analysis, Execution, Test) and validate them sequentially.
 
-### 3.4 Édition en ligne (Cmd+K)
-- [X] **Action** : Dans un fichier ouvert, sélectionnez une fonction, puis appuyez sur `Ctrl+K Ctrl+K` (ou `Cmd+K Cmd+K` sur Mac). Entrez un prompt (ex: "Ajoute un try/catch").
-- [X] **Résultat attendu** : Jarvis s'active, comprend le contexte de la sélection et applique la modification directement dans l'éditeur via les outils d'édition. Les boutons d'acceptation de diff apparaissent.
+### 2.4 Automatic mode (large model)
+- [X] **Action**: Enable a powerful model (GPT-4, Claude-3.5-Sonnet) in "Automatic" mode. Give a simple coding instruction.
+- [X] **Expected result**: The model uses its tools directly (classic agentic loop) without going through the `dynamic` decomposition workflow.
 
 ---
 
-## 4. Contexte, RAG Sémantique et Tree-Sitter (Pruning)
+## 3. Diff Review and CodeLens (File Modifications)
 
-### 4.1 Mention `@file:`
-- [X] **Action** : Dans le chat, tapez "Que fait la fonction main dans @file:src/index.ts".
-- [X] **Résultat attendu** : Le contenu de `src/index.ts` est lu et injecté. Jarvis explique correctement le code.
+### 3.1 Editing and CodeLens appearance
+- [X] **Action**: Ask Jarvis to modify an existing file (e.g. "Add a comment at the top of index.ts").
+- [X] **Expected result**: The file is edited. VS Code instantly shows a green background on the newly added line. Above the change, the clickable CodeLens `✓ Accept Hunk` and `✗ Reject Hunk` appear. (At the top of the file, `✓ Accept All Changes` should appear.)
 
-### 4.2 Recherche RAG (Semantic Search) avec `@docs:`
-- [X] **Prérequis** : Utilisez la commande `Jarvis: Index Workspace (RAG)` depuis la palette VS Code (Ctrl+Shift+P) pour vectoriser le projet. Attendez la notification de succès.
-- [X] **Action** : Tapez une requête sémantique approximative : "Comment est gérée l'interface utilisateur @docs:".
-- [X] **Résultat attendu** : Sans mot exact, la librairie `@xenova/transformers` (all-MiniLM-L6-v2) trouve les fichiers pertinents grâce aux embeddings cosinus. Jarvis utilise ce contexte pour répondre.
+### 3.2 Accepting via CodeLens
+- [X] **Action**: Click `✓ Accept Hunk` in the editor.
+- [X] **Expected result**: The green background disappears. The clickable CodeLens text disappears. The file is considered validated and saved.
+
+### 3.3 Rejecting via CodeLens
+- [X] **Action**: Ask for another change. Click `✗ Reject Hunk`.
+- [X] **Expected result**: The text added by the AI immediately disappears from the editor. The file returns to its original state.
+
+### 3.4 Inline editing (Cmd+K)
+- [X] **Action**: In an open file, select a function, then press `Ctrl+K Ctrl+K` (or `Cmd+K Cmd+K` on Mac). Enter a prompt (e.g. "Add a try/catch").
+- [X] **Expected result**: Jarvis activates, understands the context of the selection, and applies the change directly in the editor via the editing tools. The diff acceptance buttons appear.
+
+---
+
+## 4. Context, Semantic RAG, and Tree-Sitter (Pruning)
+
+### 4.1 `@file:` mention
+- [X] **Action**: In the chat, type "What does the main function do in @file:src/index.ts".
+- [X] **Expected result**: The content of `src/index.ts` is read and injected. Jarvis correctly explains the code.
+
+### 4.2 RAG (Semantic Search) with `@docs:`
+- [X] **Prerequisite**: Use the `Jarvis: Index Workspace (RAG)` command from the VS Code palette (Ctrl+Shift+P) to vectorize the project. Wait for the success notification.
+- [X] **Action**: Type an approximate semantic query: "How is the user interface handled @docs:".
+- [X] **Expected result**: Without an exact keyword match, the `@xenova/transformers` library (all-MiniLM-L6-v2) finds the relevant files via cosine embeddings. Jarvis uses this context to answer.
 
 ### 4.3 Context Pruning (AST Tree-Sitter)
-- [X] **Action** : Demandez à Jarvis d'analyser un énorme fichier TS (> 1000 lignes) contenant de nombreuses fonctions, en lui disant de se focaliser sur UNE fonction spécifique.
-- [X] **Résultat attendu** : L'agent doit lire le fichier, et grâce à `web-tree-sitter`, élaguer les fonctions inutiles (gardant seulement leurs signatures) pour ne lire que le corps de la fonction ciblée, ce qui réduit drastiquement la consommation de tokens visible dans la jauge.
+- [X] **Action**: Ask Jarvis to analyze a huge TS file (> 1000 lines) containing many functions, telling it to focus on ONE specific function.
+- [X] **Expected result**: The agent should read the file, and thanks to `web-tree-sitter`, prune unnecessary functions (keeping only their signatures) to read only the body of the targeted function, drastically reducing token consumption visible in the gauge.
 
 ---
 
-## 5. Exécution de Commandes Terminal et HITL (Human In The Loop)
+## 5. Terminal Command Execution and HITL (Human In The Loop)
 
-### 5.1 Mode Strict
-- [X] **Action** : Dans les configurations, passez `jarvis.hitl.mode` à `strict`. Demandez "Fais un ls -la".
-- [X] **Résultat attendu** : Avant d'exécuter la commande dans le terminal, une interface d'approbation s'affiche. Le bouton "Allow" doit être cliqué pour que la commande s'exécute.
+### 5.1 Strict mode
+- [X] **Action**: In the settings, set `jarvis.hitl.mode` to `strict`. Ask "Run ls -la".
+- [X] **Expected result**: Before executing the command in the terminal, an approval interface appears. The "Allow" button must be clicked for the command to run.
 
-### 5.2 Mode Moderate
-- [X] **Action** : Passez en mode `moderate`. Demandez un `ls -la`.
-- [X] **Résultat attendu** : La commande inoffensive `ls` s'exécute silencieusement et Jarvis vous donne le résultat.
-- [X] **Action** : Demandez "Supprime le fichier toto.txt avec rm".
-- [X] **Résultat attendu** : La commande destructive bloque l'exécution et vous demande une approbation formelle via la Webview ou une notification.
+### 5.2 Moderate mode
+- [X] **Action**: Switch to `moderate` mode. Ask for an `ls -la`.
+- [X] **Expected result**: The harmless `ls` command runs silently and Jarvis gives you the result.
+- [X] **Action**: Ask "Delete the toto.txt file with rm".
+- [X] **Expected result**: The destructive command blocks execution and asks for formal approval via the Webview or a notification.
 
 ---
 
 ## 6. Auto-TDD Loop
 
-### 6.1 Lancement d'une boucle TDD
-- [X] **Action** : Dans le chat, tapez la commande `/tdd écris-moi une fonction fibonacci dans fib.ts`.
-- [X] **Résultat attendu** : 
-  1. L'agent crée le test unitaire pour Fibonacci (dans un fichier `.test.ts` ou `.spec.ts`).
-  2. L'agent lance les tests en tâche de fond (la commande `npm test` configurée dans `jarvis.tdd.testCommand` échouera car l'implémentation manque).
-  3. Il observe l'échec.
-  4. L'agent écrit l'implémentation de `fib.ts`.
-  5. Il relance les tests, qui doivent cette fois réussir.
-  6. La boucle se termine avec un résumé.
+### 6.1 Launching a TDD loop
+- [X] **Action**: In the chat, type the command `/tdd write me a fibonacci function in fib.ts`.
+- [X] **Expected result**:
+  1. The agent creates the unit test for Fibonacci (in a `.test.ts` or `.spec.ts` file).
+  2. The agent runs the tests in the background (the `npm test` command configured in `jarvis.tdd.testCommand` will fail because the implementation is missing).
+  3. It observes the failure.
+  4. The agent writes the implementation of `fib.ts`.
+  5. It reruns the tests, which should now pass.
+  6. The loop ends with a summary.
 
 ---
 
-## 7. Fonctionnalités Utilitaires
+## 7. Utility Features
 
-### 7.1 Jauge de Tokens (Statut Bar)
-- [X] **Action** : Discutez et utilisez le contexte.
-- [X] **Résultat attendu** : En bas à droite de l'éditeur VS Code, la barre de statut `$(hubot) Jarvis X%` s'incrémente. Le survol avec la souris indique les tokens In/Out. Au-delà d'un seuil critique (80%), elle passe en orange/rouge.
+### 7.1 Token Gauge (Status Bar)
+- [X] **Action**: Chat and use context.
+- [X] **Expected result**: At the bottom right of the VS Code editor, the status bar `$(hubot) Jarvis X%` increments. Hovering with the mouse shows In/Out tokens. Past a critical threshold (80%), it turns orange/red.
 
-### 7.2 Checkpoints et Rollback
-- [X] **Action** : Effectuez plusieurs requêtes qui modifient le projet. Puis utilisez la commande `Jarvis: List Checkpoints` ou `/rollback`.
-- [X] **Résultat attendu** : Une liste des sauvegardes git (ou internes) s'affiche. Sélectionner un checkpoint précédent restaure les fichiers à l'état exact de ce moment-là.
+### 7.2 Checkpoints and Rollback
+- [X] **Action**: Make several requests that modify the project. Then use the `Jarvis: List Checkpoints` command or `/rollback`.
+- [X] **Expected result**: A list of git (or internal) backups appears. Selecting a previous checkpoint restores the files to their exact state at that moment.
 
 ### 7.3 `.jarvisignore`
-- [X] **Action** : Utilisez `Jarvis: Generate .jarvisignore` pour créer le fichier. Ajoutez-y un répertoire sensible (ex: `secrets/`). Demandez à Jarvis de lister les fichiers du projet.
-- [X] **Résultat attendu** : L'outil `list_dir` de Jarvis est aveugle au dossier `secrets/` et refuse d'y accéder, même via une lecture explicite de fichier.
+- [X] **Action**: Use `Jarvis: Generate .jarvisignore` to create the file. Add a sensitive directory to it (e.g. `secrets/`). Ask Jarvis to list the project's files.
+- [X] **Expected result**: Jarvis's `list_dir` tool is blind to the `secrets/` folder and refuses to access it, even via an explicit file read.
 
-### 7.4 Protocol MCP (Serveurs Externes)
-- [X] **Action** : Allez dans l'onglet Settings > MCP. Ajoutez un serveur MCP externe (par exemple le serveur local "sqlite" ou "brave-search").
-- [X] **Résultat attendu** : Le serveur s'initialise. Si vous demandez à l'Agent "Utilise Brave Search pour chercher les news du jour", il utilisera automatiquement l'outil fourni par le serveur MCP.
+### 7.4 MCP Protocol (External Servers)
+- [X] **Action**: Go to Settings > MCP. Add an external MCP server (for example the local "sqlite" or "brave-search" server).
+- [X] **Expected result**: The server initializes. If you ask the Agent "Use Brave Search to look up today's news", it will automatically use the tool provided by the MCP server.
 
 ---
 
-## 8. Interface Webview (UI)
+## 8. Webview Interface (UI)
 
-### 8.1 Markdown et Code Highlighting
-- [X] **Action** : Demandez du code Python, HTML, et Rust.
-- [X] **Résultat attendu** : Le code est correctement coloré dans le Chat (PrismJS) avec un bouton de copie fonctionnel ("Copy to clipboard").
+### 8.1 Markdown and Code Highlighting
+- [X] **Action**: Ask for Python, HTML, and Rust code.
+- [X] **Expected result**: The code is correctly highlighted in the Chat (PrismJS) with a working copy button ("Copy to clipboard").
 
-### 8.2 Bouton d'Annulation (Kill Switch) 
-- [X] **Action** : Demandez à l'IA d'écrire un très long script ou lancez une boucle d'agent complexe. Pendant que l'IA génère sa réponse, cliquez sur le bouton "Stop" (carré) qui a remplacé le bouton d'envoi.
-- [X] **Résultat attendu** : La génération s'arrête instantanément, l'appel réseau est annulé (`AbortController`), et l'interface redevient disponible pour un nouveau message.
+### 8.2 Cancel Button (Kill Switch)
+- [X] **Action**: Ask the AI to write a very long script or trigger a complex agent loop. While the AI is generating its response, click the "Stop" (square) button that replaced the send button.
+- [X] **Expected result**: Generation stops instantly, the network call is aborted (`AbortController`), and the interface becomes available again for a new message.
 
 ### 8.3 Navigation
-- [X] **Action** : Passez de l'onglet Chat à l'onglet Settings, puis Analytics.
-- [X] **Résultat attendu** : La transition est fluide (sans rechargement complet de la page). Les Settings conservent leurs valeurs.
+- [X] **Action**: Switch from the Chat tab to the Settings tab, then Analytics.
+- [X] **Expected result**: The transition is smooth (no full page reload). Settings retain their values.
 
 ---
 
-## 9. Onboarding (Écran de Bienvenue)
+## 9. Onboarding (Welcome Screen)
 
-### 9.1 Premier lancement (aucun modèle)
-- [X] **Prérequis** : Videz ou supprimez `~/.jarvis/config.json` (aucun modèle configuré), puis lancez l'Extension Development Host (`F5`).
-- [X] **Action** : Ouvrez le panneau Jarvis.
-- [X] **Résultat attendu** : Au lieu de la simple bannière « No model configured », un **écran de Bienvenue plein panneau** s'affiche : titre, indicateur d'étapes (Provider → Connexion → Tour) et une grille de fournisseurs (Ollama, OpenRouter, OpenAI, Anthropic, Mistral, LM Studio).
+### 9.1 First launch (no model)
+- [X] **Prerequisite**: Empty or delete `~/.jarvis/config.json` (no model configured), then launch the Extension Development Host (`F5`).
+- [X] **Action**: Open the Jarvis panel.
+- [X] **Expected result**: Instead of the simple "No model configured" banner, a **full-panel Welcome screen** appears: title, step indicator (Provider → Connection → Tour), and a grid of providers (Ollama, OpenRouter, OpenAI, Anthropic, Mistral, LM Studio).
 
-### 9.2 Test de connexion d'un provider
-- [X] **Action** : Choisissez un fournisseur (ex. Ollama), renseignez un modèle (ex. `qwen2.5-coder:7b`), cliquez « Continuer » puis « Tester la connexion ».
-- [X] **Résultat attendu** : Un « ping » est envoyé via un provider éphémère. En cas de succès, un bandeau vert « Connexion réussie » apparaît. En cas d'erreur (clé invalide, serveur éteint), un bandeau rouge affiche le message d'erreur. La config n'est PAS encore sauvegardée à ce stade.
+### 9.2 Testing a provider connection
+- [X] **Action**: Choose a provider (e.g. Ollama), fill in a model (e.g. `qwen2.5-coder:7b`), click "Continue" then "Test connection".
+- [X] **Expected result**: A "ping" is sent via an ephemeral provider. On success, a green "Connection successful" banner appears. On error (invalid key, server down), a red banner shows the error message. The config is NOT yet saved at this stage.
 
-### 9.3 Tour visuel des 3 features
-- [X] **Action** : Cliquez « Enregistrer et continuer ». Le modèle est persisté (via `updateSettings`) et devient le modèle par défaut. Le tour démarre.
-- [X] **Résultat attendu** : Trois slides successives présentent **le Chat agentique**, **l'édition inline Cmd+K** et **les @mentions** (`@file:` / `@docs:`). La navigation (points + Précédent/Suivant) fonctionne. Le bouton final « Commencer à coder » ferme l'écran et ouvre le chat.
+### 9.3 Visual tour of the 3 features
+- [X] **Action**: Click "Save and continue". The model is persisted (via `updateSettings`) and becomes the default model. The tour starts.
+- [X] **Expected result**: Three successive slides present **the agentic Chat**, **inline Cmd+K editing**, and **@mentions** (`@file:` / `@docs:`). Navigation (dots + Previous/Next) works. The final "Start coding" button closes the screen and opens the chat.
 
-### 9.4 Non-réaffichage après complétion
-- [X] **Action** : Rechargez la fenêtre (`Developer: Reload Window`).
-- [X] **Résultat attendu** : L'écran de Bienvenue **ne réapparaît pas** (l'état `jarvis.onboardingDone` est stocké dans le `globalState`). Le chat s'ouvre directement. (Un utilisateur déjà configuré arrive directement au tour la 1ʳᵉ fois, puis plus jamais.)
+### 9.4 Not reappearing after completion
+- [X] **Action**: Reload the window (`Developer: Reload Window`).
+- [X] **Expected result**: The Welcome screen **does not reappear** (the `jarvis.onboardingDone` state is stored in `globalState`). The chat opens directly. (A user who is already configured lands directly on the tour the 1st time, then never again.)
 
 ---
 
-## 10. Prompt Caching (implicite + statistiques)
+## 10. Prompt Caching (implicit + stats)
 
-### 10.1 Tokens « cached » visibles dans la jauge
-- [X] **Prérequis** : Un modèle cloud avec cache implicite (OpenAI `gpt-4o-mini`, DeepSeek via OpenRouter…).
-- [X] **Action** : Envoyez un premier message long (grand contexte : règles + fichiers). Puis, dans la même discussion, envoyez un second message qui réutilise le même préfixe système.
-- [X] **Résultat attendu** : Dépliez la jauge de tokens (« Tokens used »). À partir du 2ᵉ message, une ligne verte **« ⚡ Cached: N »** apparaît, indiquant les tokens du prompt servis depuis le cache du provider (issus de `usage.prompt_tokens_details.cached_tokens` / `prompt_cache_hit_tokens`).
+### 10.1 "Cached" tokens visible in the gauge
+- [X] **Prerequisite**: A cloud model with implicit caching (OpenAI `gpt-4o-mini`, DeepSeek via OpenRouter…).
+- [X] **Action**: Send a first long message (large context: rules + files). Then, in the same conversation, send a second message that reuses the same system prefix.
+- [X] **Expected result**: Expand the token gauge ("Tokens used"). Starting from the 2nd message, a green **"⚡ Cached: N"** line appears, indicating the prompt tokens served from the provider's cache (from `usage.prompt_tokens_details.cached_tokens` / `prompt_cache_hit_tokens`).
 
-### 10.2 Latence réduite sur préfixe stable
-- [X] **Action** : Comparez le temps de première réponse entre le 1ᵉʳ appel (cache froid) et les suivants (cache chaud).
-- [X] **Résultat attendu** : Les appels réutilisant le préfixe stable (system prompt + règles) répondent plus vite. Aucun réglage manuel : le cache est géré côté API tant que le préfixe reste identique d'un tour à l'autre.
+### 10.2 Reduced latency on a stable prefix
+- [X] **Action**: Compare the time to first response between the 1st call (cold cache) and subsequent ones (warm cache).
+- [X] **Expected result**: Calls reusing the stable prefix (system prompt + rules) respond faster. No manual setting: the cache is managed on the API side as long as the prefix stays identical from one turn to the next.
 
 ---
 
 ## 11. Structured Outputs (JSON Mode)
 
-### 11.1 Boucle agent sans casse de parsing
-- [X] **Prérequis** : Un petit modèle local (ex. Ollama `llama3:8b` ou `qwen2.5-coder:7b`).
-- [X] **Action** : Lancez `/agent crée un composant React Button` (ou un mode Automatique déclenchant l'orchestrateur).
-- [X] **Résultat attendu** : Les appels modèle de la boucle agent envoient `response_format: {type:'json_object'}` (OpenAI-compatible) ou `format:'json'` (Ollama). Le modèle renvoie systématiquement un JSON parsable ; **aucune erreur « Format inattendu »** n'interrompt la chaîne d'outils. `json-cleaner` reste un filet de sécurité.
+### 11.1 Agent loop without parsing breakage
+- [X] **Prerequisite**: A small local model (e.g. Ollama `llama3:8b` or `qwen2.5-coder:7b`).
+- [X] **Action**: Run `/agent create a React Button component` (or an Automatic mode triggering the orchestrator).
+- [X] **Expected result**: The agent loop's model calls send `response_format: {type:'json_object'}` (OpenAI-compatible) or `format:'json'` (Ollama). The model consistently returns parsable JSON; **no "Unexpected format" error** interrupts the tool chain. `json-cleaner` remains a safety net.
 
-### 11.2 Fallback automatique si non supporté
-- [X] **Action** : Utilisez un endpoint qui rejette `response_format` (certains serveurs OpenAI-compatible anciens).
-- [X] **Résultat attendu** : Au premier refus (HTTP 400 mentionnant `response_format`/`json`), l'orchestrateur **désactive le mode JSON pour ce provider** (mémorisé), journalise « Mode JSON non supporté… repli sur le prompt » dans l'OutputChannel, et **rejoue l'itération sans l'option**. La boucle continue normalement, sans nouvel essai coûteux aux requêtes suivantes.
-
----
-
-## 12. Persistance de Session (Jauge & Historique)
-
-### 12.1 Jauge restaurée après Reload Window
-- [X] **Action** : Discutez jusqu'à faire monter la jauge (tokens > 0), puis `Developer: Reload Window`.
-- [X] **Résultat attendu** : Après rechargement, la **jauge de tokens conserve sa valeur** (input/output/cached + historique des 5 dernières requêtes), restaurée depuis le `workspaceState` (`jarvis.tokenState`).
-
-### 12.2 Historique du chat restauré
-- [X] **Action** : Après le reload, observez le panneau de chat.
-- [X] **Résultat attendu** : Les **messages de la discussion en cours réapparaissent** (rehydratation depuis `SessionStore` / `.vscode/jarvis-sessions.json`). La conversation peut continuer avec le contexte précédent.
-
-### 12.3 Persistance après redémarrage complet
-- [X] **Action** : Fermez entièrement VS Code puis rouvrez le même workspace.
-- [X] **Résultat attendu** : Jauge et historique sont toujours présents (le `workspaceState` survit au redémarrage). `/new` remet à zéro la jauge ET l'instantané persisté.
+### 11.2 Automatic fallback if unsupported
+- [X] **Action**: Use an endpoint that rejects `response_format` (some older OpenAI-compatible servers).
+- [X] **Expected result**: On the first rejection (HTTP 400 mentioning `response_format`/`json`), the orchestrator **disables JSON mode for that provider** (remembered), logs "JSON mode not supported… falling back to prompt" in the OutputChannel, and **replays the iteration without the option**. The loop continues normally, without a costly new attempt on subsequent requests.
 
 ---
 
----
+## 12. Session Persistence (Gauge & History)
 
-## 13. Finalisation v1 (audit du 11/07/2026)
+### 12.1 Gauge restored after Reload Window
+- [X] **Action**: Chat until the gauge goes up (tokens > 0), then `Developer: Reload Window`.
+- [X] **Expected result**: After reloading, the **token gauge keeps its value** (input/output/cached + history of the last 5 requests), restored from `workspaceState` (`jarvis.tokenState`).
 
-Scénarios couvrant les 9 chantiers de finalisation issus de `docs/audit-2026-07-11.md`. À exécuter après un `npm run build` propre (backend + webview).
+### 12.2 Chat history restored
+- [X] **Action**: After the reload, look at the chat panel.
+- [X] **Expected result**: The **messages from the ongoing conversation reappear** (rehydrated from `SessionStore` / `.vscode/jarvis-sessions.json`). The conversation can continue with the previous context.
 
-### 13.1 Agents spécialisés — restriction d'outils réelle
-
-- [X] **Action** : Tapez `@Security-Agent audite ce fichier et corrige les failles que tu trouves` sur un fichier contenant un problème évident (ex: secret en dur).
-- [X] **Résultat attendu** : L'agent lit le code et liste les problèmes, mais **ne tente jamais** d'appeler `edit_existing_file`/`create_new_file`/`run_terminal_command` (il n'a pas ces outils — si le modèle essaie, l'orchestrateur renverra "Outil inconnu"). Il vous propose le correctif en texte plutôt que de l'appliquer.
-- [X] **Action** : Tapez `@QA-Agent lance les tests du projet et résume les échecs`.
-- [X] **Résultat attendu** : L'agent utilise `run_terminal_command`/`grep_search` sans éditer de fichier.
-- [X] **Action** : Dans Settings > Agents, dépliez un agent et vérifiez le champ "Allowed tools" — modifiez-le (ex: retirez `run_terminal_command` de QA-Agent), sauvegardez, puis redemandez une tâche à cet agent.
-- [X] **Résultat attendu** : La modification est prise en compte immédiatement (pas besoin de recharger la fenêtre).
-
-### 13.2 Ouverture automatique du fichier édité
-
-- [X] **Action** : Demandez à l'agent de modifier 2-3 fichiers différents dans une même tâche (ex: "renomme la fonction foo en bar dans ces 3 fichiers").
-- [X] **Résultat attendu** : Après chaque édition, le fichier concerné s'ouvre au premier plan dans l'éditeur (onglet en italique = "preview"), et les décorations vert/rouge sont visibles. Un seul onglet preview est réutilisé à chaque édition suivante (pas d'empilement de 3 onglets distincts).
-- [X] **Action** : Dans Settings > Optimization, passez "Auto-open edited files" à `never`, puis redemandez une édition.
-- [X] **Résultat attendu** : Le fichier n'est plus amené au premier plan automatiquement (vous devez toujours accepter/rejeter via le panneau de revue de diff dans le chat, qui reste inchangé).
-
-### 13.3 Recherche web (Brave Search API)
-
-- [ ] **Prérequis** : Obtenez une clé API gratuite sur [api.search.brave.com/app/keys](https://api.search.brave.com/app/keys), renseignez-la dans Settings > Web Search.
-- [ ] **Action** : Demandez "Cherche sur le web la dernière version stable de Svelte".
-- [ ] **Résultat attendu** : L'agent appelle `search_web` et obtient de vrais résultats (titres + liens + extraits), pas un message d'erreur.
-- [ ] **Action** : Sans clé API configurée (retirez-la), redemandez la même chose.
-- [ ] **Résultat attendu** : L'outil répond que la recherche web n'est pas configurée (pas de crash, pas d'erreur réseau visible).
-- [ ] **Action** : Dans Settings > Web Search, cochez "stackoverflow.com" comme source par défaut, puis redemandez une recherche sans préciser de site.
-- [ ] **Résultat attendu** : Les résultats sont restreints à StackOverflow (vérifiable dans les URLs retournées).
-
-### 13.4 `JARVIS.md` et commande `/init`
-
-- [X] **Action** : Sur un dossier qui n'est pas encore un dépôt git, tapez `/init` dans le chat.
-- [X] **Résultat attendu** : Une boîte de dialogue demande confirmation pour `git init` ; après acceptation, un dossier `.git` apparaît, puis l'agent analyse le projet et crée `JARVIS.md` à la racine avec les sections Project Overview / Build & Test Commands / Architecture / Conventions / Notes for Agents.
-- [X] **Action** : Relancez `/init` alors que `JARVIS.md` existe déjà.
-- [X] **Résultat attendu** : Une confirmation est demandée avant d'écraser le fichier existant ; en refusant, le fichier reste inchangé.
-- [X] **Action** : Éditez manuellement `JARVIS.md` pour y ajouter une instruction distinctive (ex: "Réponds toujours en commençant par 🚀"), puis posez une question dans le chat.
-- [X] **Résultat attendu** : L'agent respecte l'instruction — confirmant que `JARVIS.md` est bien injecté dans le prompt système (agents, workflows, et chat direct).
-- [X] **Test palette** : `Ctrl+Shift+P` → `Jarvis: Initialize Project (generate JARVIS.md)`.
-- [X] **Résultat attendu** : Ouvre la sidebar et déclenche `/init` comme ci-dessus.
-
-### 13.5 Règles par dossier
-
-- [X] **Action** : Dans Settings > Rules, créez une règle "Backend only" avec le contenu "Utilise toujours des imports relatifs avec suffixe .js" et un scope `src/backend/**`.
-- [X] **Action** : Ouvrez un fichier dans `src/backend/`, posez une question générale à l'agent (n'importe laquelle, pour vérifier l'injection du prompt).
-- [X] **Résultat attendu** : La règle s'applique (visible si vous demandez à l'agent de citer ses instructions, ou observable dans le style du code généré).
-- [X] **Action** : Ouvrez un fichier dans `src/frontend/` à la place, reposez une question.
-- [X] **Résultat attendu** : La règle scopée à `src/backend/**` ne s'applique plus.
-
-### 13.6 Checklist TODO visuelle
-
-- [X] **Action** : Lancez `/workflow dev-feature ajoute une fonction utilitaire de formatage de date`.
-- [X] **Résultat attendu** : **Avant même le début de la première étape**, une checklist "Tasks (0/4)" apparaît au-dessus de la zone de saisie avec les 4 étapes du workflow (Planifier/Coder/Tester/Commiter). Chaque étape passe à "in_progress" puis "completed" au fur et à mesure.
-- [X] **Action** : Une fois le workflow terminé, tapez `/new`.
-- [X] **Résultat attendu** : La checklist disparaît.
-- [X] **Action** : Lancez une tâche agentique simple (`/agent ...`) sur un modèle qui supporte bien les tool calls, en lui demandant explicitement de "découper la tâche en étapes avec la checklist".
-- [X] **Résultat attendu** : Le modèle peut appeler l'outil `update_todo_list` et la checklist apparaît/se met à jour sans jamais demander de confirmation HITL (même en mode strict).
-
-### 13.7 Autocomplete inline (Tab)
-
-- [X] **Prérequis** : Dans Settings > Optimization, activez "Inline autocomplete (Tab)" (désactivé par défaut).
-- [X] **Action** : Ouvrez un fichier de code, placez le curseur en fin de ligne incomplète (ex: `const total = `), attendez ~0.5s sans taper.
-- [X] **Résultat attendu** : Un texte fantôme (ghost text) grisé apparaît proposant une complétion ; `Tab` l'accepte, `Échap` ou continuer à taper l'annule.
-- [X] **Action** : Continuez à taper rapidement sans pause.
-- [X] **Résultat attendu** : Aucune requête n'est déclenchée tant que vous tapez (debounce) — pas de ghost text qui clignote à chaque frappe.
-- [X] **Action** : Désactivez le réglage, retestez.
-- [X] **Résultat attendu** : Plus aucune complétion ne se déclenche.
-- [X] **Optionnel** : Dans Settings > Models, taguez un modèle local rapide (ex. Ollama `qwen2.5-coder:7b`) avec le rôle `autocomplete`, puis retestez.
-- [X] **Résultat attendu** : Les complétions utilisent ce modèle plutôt que le modèle de chat par défaut.
-
-### 13.8 Nettoyage UI (non-régression)
-
-- [X] **Action** : Dans Settings > Models, dépliez un modèle et regardez les toggles de rôles.
-- [X] **Résultat attendu** : Seuls `chat`, `edit`, `apply`, `autocomplete` sont proposés (plus de `embed`/`rerank`/`summarize`).
-- [X] **Action** : Changez le mode HITL dans Settings (Optimization > HITL mode) sans cliquer sur "Save".
-- [X] **Résultat attendu** : Le changement est appliqué immédiatement (visible dans le comportement d'approbation d'une commande terminal suivante), pas seulement après sauvegarde.
-- [X] **Action** : Videz le chat (aucun message), observez l'état vide.
-- [X] **Résultat attendu** : Deux boutons "New chat" / "Resume past conversation" sont visibles et fonctionnels.
-- [X] **Action** : Passez en mode "Plan", laissez l'agent proposer un plan.
-- [X] **Résultat attendu** : Le bouton "Review" affiche une icône crayon correcte (plus de rond générique) ; de même pour le badge "Working..." (icône puce) et le bouton stop (icône carré).
-- [X] **Action** : Dans Settings > Models, sélectionnez le provider "huggingface".
-- [X] **Résultat attendu** : Le champ "API base URL" se pré-remplit correctement (plus de champ vide/`undefined`).
+### 12.3 Persistence after a full restart
+- [X] **Action**: Fully close VS Code then reopen the same workspace.
+- [X] **Expected result**: Gauge and history are still present (`workspaceState` survives the restart). `/new` resets both the gauge AND the persisted snapshot.
 
 ---
 
-**Cahier de test clôturé.** Si toutes ces étapes fonctionnent comme prévu, l'extension est robuste, **prête pour la publication sur le VS Code Marketplace (V1.0)** et l'utilisation optimale avec n'importe quel LLM.
+---
+
+## 13. V1 Finalization (2026-07-11 audit)
+
+Scenarios covering the 9 finalization workstreams from `docs/audit-2026-07-11.md`. Run after a clean `npm run build` (backend + webview).
+
+### 13.1 Specialized agents — real tool restriction
+
+- [X] **Action**: Type `@Security-Agent audit this file and fix the flaws you find` on a file containing an obvious issue (e.g. a hardcoded secret).
+- [X] **Expected result**: The agent reads the code and lists the issues, but **never attempts** to call `edit_existing_file`/`create_new_file`/`run_terminal_command` (it doesn't have those tools — if the model tries, the orchestrator returns "Unknown tool"). It suggests the fix as text rather than applying it.
+- [X] **Action**: Type `@QA-Agent run the project's tests and summarize the failures`.
+- [X] **Expected result**: The agent uses `run_terminal_command`/`grep_search` without editing any file.
+- [X] **Action**: In Settings > Agents, expand an agent and check the "Allowed tools" field — edit it (e.g. remove `run_terminal_command` from QA-Agent), save, then ask that agent for a task again.
+- [X] **Expected result**: The change takes effect immediately (no need to reload the window).
+
+### 13.2 Auto-opening the edited file
+
+- [X] **Action**: Ask the agent to modify 2-3 different files in the same task (e.g. "rename function foo to bar in these 3 files").
+- [X] **Expected result**: After each edit, the file in question opens in the foreground in the editor (italicized tab = "preview"), and the green/red decorations are visible. A single preview tab is reused for each subsequent edit (no stacking of 3 separate tabs).
+- [X] **Action**: In Settings > Optimization, set "Auto-open edited files" to `never`, then request another edit.
+- [X] **Expected result**: The file is no longer automatically brought to the foreground (you must still accept/reject via the diff review panel in the chat, which remains unchanged).
+
+### 13.3 Web Search (DuckDuckGo, free)
+
+- [ ] **Prerequisite**: none — no API key, no account to create.
+- [ ] **Action**: Ask "Search the web for the latest stable version of Svelte".
+- [ ] **Expected result**: The agent calls `search_web` and gets real results (titles + links + snippets), not an error message.
+- [ ] **Action**: In Settings > Web Search, check "stackoverflow.com" as a default source, then request a search again without specifying a site.
+- [ ] **Expected result**: The results are restricted to StackOverflow (verifiable in the returned URLs).
+
+### 13.4 `JARVIS.md` and the `/init` command
+
+- [X] **Action**: On a folder that isn't a git repo yet, type `/init` in the chat.
+- [X] **Expected result**: A dialog asks for confirmation to `git init`; after accepting, a `.git` folder appears, then the agent analyzes the project and creates `JARVIS.md` at the root with the Project Overview / Build & Test Commands / Architecture / Conventions / Notes for Agents sections.
+- [X] **Action**: Rerun `/init` while `JARVIS.md` already exists.
+- [X] **Expected result**: A confirmation is requested before overwriting the existing file; if declined, the file remains unchanged.
+- [X] **Action**: Manually edit `JARVIS.md` to add a distinctive instruction (e.g. "Always answer starting with 🚀"), then ask a question in the chat.
+- [X] **Expected result**: The agent follows the instruction — confirming that `JARVIS.md` is indeed injected into the system prompt (agents, workflows, and direct chat).
+- [X] **Palette test**: `Ctrl+Shift+P` → `Jarvis: Initialize Project (generate JARVIS.md)`.
+- [X] **Expected result**: Opens the sidebar and triggers `/init` as above.
+
+### 13.5 Folder-scoped rules
+
+- [X] **Action**: In Settings > Rules, create a "Backend only" rule with the content "Always use relative imports with a .js suffix" and a scope of `src/backend/**`.
+- [X] **Action**: Open a file in `src/backend/`, ask the agent a general question (any one, to verify the prompt injection).
+- [X] **Expected result**: The rule applies (visible if you ask the agent to quote its instructions, or observable in the style of the generated code).
+- [X] **Action**: Open a file in `src/frontend/` instead, ask a question again.
+- [X] **Expected result**: The rule scoped to `src/backend/**` no longer applies.
+
+### 13.6 Visual TODO checklist
+
+- [X] **Action**: Run `/workflow dev-feature add a date-formatting utility function`.
+- [X] **Expected result**: **Even before the first step begins**, a "Tasks (0/4)" checklist appears above the input box with the workflow's 4 steps (Plan/Code/Test/Commit). Each step moves to "in_progress" then "completed" as it progresses.
+- [X] **Action**: Once the workflow is finished, type `/new`.
+- [X] **Expected result**: The checklist disappears.
+- [X] **Action**: Run a simple agentic task (`/agent ...`) on a model that supports tool calls well, explicitly asking it to "break the task into steps with the checklist".
+- [X] **Expected result**: The model can call the `update_todo_list` tool and the checklist appears/updates without ever asking for HITL confirmation (even in strict mode).
+
+### 13.7 Inline autocomplete (Tab)
+
+- [X] **Prerequisite**: In Settings > Optimization, enable "Inline autocomplete (Tab)" (disabled by default).
+- [X] **Action**: Open a code file, place the cursor at the end of an incomplete line (e.g. `const total = `), wait ~0.5s without typing.
+- [X] **Expected result**: Grayed-out ghost text appears suggesting a completion; `Tab` accepts it, `Escape` or continuing to type cancels it.
+- [X] **Action**: Keep typing quickly without pausing.
+- [X] **Expected result**: No request is triggered while you're typing (debounce) — no ghost text flickering on every keystroke.
+- [X] **Action**: Disable the setting, retest.
+- [X] **Expected result**: No completion triggers anymore.
+- [X] **Optional**: In Settings > Models, tag a fast local model (e.g. Ollama `qwen2.5-coder:7b`) with the `autocomplete` role, then retest.
+- [X] **Expected result**: Completions use that model instead of the default chat model.
+
+### 13.8 UI Cleanup (non-regression)
+
+- [X] **Action**: In Settings > Models, expand a model and look at the role toggles.
+- [X] **Expected result**: Only `chat`, `edit`, `apply`, `autocomplete` are offered (no more `embed`/`rerank`/`summarize`).
+- [X] **Action**: Change the HITL mode in Settings (Optimization > HITL mode) without clicking "Save".
+- [X] **Expected result**: The change is applied immediately (visible in the approval behavior of the next terminal command), not only after saving.
+- [X] **Action**: Clear the chat (no messages), observe the empty state.
+- [X] **Expected result**: Two buttons, "New chat" / "Resume past conversation", are visible and functional.
+- [X] **Action**: Switch to "Plan" mode, let the agent propose a plan.
+- [X] **Expected result**: The "Review" button shows the correct pencil icon (no more generic circle); same for the "Working..." badge (chip icon) and the stop button (square icon).
+- [X] **Action**: In Settings > Models, select the "huggingface" provider.
+- [X] **Expected result**: The "API base URL" field pre-fills correctly (no more empty/`undefined` field).
+
+---
+
+**Test book closed.** If all these steps work as expected, the extension is robust, **ready for publication on the VS Code Marketplace (V1.0)**, and for optimal use with any LLM.

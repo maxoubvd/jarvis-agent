@@ -17,6 +17,7 @@
     SettingsDefaults,
     WebSearchConfig
   } from '../shared/types';
+  import { DEFAULT_WEB_SEARCH_SITES } from '../shared/types';
   import Icon from './Icon.svelte';
   import Toggle from './Toggle.svelte';
   import ModelsSection from './settings/ModelsSection.svelte';
@@ -70,16 +71,16 @@
   let agents = $state<SpecializedAgent[]>([]);
   let workflows = $state<Workflow[]>([]);
   let builtinToggles = $state<Record<string, boolean>>({});
-  /** Politique par tool de chaque serveur MCP intégré (id → tool → policy ; absent = ask). */
+  /** Per-tool policy for each built-in MCP server (id → tool → policy; absent = ask). */
   let builtinToolPolicies = $state<Record<string, Record<string, ToolPolicy>>>({});
   let toolPolicies = $state<Record<string, ToolPolicy>>({});
   let docs = $state<DocSite[]>([]);
   let workspaces = $state<WorkspaceProfile[]>([]);
-  let webSearch = $state<WebSearchConfig>({ provider: 'brave' });
+  let webSearch = $state<WebSearchConfig>({ provider: 'duckduckgo', defaultSites: DEFAULT_WEB_SEARCH_SITES });
   let dirty = $state(false);
   let confirmingReset = $state(false);
 
-  // Re-synchronise l'état local quand une nouvelle config arrive du backend.
+  // Re-syncs local state whenever a new config arrives from the backend.
   $effect(() => {
     const incoming = settings;
     if (!incoming) return;
@@ -89,7 +90,7 @@
     optimization = structuredClone($state.snapshot(incoming.optimization ?? {}));
     mcpEntries = Object.entries(incoming.mcpServers ?? {}).map(([key, raw]) => {
       const value = structuredClone($state.snapshot(raw)) as McpServerConfig;
-      // Migration legacy : disabledTools → toolPolicies[tool] = excluded.
+      // Legacy migration: disabledTools → toolPolicies[tool] = excluded.
       const policies = { ...(value.toolPolicies ?? {}) };
       for (const tool of value.disabledTools ?? []) {
         if (!policies[tool]) policies[tool] = 'excluded';
@@ -105,11 +106,13 @@
     });
     rules = structuredClone($state.snapshot(incoming.rules ?? []));
     prompts = structuredClone($state.snapshot(incoming.prompts ?? [])) as PromptItem[];
-    webSearch = structuredClone($state.snapshot(incoming.webSearch ?? { provider: 'brave' }));
-    // Pré-remplit avec les défauts codés en dur quand la config est vide
-    // (même sémantique que getAgents/getWorkflows : config non vide gagne).
-    // $state.snapshot est obligatoire des deux côtés : structuredClone ne sait
-    // pas cloner un proxy $state et ferait planter tout le webview.
+    webSearch = structuredClone(
+      $state.snapshot(incoming.webSearch ?? { provider: 'duckduckgo', defaultSites: DEFAULT_WEB_SEARCH_SITES })
+    );
+    // Pre-fills with the hardcoded defaults when the config is empty
+    // (same semantics as getAgents/getWorkflows: non-empty config wins).
+    // $state.snapshot is mandatory on both sides: structuredClone can't
+    // clone a $state proxy and would crash the entire webview.
     agents = structuredClone(
       $state.snapshot(incoming.agents?.length ? incoming.agents : (defaults?.agents ?? []))
     ) as SpecializedAgent[];
@@ -125,7 +128,7 @@
     builtinToolPolicies = Object.fromEntries(
       (defaults?.builtinMcp ?? []).map(b => {
         const override = incoming.builtinMcp?.[b.id];
-        // Migration legacy : disabledTools → excluded.
+        // Legacy migration: disabledTools → excluded.
         const policies: Record<string, ToolPolicy> = { ...(override?.toolPolicies ?? {}) };
         for (const tool of override?.disabledTools ?? []) {
           if (!policies[tool]) policies[tool] = 'excluded';
@@ -147,7 +150,7 @@
 
   function onBuiltinToolPolicy(id: string, tool: string, policy: ToolPolicy) {
     const current = { ...(builtinToolPolicies[id] ?? {}) };
-    // `ask` est le défaut MCP — on n'écrit que les écarts.
+    // `ask` is the MCP default — only deviations are written.
     if (policy === 'ask') delete current[tool];
     else current[tool] = policy;
     builtinToolPolicies[id] = current;
@@ -168,7 +171,7 @@
 
   // --- Rules ---
 
-  /** Cartes de règles dépliées (nouvelle règle = ouverte en édition). */
+  /** Expanded rule cards (a new rule opens in edit mode). */
   let expandedRules = $state<Record<string, boolean>>({});
 
   function addRule() {
@@ -184,9 +187,9 @@
   }
 
   /**
-   * Règle omit-if-unchanged : si la liste éditée est identique aux défauts,
-   * on n'écrit rien dans la config — les futurs changements de défauts restent
-   * ainsi suivis (sémantique getAgents/getWorkflows : « config non vide gagne »).
+   * Omit-if-unchanged rule: if the edited list is identical to the defaults,
+   * nothing is written to the config — future default changes remain tracked
+   * this way (getAgents/getWorkflows semantics: "non-empty config wins").
    */
   function omitIfDefault<T>(edited: T[], defaultItems: T[] | undefined): T[] | undefined {
     if (edited.length === 0) return undefined;
@@ -194,7 +197,7 @@
     return edited;
   }
 
-  /** N'écrit un override que si l'activation diffère du défaut ou des politiques par tool existent. */
+  /** Only writes an override if the enabled state differs from the default or per-tool policies exist. */
   function serializeBuiltinMcp(): Record<string, BuiltinMcpOverride> | undefined {
     const out: Record<string, BuiltinMcpOverride> = {};
     for (const b of defaults?.builtinMcp ?? []) {
@@ -202,7 +205,7 @@
       const enabled = builtinToggles[b.id] ?? b.defaultEnabled;
       if (enabled !== b.defaultEnabled) override.enabled = enabled;
       const policies = builtinToolPolicies[b.id] ?? {};
-      // disabledTools (legacy) n'est plus écrit : migré vers toolPolicies.
+      // disabledTools (legacy) is no longer written: migrated to toolPolicies.
       if (Object.keys(policies).length > 0) override.toolPolicies = { ...policies };
       if (Object.keys(override).length > 0) out[b.id] = override;
     }
@@ -250,16 +253,16 @@
       toolPolicies: Object.keys(toolPolicies).length > 0 ? toolPolicies : undefined,
       docs: docs.length > 0 ? ($state.snapshot(docs) as DocSite[]) : undefined,
       workspaces: workspaces.length > 0 ? ($state.snapshot(workspaces) as WorkspaceProfile[]) : undefined,
-      // Non édité ici — préservé pour ne pas réinitialiser le workspace actif.
+      // Not edited here — preserved so the active workspace isn't reset.
       activeWorkspaceId: settings?.activeWorkspaceId,
       optimization,
-      webSearch: webSearch.apiKey || (webSearch.defaultSites?.length ?? 0) > 0
+      webSearch: (webSearch.defaultSites?.length ?? 0) > 0
         ? ($state.snapshot(webSearch) as WebSearchConfig)
         : undefined
     };
-    // Dé-proxifie en profondeur (rules, optimization… sont des proxies $state) :
-    // postMessage utilise le clonage structuré, qui plante sur un Proxy — la
-    // sauvegarde échouerait silencieusement.
+    // Deep de-proxies (rules, optimization… are $state proxies):
+    // postMessage uses structured clone, which crashes on a Proxy — the
+    // save would fail silently otherwise.
     return $state.snapshot(config) as JarvisConfig;
   }
 
@@ -350,7 +353,7 @@
     onChange={next => { webSearch = next; markDirty(); }}
   />
 
-  <!-- Tools & MCP servers (politiques d'outils incluses) -->
+  <!-- Tools & MCP servers (tool policies included) -->
   <McpSection
     builtins={defaults?.builtinMcp ?? []}
     {builtinToggles}
@@ -605,7 +608,7 @@
   .save-status.error {
     color: var(--vscode-terminal-ansiRed);
     background: rgba(220, 50, 50, 0.12);
-    /* Le message d'erreur peut être long — autorise le retour à la ligne. */
+    /* The error message can be long — allow line wrapping. */
     white-space: normal;
     max-width: 20rem;
   }

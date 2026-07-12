@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const { mockConnect, FakeStdioClientTransport } = vi.hoisted(() => {
-  /** Mini pub/sub suffisant pour simuler le `.stderr` d'un stdio transport (pas d'import 'events' ici : vi.hoisted() s'exécute avant que les imports du module ne soient évalués). */
+  /** Minimal pub/sub sufficient to simulate `.stderr` of a stdio transport (no 'events' import here: vi.hoisted() executes before module imports are evaluated). */
   class MiniEmitter {
     private listeners: Record<string, Array<(...args: unknown[]) => void>> = {};
     on(event: string, cb: (...args: unknown[]) => void) {
@@ -13,7 +13,7 @@ const { mockConnect, FakeStdioClientTransport } = vi.hoisted(() => {
     }
   }
 
-  /** Transport factice qui se comporte comme un vrai stdio transport côté stderr. */
+  /** Fake transport that behaves like a real stdio transport on stderr. */
   class FakeStdioClientTransport extends MiniEmitter {
     public stderr = new MiniEmitter();
     constructor(public params: unknown) {
@@ -53,10 +53,10 @@ describe('JarvisMcpClient stderr capture', () => {
   });
 
   it('appends captured stderr to the error when the connection closes unexpectedly', async () => {
-    // Régression : un serveur MCP stdio qui crashe au démarrage (ex: mcp-server-git
-    // sur un repo invalide) ne remontait que "MCP error -32000: Connection closed"
-    // — vrai mais inutile pour diagnostiquer la cause réelle. On capture maintenant
-    // le stderr du process et on l'ajoute au message d'erreur affiché.
+    // Regression: an MCP stdio server that crashes on startup (e.g., mcp-server-git
+    // on an invalid repo) only reported "MCP error -32000: Connection closed"
+    // — true but useless for diagnosing the real cause. Now we capture
+    // the process stderr and add it to the displayed error message.
     mockConnect.mockImplementation(async (transport: InstanceType<typeof FakeStdioClientTransport>) => {
       transport.stderr.emit('data', Buffer.from('ERROR:mcp_server_git.server:not a valid Git repository\n'));
       throw new Error('MCP error -32000: Connection closed');

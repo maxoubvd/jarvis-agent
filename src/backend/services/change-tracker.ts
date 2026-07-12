@@ -1,54 +1,54 @@
 import * as vscode from 'vscode';
 import { computeHunks, resolveHunk, type DiffHunk } from './diff.js';
 
-/** Vue d'un fichier en attente de revue, envoyée au webview. */
+/** View of a file pending review, sent to the webview. */
 export interface PendingFileView {
   path: string;
-  /** true = fichier créé par l'IA (rejet du fichier = suppression). */
+  /** true = file created by the AI (rejecting the file = deletion). */
   isNew: boolean;
-  /** Incrémenté à chaque évolution — les résolutions périmées sont ignorées. */
+  /** Incremented on every update — stale resolutions are ignored. */
   revision: number;
   hunks: DiffHunk[];
 }
 
 interface PendingFile {
   path: string;
-  /** Contenu de référence (accepté). `null` = le fichier n'existait pas. */
+  /** Baseline (accepted) content. `null` = the file didn't exist. */
   before: string | null;
-  /** Contenu courant sur disque. */
+  /** Current content on disk. */
   after: string;
   revision: number;
 }
 
-/** Action disque que l'appelant doit exécuter après une résolution. */
+/** Disk action the caller must perform after a resolution. */
 export interface DiskAction {
   path: string;
-  /** `null` = supprimer le fichier (rejet d'une création). */
+  /** `null` = delete the file (rejecting a creation). */
   content: string | null;
 }
 
 /**
- * Suivi des modifications IA pour la revue de diffs (façon Antigravity) :
- * les écritures sont appliquées immédiatement puis revues — accepter un hunk
- * l'intègre à la base de référence, le rejeter réécrit le fichier sans lui.
- * La classe est pure (aucune I/O) : les écritures disque nécessaires sont
- * retournées à l'appelant sous forme de {@link DiskAction}.
+ * Tracks AI changes for diff review (Antigravity-style): writes are applied
+ * immediately and then reviewed — accepting a hunk merges it into the
+ * baseline, rejecting it rewrites the file without it.
+ * The class is pure (no I/O): the disk writes it requires are returned to
+ * the caller as {@link DiskAction}.
  */
 export class ChangeTracker {
   private files = new Map<string, PendingFile>();
-  /** true pendant l'application d'une résolution : nos propres écritures ne sont pas re-suivies. */
+  /** true while applying a resolution: our own writes are not re-tracked. */
   private applying = false;
-  
+
   public readonly onDidChange = new vscode.EventEmitter<void>();
 
-  /** Enregistre une écriture de l'IA (appelé par le listener fileSystem). */
+  /** Records an AI write (called by the fileSystem listener). */
   public record(path: string, before: string | null, after: string): void {
     if (this.applying) return;
     const existing = this.files.get(path);
     if (existing) {
       existing.after = after;
       existing.revision++;
-      // Retour au contenu de référence → plus rien à revoir.
+      // Back to the baseline content → nothing left to review.
       if (existing.before !== null && existing.before === after) this.files.delete(path);
       return;
     }
@@ -57,7 +57,7 @@ export class ChangeTracker {
     this.onDidChange.fire();
   }
 
-  /** Exécute `fn` sans suivre les écritures qu'elle déclenche. */
+  /** Runs `fn` without tracking the writes it triggers. */
   public async runUntracked<T>(fn: () => Promise<T>): Promise<T> {
     this.applying = true;
     try {
@@ -71,14 +71,14 @@ export class ChangeTracker {
     return this.files.size;
   }
 
-  /** Contenu de référence courant d'un fichier en revue (`''` si créé par l'IA), `null` si non suivi. */
+  /** Current baseline content of a file under review (`''` if created by the AI), `null` if untracked. */
   public getBaseline(path: string): string | null {
     const file = this.files.get(path);
     if (!file) return null;
     return file.before ?? '';
   }
 
-  /** true si le fichier est en attente de revue. */
+  /** true if the file is pending review. */
   public isPending(path: string): boolean {
     return this.files.has(path);
   }
@@ -93,8 +93,8 @@ export class ChangeTracker {
   }
 
   /**
-   * Résout un hunk. Retourne l'action disque à appliquer (rejet) ou `null`
-   * (acceptation, ou résolution périmée/inconnue — rien à faire).
+   * Resolves a hunk. Returns the disk action to apply (rejection) or `null`
+   * (acceptance, or a stale/unknown resolution — nothing to do).
    */
   public resolveHunk(
     path: string,
@@ -110,13 +110,13 @@ export class ChangeTracker {
     file.after = resolved.after;
     file.revision++;
     if (file.before === file.after) this.files.delete(path);
-    
+
     this.onDidChange.fire();
 
     return action === 'reject' ? { path, content: resolved.after } : null;
   }
 
-  /** Résout un fichier entier. Rejet d'une création = suppression du fichier. */
+  /** Resolves an entire file. Rejecting a creation = deleting the file. */
   public resolveFile(path: string, action: 'accept' | 'reject'): DiskAction | null {
     const file = this.files.get(path);
     if (!file) return null;
@@ -126,7 +126,7 @@ export class ChangeTracker {
     return { path, content: file.before };
   }
 
-  /** Résout tout. Retourne les actions disque des rejets. */
+  /** Resolves everything. Returns the disk actions for the rejections. */
   public resolveAll(action: 'accept' | 'reject'): DiskAction[] {
     const actions: DiskAction[] = [];
     for (const path of [...this.files.keys()]) {

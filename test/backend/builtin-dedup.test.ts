@@ -40,7 +40,7 @@ describe('builtin-dedup (Settings > Agent tools vs serveurs MCP)', () => {
   it('keeps builtins when the server is absent or the equivalent tool inactive', () => {
     expect(isBuiltinShadowed('read_file', new Map())).toBe(false);
     expect(isBuiltinShadowed('read_file', active({ git: ['git_status'] }))).toBe(false);
-    // Tool équivalent exclu (absent du set) → builtin conservé.
+    // Equivalent tool excluded (absent from set) → builtin kept.
     expect(isBuiltinShadowed('read_file', active({ filesystem: ['write_file'] }))).toBe(false);
     expect(isBuiltinShadowed('git_status', active({ filesystem: ['read_text_file'] }))).toBe(false);
   });

@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/svelte';
 import { tick } from 'svelte';
 
-/** Mock d'acquireVsCodeApi installé avant l'import de l'App (cf. settings-panel.test.ts). */
+/** Mock of acquireVsCodeApi installed before importing App (see settings-panel.test.ts). */
 const posted = vi.hoisted(() => {
   const messages: Array<Record<string, unknown>> = [];
   (globalThis as unknown as { acquireVsCodeApi: unknown }).acquireVsCodeApi = () => ({
@@ -11,7 +11,7 @@ const posted = vi.hoisted(() => {
       messages.push(structuredClone(message) as Record<string, unknown>);
     },
     getState() { return undefined; },
-    setState() { /* no-op en test */ }
+    setState() { /* no-op in test */ }
   });
   return messages;
 });
@@ -26,7 +26,7 @@ function chatTextarea(): HTMLTextAreaElement {
   return screen.getByPlaceholderText(/Ask anything/) as HTMLTextAreaElement;
 }
 
-/** Simule la frappe : valeur + caret + événement input (bind:value + oninput). */
+/** Simulates typing: value + caret + input event (bind:value + oninput). */
 async function type(text: string) {
   const el = chatTextarea();
   el.value = text;
@@ -92,10 +92,10 @@ describe('@ file mentions (Claude Code style)', () => {
 });
 
 describe('@docs: mentions', () => {
-  // La recherche docs est globale (toutes les sources indexées + les .md du
-  // workspace, cf. searchAllDocs côté backend) : il n'y a pas de sélection
-  // "par site". Le menu propose une action unique qui cite la requête tapée,
-  // les sources connues n'apparaissant qu'à titre indicatif dans le detail.
+  // Docs search is global (all indexed sources + the workspace's .md files,
+  // see searchAllDocs on the backend): there's no "per site" selection. The
+  // menu offers a single action that quotes the typed query, with known
+  // sources only shown for reference in the detail.
   it('shows the quoted-query template as soon as "docs" is typed, before the colon', async () => {
     render(App);
     await tick();
@@ -108,7 +108,7 @@ describe('@docs: mentions', () => {
     postToWebview({ type: 'docsSuggestions', docs: [] });
     await tick();
 
-    const item = screen.getByText('Rechercher dans la doc');
+    const item = screen.getByText('Search the docs');
     item.closest('li')!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
     await tick();
 
@@ -129,7 +129,7 @@ describe('@docs: mentions', () => {
     postToWebview({ type: 'docsSuggestions', docs: ['Svelte Docs', 'MDN'] });
     await tick();
 
-    expect(screen.getByText('Rechercher dans la doc')).toBeTruthy();
+    expect(screen.getByText('Search the docs')).toBeTruthy();
     expect(screen.getByText(/Svelte Docs, MDN/)).toBeTruthy();
   });
 
@@ -144,7 +144,7 @@ describe('@docs: mentions', () => {
     postToWebview({ type: 'docsSuggestions', docs: ['MDN'] });
     await tick();
 
-    const item = screen.getByText('Rechercher : "mdn"');
+    const item = screen.getByText('Search: "mdn"');
     item.closest('li')!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
     await tick();
 
@@ -161,7 +161,7 @@ describe('@docs: mentions', () => {
     postToWebview({ type: 'docsSuggestions', docs: [] });
     await tick();
 
-    const item = screen.getByText('Rechercher dans la doc');
+    const item = screen.getByText('Search the docs');
     item.closest('li')!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
     await tick();
 
@@ -170,14 +170,14 @@ describe('@docs: mentions', () => {
     const caret = el.selectionStart!;
     expect(el.value.slice(0, caret)).toBe('@docs:"');
 
-    // Une question multi-mots tapée au caret reste entre les guillemets déjà
-    // en place (le menu ne revoit plus le texte une fois fermé).
-    const question = 'comment créer une api mistral ?';
+    // A multi-word question typed at the caret stays between the quotes
+    // already in place (the menu no longer touches the text once closed).
+    const question = 'how do I create a mistral api ?';
     el.value = el.value.slice(0, caret) + question + el.value.slice(caret);
     el.setSelectionRange(caret + question.length, caret + question.length);
     el.dispatchEvent(new Event('input', { bubbles: true }));
     await tick();
 
-    expect(el.value).toBe('@docs:"comment créer une api mistral ?" ');
+    expect(el.value).toBe('@docs:"how do I create a mistral api ?" ');
   });
 });

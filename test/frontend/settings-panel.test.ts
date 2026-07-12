@@ -4,10 +4,10 @@ import { render, screen, cleanup } from '@testing-library/svelte';
 import { tick } from 'svelte';
 
 /**
- * Mock d'acquireVsCodeApi installé AVANT l'import de l'App (vscode-api.ts
- * capture l'API au chargement du module). Comme le vrai VS Code, postMessage
- * passe par le clonage structuré : un proxy $state résiduel dans le message
- * ferait planter la sauvegarde (bug régressé ici).
+ * Mock of acquireVsCodeApi installed BEFORE importing App (vscode-api.ts
+ * captures the API on module load). Like real VS Code, postMessage
+ * uses structured cloning: a residual $state proxy in the message
+ * would crash the save (regression bug tested here).
  */
 const posted = vi.hoisted(() => {
   const messages: Array<Record<string, unknown>> = [];
@@ -24,9 +24,9 @@ const posted = vi.hoisted(() => {
 import App from '../../src/frontend/App.svelte';
 
 /**
- * Régression du bug « cliquer un light-switch dans les Settings casse tout le
- * front » : on ouvre l'onglet Settings avec une config réaliste (comme le
- * backend l'envoie), puis on actionne les toggles et les boutons expand.
+ * Regression test for bug "clicking a light-switch in Settings breaks the entire
+ * frontend": we open the Settings tab with a realistic config (as the
+ * backend sends it), then we operate the toggles and expand buttons.
  */
 
 function postToWebview(data: Record<string, unknown>) {
@@ -59,8 +59,8 @@ const DEFAULTS = {
     { id: 'fetch', label: 'Fetch (URL)', description: 'fetch', command: '(built-in)', defaultEnabled: true }
   ],
   agentTools: [
-    { name: 'create_new_file', description: 'Crée ou remplace un fichier' },
-    { name: 'run_terminal_command', description: 'Exécute une commande shell' }
+    { name: 'create_new_file', description: 'Creates or replaces a file' },
+    { name: 'run_terminal_command', description: 'Executes a shell command' }
   ],
   customTools: []
 };
@@ -85,18 +85,18 @@ const CONFIG = {
 async function openSettingsWithConfig(defaults: typeof DEFAULTS = DEFAULTS) {
   render(App);
   await tick();
-  // Le backend pousse status + settings au webviewReady.
+  // The backend pushes status + settings on webviewReady.
   postToWebview({ type: 'status', text: 'Connected — model: GPT', models: ['GPT'], model: 'GPT', needsSetup: false });
   postToWebview({ type: 'settings', config: CONFIG, defaults, currentFolder: 'C:\\proj', needsSetup: false });
   await tick();
-  // La navigation est fermée par défaut à l'ouverture : on l'ouvre via le bouton menu.
+  // Navigation is closed by default on open: we open it via the menu button.
   screen.getByRole('button', { name: /Toggle navigation/ }).click();
   await tick();
-  // Naviguer vers Settings (sidebar inline, viewport large par défaut).
+  // Navigate to Settings (sidebar inline, large viewport by default).
   const settingsTab = screen.getAllByRole('button', { name: /Settings/ }).at(-1)!;
   settingsTab.click();
   await tick();
-  // Le backend renvoie settings + mcpStatus quand on entre dans l'onglet.
+  // The backend returns settings + mcpStatus when entering the tab.
   postToWebview({ type: 'settings', config: CONFIG, defaults, currentFolder: 'C:\\proj', needsSetup: false });
   postToWebview({
     type: 'mcpStatus',
@@ -133,7 +133,7 @@ describe('settings panel interactions', () => {
 
     expect(checkbox.checked).toBe(true);
 
-    // L'app doit encore réagir : le bouton expand du serveur memory doit fonctionner.
+    // The app must still be responsive: the memory server expand button should work.
     const memoryCard = screen.getByText('Memory (Knowledge Graph)').closest('.j-card') as HTMLElement;
     const expandBtn = memoryCard.querySelector('.j-expand') as HTMLElement;
     expandBtn.click();
@@ -142,11 +142,11 @@ describe('settings panel interactions', () => {
   });
 
   it('enabling git when the folder needs "git init" asks the backend instead of toggling locally', async () => {
-    // Régression : le dossier ouvert n'est pas lui-même un dépôt git
-    // (requiresGitInit) — cliquer Enabled ne doit PAS activer le toggle
-    // directement, il doit demander au backend le flow de confirmation +
-    // git init (message `requestGitInit`), qui rafraîchira settings/mcpStatus
-    // une fois fait.
+    // Regression: the opened folder is not itself a git repository
+    // (requiresGitInit) — clicking Enabled must NOT activate the toggle
+    // directly, it must request from the backend the confirmation flow +
+    // git init (message `requestGitInit`), which will refresh settings/mcpStatus
+    // once done.
     const defaultsNeedsGitInit = {
       ...DEFAULTS,
       builtinMcp: DEFAULTS.builtinMcp.map(b =>
@@ -162,18 +162,18 @@ describe('settings panel interactions', () => {
     checkbox.click();
     await tick();
 
-    // Pas de toggle optimiste : le backend confirme/refuse avant tout changement visible.
+    // No optimistic toggle: the backend confirms/refuses before any visible change.
     expect(checkbox.checked).toBe(false);
     expect(posted.some(m => m.type === 'requestGitInit' && m.id === 'git')).toBe(true);
-    // Et surtout : pas de sauvegarde silencieuse de la config avec git activé.
+    // And above all: no silent save of the config with git enabled.
     expect(posted.some(m => m.type === 'updateSettings')).toBe(false);
   });
 
   it('clicking a model role toggle keeps the app responsive', async () => {
     await openSettingsWithConfig();
 
-    // Les cartes modèles sont repliées par défaut — on déplie la carte GPT.
-    // (getAllByText : « GPT » apparaît aussi dans le sélecteur de modèle du header.)
+    // Model cards are collapsed by default — we expand the GPT card.
+    // (getAllByText: "GPT" also appears in the model selector in the header.)
     const title = screen.getAllByText('GPT').find(el => el.classList.contains('j-title'))!;
     const modelCard = title.closest('.j-card') as HTMLElement;
     (modelCard.querySelector('.j-expand') as HTMLElement).click();
@@ -192,8 +192,8 @@ describe('settings panel interactions', () => {
     screen.getByRole('button', { name: /Add model/ }).click();
     await tick();
 
-    // La nouvelle carte est ouverte en édition (placeholder du nom visible),
-    // avec le lien vers la page de clé API du provider par défaut (mistral).
+    // The new card is opened in edit mode (name placeholder visible),
+    // with the link to the API key page of the default provider (mistral).
     expect(screen.getByText(/Get API key — mistral/)).toBeTruthy();
     const nameInput = screen.getByPlaceholderText('e.g. GPT-OSS 120B') as HTMLInputElement;
     nameInput.value = 'Mistral';
@@ -203,8 +203,8 @@ describe('settings panel interactions', () => {
     screen.getByRole('button', { name: /Validate/ }).click();
     await tick();
 
-    // La carte est repliée : le formulaire disparaît, l'item reste listé
-    // avec son light-switch Enabled.
+    // The card is collapsed: the form disappears, the item remains listed
+    // with its Enabled light-switch.
     expect(screen.queryByPlaceholderText('e.g. GPT-OSS 120B')).toBeNull();
     const card = screen.getByText('Mistral').closest('.j-card') as HTMLElement;
     const toggle = card.querySelector('input[type="checkbox"]') as HTMLInputElement;
@@ -215,15 +215,15 @@ describe('settings panel interactions', () => {
   it('Save posts a structured-cloneable config (rules + models survive postMessage)', async () => {
     await openSettingsWithConfig();
 
-    // Ajoute une rule (ouverte en édition) et remplit son contenu.
+    // Add a rule (opened in edit mode) and fill its content.
     screen.getByRole('button', { name: /Add rule/ }).click();
     await tick();
     const ruleContent = screen.getByPlaceholderText(/Always write tests/) as HTMLTextAreaElement;
-    ruleContent.value = 'Réponds en français';
+    ruleContent.value = 'Respond in English';
     ruleContent.dispatchEvent(new Event('input', { bubbles: true }));
     await tick();
 
-    // Save — postMessage clone la config : ne doit pas jeter (proxies $state).
+    // Save — postMessage clones the config: must not throw (proxies $state).
     const saveBtn = screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement;
     expect(saveBtn.disabled).toBe(false);
     saveBtn.click();
@@ -233,10 +233,10 @@ describe('settings panel interactions', () => {
       | { config?: { rules?: Array<{ content: string }>; models?: { items: Array<{ name: string }> } } }
       | undefined;
     expect(update).toBeTruthy();
-    expect(update?.config?.rules?.[0]?.content).toBe('Réponds en français');
+    expect(update?.config?.rules?.[0]?.content).toBe('Respond in English');
     expect(update?.config?.models?.items?.[0]?.name).toBe('GPT');
 
-    // Feedback : « Saving… » immédiat, puis « Saved ✓ » à l'ack du backend.
+    // Feedback: "Saving..." immediately, then "Saved checkmark" on backend ack.
     expect(screen.getByRole('status').textContent).toContain('Saving…');
     postToWebview({ type: 'settingsSaved', ok: true });
     await tick();
@@ -246,7 +246,7 @@ describe('settings panel interactions', () => {
   it('tool policies (auto/ask/excluded) are edited and saved', async () => {
     await openSettingsWithConfig();
 
-    // La section Tools liste les outils intégrés avec leur select de politique.
+    // The Tools section lists the built-in tools with their policy select.
     const row = screen.getByText('run_terminal_command').closest('.tool-row') as HTMLElement;
     const select = row.querySelector('select') as HTMLSelectElement;
     select.value = 'ask';
@@ -265,7 +265,7 @@ describe('settings panel interactions', () => {
   it('MCP tool policies default to ask first and are saved per server', async () => {
     await openSettingsWithConfig();
 
-    // Déplie la carte du serveur memory pour lister ses tools.
+    // Expands the memory server card to list its tools.
     const memoryCard = screen.getByText('Memory (Knowledge Graph)').closest('.j-card') as HTMLElement;
     (memoryCard.querySelector('.j-expand') as HTMLElement).click();
     await tick();

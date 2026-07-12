@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from 'child_process';
 
-/** Taille max de la sortie conservée par process (on garde la fin). */
+/** Max output size retained per process (we keep the tail end). */
 const MAX_OUTPUT_CHARS = 20_000;
 
 export interface BackgroundProcessStatus {
@@ -10,7 +10,7 @@ export interface BackgroundProcessStatus {
   running: boolean;
   exitCode: number | null;
   startedAt: string;
-  /** Fin de la sortie combinée stdout+stderr. */
+  /** Tail end of the combined stdout+stderr output. */
   output: string;
 }
 
@@ -25,9 +25,9 @@ interface BackgroundProcessEntry {
 }
 
 /**
- * Processus lancés en arrière-plan par l'agent (outil `run_in_background`) :
- * serveurs de dev, watchers, tâches longues. La sortie est bufferisée (fin
- * conservée) et consultable via `check_background_process`.
+ * Processes launched in the background by the agent (`run_in_background` tool):
+ * dev servers, watchers, long-running tasks. Output is buffered (tail end
+ * retained) and can be inspected via `check_background_process`.
  */
 export class BackgroundProcessManager {
   private processes = new Map<string, BackgroundProcessEntry>();
@@ -77,13 +77,13 @@ export class BackgroundProcessManager {
     return [...this.processes.values()].map(e => this.toStatus(e));
   }
 
-  /** Tue le process (arbre complet sous Windows via taskkill). */
+  /** Kills the process (full tree on Windows via taskkill). */
   public stop(id: string): boolean {
     const entry = this.processes.get(id);
     if (!entry || !entry.running) return false;
     const pid = entry.child.pid;
     if (process.platform === 'win32' && pid) {
-      // child.kill() ne tuerait que cmd.exe, pas ses enfants (serveur de dev…).
+      // child.kill() would only kill cmd.exe, not its children (dev server…).
       spawn('taskkill', ['/pid', String(pid), '/T', '/F']);
     } else {
       entry.child.kill('SIGTERM');
@@ -92,7 +92,7 @@ export class BackgroundProcessManager {
     return true;
   }
 
-  /** Arrête tout (désactivation de l'extension). */
+  /** Stops everything (extension deactivation). */
   public dispose(): void {
     for (const id of this.processes.keys()) {
       try {
@@ -117,5 +117,5 @@ export class BackgroundProcessManager {
   }
 }
 
-/** Instance partagée par les outils du registre. */
+/** Instance shared by the registry's tools. */
 export const backgroundProcesses = new BackgroundProcessManager();
