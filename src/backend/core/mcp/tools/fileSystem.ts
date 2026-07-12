@@ -46,7 +46,7 @@ function getWorkspaceFolder(): string {
   return workspaceFolder;
 }
 
-function resolveWorkspacePath(workspaceFolder: string, filePath: string): string {
+export function resolveWorkspacePath(workspaceFolder: string, filePath: string): string {
   return path.resolve(workspaceFolder, filePath);
 }
 

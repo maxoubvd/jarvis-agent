@@ -8,6 +8,7 @@
   import DiffReviewPanel from './components/DiffReviewPanel.svelte';
   import WelcomeScreen from './components/WelcomeScreen.svelte';
   import Icon from './components/Icon.svelte';
+  import JarvisIcon from './components/JarvisIcon.svelte';
 
   import { fly, fade } from 'svelte/transition';
   import { APP_NAME } from './shared/constants';
@@ -601,7 +602,7 @@
     />
   {:else}
   <header class="app-header">
-    <div class="header-left">
+    <div class="header-left" style="display: flex; gap: 2px">
       <button
         class="menu-btn"
         title="Menu"
@@ -610,6 +611,7 @@
       >
         <Icon name={sidebarOpen ? 'close' : 'menu'} />
       </button>
+      <JarvisIcon />
       <h1>{APP_NAME}</h1>
       <div class="header-actions" style="display: flex; gap: 4px; margin-left: 8px;">
         <button

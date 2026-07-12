@@ -18,11 +18,15 @@
 
 **Jarvis Agent** is a next-generation extension for Visual Studio Code. Whether you want to automate component creation, debug a complex system, or explore a huge codebase, Jarvis integrates seamlessly into your local environment to assist you.
 
-> 📸 Screenshots and demo videos coming soon in `docs/media/` (see `CONTRIBUTING.md`).
-
 ---
 
-
+<div align="center" style="margin: 20px 0;">
+  <video controls width="800" style="border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+    <source src="media/user_guide_jarvis.mp4" type="video/mp4">
+    Your browser does not support the video tag.
+  </video>
+  <p><strong>Here is an example of what you can do with Jarvis Agent.</strong></p>
+</div>
 
 ## ✨ Key Features
 

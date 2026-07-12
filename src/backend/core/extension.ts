@@ -38,7 +38,8 @@ import {
   writeFileTool,
   listDirectoryTool,
   getSandbox,
-  setSandbox
+  setSandbox,
+  resolveWorkspacePath
 } from './mcp/tools/fileSystem.js';
 import { executeTerminalCommand } from './mcp/tools/terminal.js';
 import { McpManager } from './mcp/manager.js';
@@ -1862,12 +1863,27 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     const result = await loop.run(task, { maxAttempts, testCommand, timeout }, {
       onAttemptStart: (attempt, max) =>
         this.post(webview, { type: 'workflowStep', step: `Tentative TDD ${attempt}`, index: attempt, total: max }),
-      onFilesGenerated: files =>
+      onFilesGenerated: async files => {
         this.post(webview, {
           type: 'agentTool',
           tool: 'create_new_file',
           args: { files: files.map(f => f.path) }
-        }),
+        });
+        // Open the first created file automatically
+        if (files.length > 0) {
+          const firstFile = files[0];
+          const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+          if (workspaceFolder) {
+            const resolvedPath = resolveWorkspacePath(workspaceFolder, firstFile.path);
+            try {
+              const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(resolvedPath));
+              await vscode.window.showTextDocument(doc, { preview: false });
+            } catch (err) {
+              operationLogger.log('tdd', `Failed to open file ${firstFile.path}: ${err instanceof Error ? err.message : err}`, 'error');
+            }
+          }
+        }
+      },
       onTestResult: (testResult, attempt) =>
         this.post(webview, {
           type: 'agentToolResult',
