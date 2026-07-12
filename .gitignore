@@ -2,6 +2,7 @@ node_modules/
 dist/
 out/
 
+
 # Ignore user-specific VSCode settings, but keep shared ones
 .vscode/*
 !.vscode/settings.json
