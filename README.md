@@ -105,6 +105,24 @@ You can configure Jarvis visually via the **Settings** tab:
 
 ---
 
+## 💡 Tips & Best Practices
+
+Get the most out of Jarvis and keep your token usage under control:
+
+- **Write a `JARVIS.md`**: run `/init` once per project. It's versioned with the code (unlike personal rules), so the whole team benefits from the same project context on every request.
+- **Scope rules to folders**: instead of one long global rule, give a rule a `scope` glob (e.g. `src/backend/**`) so it only loads for the files it's actually relevant to — shorter prompts, more focused answers.
+- **Save your own prompts as `/shortcuts`**: Settings > Prompts lets you turn any recurring instruction into a `/name` shortcut. Jarvis ships with two disabled examples — a `Commentator` rule and an `/explain` prompt — enable them or duplicate them as a starting point for your own.
+- **Reach for `@file` and `@docs` before pasting code**: `@file:path` pulls in exactly the file you mean, and `@docs:query` searches your indexed documentation semantically — both are cheaper and more accurate than dropping large code blocks into the chat.
+- **Match the chat mode to the task**: use **Fast** for quick text-only questions (no tool calls, no token overhead), **Automatic** for everyday coding, and **Plan** when you want to validate the approach before Jarvis touches any files.
+- **Delegate to a specialized agent**: `@Security-Agent` for a read-only audit, `@QA-Agent` to just run tests, `@Refactor-Agent` when you want edits re-verified against the test suite — each has tool access restricted to its role, which keeps it focused and safer to run unattended.
+- **Let `/tdd` and `/workflow` structure multi-step work**: `/tdd <task>` drives a write → test → fix loop automatically, and `/workflow <id> <task>` runs one of the predefined multi-step sequences (or `dynamic` for an auto-decomposed task) instead of you prompting step by step.
+- **Tune HITL to your risk tolerance**: `strict` mode confirms every terminal command and edit, `moderate` trusts routine actions, `free` lets Jarvis run autonomously — pick per project depending on how much you want to supervise.
+- **Use checkpoints as a safety net**: Jarvis stashes a git checkpoint before actions/workflows, so `/rollback` (or the Checkpoints tab) lets you experiment freely and undo anything that goes wrong.
+- **Keep secrets out of the sandbox**: maintain `.jarvisignore` (auto-generated, stricter than `.gitignore`) so credentials and sensitive folders are never read or sent to a cloud model.
+- **Tag model roles deliberately**: in Settings > Models, assign a fast/cheap model to `autocomplete` and a stronger one to `chat`, instead of using a single model for everything.
+
+---
+
 ## 🤝 Contributing & Support
 Jarvis is a community project, built by developers, for developers.
 - Ideas, bugs? Open an [Issue on GitHub](https://github.com/maxoubvd/extension-VS-code/issues).

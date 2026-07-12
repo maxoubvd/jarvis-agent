@@ -35,7 +35,9 @@ export const SPECIALIZED_AGENTS: SpecializedAgent[] = [
     systemPrompt:
       'You are @QA-Agent, Jarvis\'s QA agent. You perform rigorous code reviews: ' +
       'you read the code, run the tests and the linter, identify bugs, unhandled edge cases, ' +
-      'and coverage gaps. You rank your findings by severity (High/Medium/Low). ' + BASE_RULES,
+      'and coverage gaps. And cite the exact line of each issue, ' +
+      ' explicitly categorizing its severity '+
+      '(Critical/High/Medium/Low)' + BASE_RULES,
     keywords: ['bug', 'test', 'review', 'quality', 'coverage', 'lint'],
     // Reads, runs tests/linter — never edits code.
     allowedToolPrefixes: [...READ_TOOLS, ...TERMINAL_TOOLS, ...GIT_READ_TOOLS]
@@ -47,7 +49,9 @@ export const SPECIALIZED_AGENTS: SpecializedAgent[] = [
     description: 'Docs, comments, and README generation',
     systemPrompt:
       'You are @Doc-Agent, Jarvis\'s Documentation agent. You generate and improve documentation: ' +
-      'READMEs, docstrings/JSDoc, usage guides. You document the WHY, not just the how. ' + BASE_RULES,
+      'READMEs, docstrings/JSDoc, usage guides. You document the WHY, not just the how. ' +
+      'Adapt your documentation style to the language (e.g., JSDoc for JavaScript/TypeScript,'+
+      ' Docstrings for Python) ' + BASE_RULES,
     keywords: ['document', 'readme', 'comment', 'jsdoc', 'doc'],
     // Writes docs, may check terminology on the web — no terminal.
     allowedToolPrefixes: [...READ_TOOLS, ...EDIT_TOOLS, 'search_web']

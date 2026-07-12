@@ -30,7 +30,7 @@ export const WORKFLOWS: Workflow[] = [
       { name: 'Plan', prompt: 'Analyze the following task and produce a concise implementation plan (files to create/modify, steps): {task}' },
       { name: 'Code', prompt: 'Implement the following plan for the task "{task}". Plan:\n{previous}' },
       { name: 'Test', prompt: 'Run the project tests and fix failures related to the changes for the task "{task}". Context:\n{previous}' },
-      { name: 'Commit', prompt: 'Check the diff (view_diff) then create a git commit with a clear message describing the feature "{task}".' }
+      { name: 'Commit', prompt: 'Check the diff (view_diff) then create a git commit using the Conventional Commits standard (feat, fix, chore, etc.) describing the feature "{task}"' }
     ]
   },
   {
@@ -61,7 +61,7 @@ export const WORKFLOWS: Workflow[] = [
     description: 'Analyse → Plan → Apply Changes → Test',
     steps: [
       { name: 'Analyse', prompt: 'Analyse the code targeted by this refactoring and identify the issues: {task}' },
-      { name: 'Plan', prompt: 'Propose a refactoring plan in small, safe steps. Analysis:\n{previous}' },
+      { name: 'Plan', prompt: 'Propose a refactoring plan in small, safe steps. Output the plan strictly as a Markdown checklist. Analysis:\n{previous}' },
       { name: 'Apply', prompt: 'Apply the refactoring plan for "{task}". Plan:\n{previous}' },
       { name: 'Test', prompt: 'Run the tests to verify that the refactoring "{task}" does not change behaviour.' }
     ]

@@ -228,11 +228,44 @@ export interface WebSearchConfig {
  */
 export const DEFAULT_WEB_SEARCH_SITES = ['stackoverflow.com', 'developer.mozilla.org', 'github.com', 'devdocs.io'];
 
+/**
+ * Seed rule shipped disabled for every new install, as a usage example
+ * (Settings > Rules). Users toggle it on or delete it freely.
+ */
+const DEFAULT_EXAMPLE_RULE: RuleItem = {
+  id: 'default-example-commentator',
+  name: 'Commentator',
+  enabled: false,
+  content: 'Always comment your work professionnally.'
+};
+
+/**
+ * Seed prompt shipped for every new install, as a usage example of a
+ * reusable text shortcut invocable via `/explain` (Settings > Prompts).
+ */
+const DEFAULT_EXAMPLE_PROMPT: PromptItem = {
+  id: 'default-example-explain',
+  name: 'explain',
+  description: 'Explains the selected code line by line like a senior mentor.',
+  content:
+    'Act as a senior mentor. Explain the following code line by line, focusing on time complexity, potential edge cases, and the underlying logic. Do not rewrite the code, just explain it.'
+};
+
 export const EMPTY_CONFIG: JarvisConfig = {
   version: 1,
   models: { default: null, items: [] },
   optimization: {}
 };
+
+/**
+ * Config written on first launch (no `~/.jarvis/config.json` yet), i.e. what
+ * every new user starts from — `EMPTY_CONFIG` plus the disabled example
+ * rule/prompt. Kept separate from `EMPTY_CONFIG` itself, which must stay the
+ * bare normalized shape (`normalizeConfig(null) === EMPTY_CONFIG`).
+ */
+function seedDefaultConfig(): JarvisConfig {
+  return { ...clone(EMPTY_CONFIG), rules: [clone(DEFAULT_EXAMPLE_RULE)], prompts: [clone(DEFAULT_EXAMPLE_PROMPT)] };
+}
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -424,7 +457,7 @@ export class ConfigManager {
     }
 
     if (!fsSync.existsSync(this.globalPath)) {
-      const seeded = this.migrateFromWorkspace() ?? clone(EMPTY_CONFIG);
+      const seeded = this.migrateFromWorkspace() ?? seedDefaultConfig();
       try {
         fsSync.writeFileSync(this.globalPath, JSON.stringify(seeded, null, 2), 'utf-8');
       } catch (err) {
