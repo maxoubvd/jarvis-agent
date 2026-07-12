@@ -8,6 +8,9 @@ out/
 !.vscode/settings.json
 !.vscode/extensions.json
 !.vscode/launch.json
+# Ignore workspace-specific session state
+.vscode/jarvis-sessions.json
+
 
 # Environment files
 .env
