@@ -92,7 +92,32 @@ describe('@ file mentions (Claude Code style)', () => {
 });
 
 describe('@docs: mentions', () => {
-  it('typing @docs: requests doc suggestions and lists them in the menu', async () => {
+  // La recherche docs est globale (toutes les sources indexées + les .md du
+  // workspace, cf. searchAllDocs côté backend) : il n'y a pas de sélection
+  // "par site". Le menu propose une action unique qui cite la requête tapée,
+  // les sources connues n'apparaissant qu'à titre indicatif dans le detail.
+  it('shows the quoted-query template as soon as "docs" is typed, before the colon', async () => {
+    render(App);
+    await tick();
+
+    await type('@docs');
+    const query = posted.find(m => m.type === 'queryDocs');
+    expect(query).toBeTruthy();
+    expect(query?.query).toBe('');
+
+    postToWebview({ type: 'docsSuggestions', docs: [] });
+    await tick();
+
+    const item = screen.getByText('Rechercher dans la doc');
+    item.closest('li')!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    await tick();
+
+    const el = chatTextarea();
+    expect(el.value).toBe('@docs:"" ');
+    expect(el.value.slice(0, el.selectionStart!)).toBe('@docs:"');
+  });
+
+  it('typing @docs: requests doc suggestions and shows a single quoted-query action', async () => {
     render(App);
     await tick();
 
@@ -104,11 +129,11 @@ describe('@docs: mentions', () => {
     postToWebview({ type: 'docsSuggestions', docs: ['Svelte Docs', 'MDN'] });
     await tick();
 
-    expect(screen.getByText('Svelte Docs')).toBeTruthy();
-    expect(screen.getByText('MDN')).toBeTruthy();
+    expect(screen.getByText('Rechercher dans la doc')).toBeTruthy();
+    expect(screen.getByText(/Svelte Docs, MDN/)).toBeTruthy();
   });
 
-  it('narrows the query while typing and inserts @docs:<label> on accept', async () => {
+  it('wraps the typed query in quotes on accept, caret placed before the closing quote', async () => {
     render(App);
     await tick();
 
@@ -119,25 +144,40 @@ describe('@docs: mentions', () => {
     postToWebview({ type: 'docsSuggestions', docs: ['MDN'] });
     await tick();
 
-    const item = screen.getByText('MDN');
+    const item = screen.getByText('Rechercher : "mdn"');
     item.closest('li')!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
     await tick();
 
-    expect(chatTextarea().value).toBe('@docs:MDN ');
+    const el = chatTextarea();
+    expect(el.value).toBe('@docs:"mdn" ');
+    expect(el.selectionStart).toBe('@docs:"mdn'.length);
   });
 
-  it('quotes doc labels containing spaces so the mention stays parseable', async () => {
+  it('starts an empty quoted template so a multi-word question can be typed inside the quotes', async () => {
     render(App);
     await tick();
 
-    await type('@docs:svelte');
-    postToWebview({ type: 'docsSuggestions', docs: ['Svelte Docs'] });
+    await type('@docs:');
+    postToWebview({ type: 'docsSuggestions', docs: [] });
     await tick();
 
-    const item = screen.getByText('Svelte Docs');
+    const item = screen.getByText('Rechercher dans la doc');
     item.closest('li')!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
     await tick();
 
-    expect(chatTextarea().value).toBe('@docs:"Svelte Docs" ');
+    const el = chatTextarea();
+    expect(el.value).toBe('@docs:"" ');
+    const caret = el.selectionStart!;
+    expect(el.value.slice(0, caret)).toBe('@docs:"');
+
+    // Une question multi-mots tapée au caret reste entre les guillemets déjà
+    // en place (le menu ne revoit plus le texte une fois fermé).
+    const question = 'comment créer une api mistral ?';
+    el.value = el.value.slice(0, caret) + question + el.value.slice(caret);
+    el.setSelectionRange(caret + question.length, caret + question.length);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    await tick();
+
+    expect(el.value).toBe('@docs:"comment créer une api mistral ?" ');
   });
 });

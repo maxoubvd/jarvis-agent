@@ -837,12 +837,23 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
 
     if (!(await this.ensureGitInitialized(workspaceFolder))) return;
 
+    await this.enableGitMcpBuiltin(webview);
+  }
+
+  /**
+   * Persiste l'activation du builtin MCP `git` (override explicite, idempotent) et
+   * reconnecte le manager. À appeler après un `git init` réussi (Settings ou `/init`)
+   * pour que les tools MCP git soient disponibles sans action manuelle supplémentaire.
+   */
+  private async enableGitMcpBuiltin(webview: vscode.Webview): Promise<void> {
     try {
       const config = getConfigManager().getGlobalConfig();
-      await getConfigManager().writeGlobal({
-        ...config,
-        builtinMcp: { ...config.builtinMcp, git: { ...config.builtinMcp?.git, enabled: true } }
-      });
+      if (config.builtinMcp?.git?.enabled !== true) {
+        await getConfigManager().writeGlobal({
+          ...config,
+          builtinMcp: { ...config.builtinMcp, git: { ...config.builtinMcp?.git, enabled: true } }
+        });
+      }
     } catch (err) {
       operationLogger.log('mcp', `activation du builtin git échouée: ${err instanceof Error ? err.message : err}`, 'error');
     }
@@ -1771,6 +1782,7 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
       this.post(webview, { type: 'chatError', error: 'Initialisation annulée (git init requis).' });
       return;
     }
+    await this.enableGitMcpBuiltin(webview);
 
     let existing = '';
     try {

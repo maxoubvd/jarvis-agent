@@ -13,6 +13,8 @@ export interface CommandItem {
   label: string;
   /** Courte description affichée à droite. */
   detail: string;
+  /** Recule le caret de N caractères depuis la fin d'`insert` (ex: se placer entre guillemets). */
+  caretBack?: number;
 }
 
 export const SLASH_COMMANDS: CommandItem[] = [

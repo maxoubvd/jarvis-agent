@@ -137,11 +137,6 @@
     return /\s/.test(path) ? `@file:"${path}" ` : `@file:${path} `;
   }
 
-  /** Une source docs avec espaces doit être citée pour rester une seule mention. */
-  function docsInsert(label: string): string {
-    return /\s/.test(label) ? `@docs:"${label}" ` : `@docs:${label} `;
-  }
-
   function refreshMenu() {
     if (!textareaEl) return;
     const caret = textareaEl.selectionStart ?? inputText.length;
@@ -153,20 +148,35 @@
       return;
     }
     let items = filterCommands(match, extraCommands);
-    if (match.trigger === '@' && match.partial.startsWith('docs:')) {
-      // Mention de doc : sites de documentation + .md du workspace proposés
-      // directement sous les commandes @, comme pour @file:.
-      const query = match.partial.slice('docs:'.length);
+    // "docs" (4 lettres) suffit à désambiguïser de `@Doc-Agent` (qui diverge au
+    // 4e caractère : 's' vs '-'), donc le gabarit apparaît dès `@docs`, avant
+    // même le `:` — sinon valider l'entrée générique statique insère juste
+    // `@docs:` et referme le menu (accept() ne redéclenche pas refreshMenu),
+    // ce qui pousse à taper la question hors mention ou à envoyer trop tôt.
+    if (match.trigger === '@' && match.partial.toLowerCase().startsWith('docs')) {
+      // Mention de doc : la recherche est globale (toutes les sources indexées
+      // + les .md du workspace, cf. searchAllDocs côté backend) — il n'y a pas
+      // de sélection "par site". Entrée insère directement le format valide
+      // `@docs:"..."` avec le caret entre les guillemets, en conservant ce qui
+      // est déjà tapé (sinon une requête multi-mots non citée serait tronquée
+      // au premier espace côté backend, cf. mentions.ts).
+      const rest = match.partial.slice('docs'.length);
+      const query = rest.startsWith(':') ? rest.slice(1) : '';
       if (query !== lastDocsQuery) {
         lastDocsQuery = query;
         onQueryDocs(query);
       }
-      const q = query.toLowerCase();
-      const docItems: CommandItem[] = docsSuggestions
-        .filter(p => !q || p.toLowerCase().includes(q))
-        .map(p => ({ trigger: '@' as const, insert: docsInsert(p), label: p, detail: 'Documentation site' }));
-      const seen = new Set(items.map(i => i.insert));
-      items = [...items, ...docItems.filter(i => !seen.has(i.insert))];
+      const detail = docsSuggestions.length
+        ? `Recherche dans toutes les sources indexées : ${docsSuggestions.join(', ')}`
+        : 'Aucune source indexée (Settings > Docs)';
+      const docItem: CommandItem = {
+        trigger: '@',
+        insert: `@docs:"${query}" `,
+        label: query ? `Rechercher : "${query}"` : 'Rechercher dans la doc',
+        detail,
+        caretBack: 2
+      };
+      items = [...items.filter(i => i.insert !== '@docs:'), docItem];
     } else if (match.trigger === '@') {
       // Mention de fichier : les fichiers du workspace sont proposés
       // directement sous les commandes @.
@@ -211,7 +221,7 @@
     const caret = textareaEl?.selectionStart ?? inputText.length;
     inputText = inputText.slice(0, tokenStart) + item.insert + inputText.slice(caret);
     showMenu = false;
-    const newCaret = tokenStart + item.insert.length;
+    const newCaret = tokenStart + item.insert.length - (item.caretBack ?? 0);
     // Repositionne le caret après insertion (au prochain tick).
     queueMicrotask(() => {
       if (textareaEl) {
