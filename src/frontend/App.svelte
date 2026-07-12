@@ -72,6 +72,7 @@
   let settingsDefaults = $state<SettingsDefaults | null>(null);
   let docsStatuses = $state<DocsSiteStatus[]>([]);
   let currentFolder = $state('');
+  let avatarUri = $state<string | null>(null);
   let workspaces = $state<Array<{ id: string; name: string }>>([]);
   let activeWorkspaceId = $state<string | null>(null);
   let activeWorkspaceName = $derived(workspaces.find(w => w.id === activeWorkspaceId)?.name || currentFolder.split(/[/\\]/).pop() || 'Workspace');
@@ -198,9 +199,13 @@
       endLine?: number;
       docs?: string[];
       items?: TodoItem[];
+      uri?: string;
     };
 
     switch (msg.type) {
+      case 'avatarUri':
+        if (msg.uri) avatarUri = msg.uri;
+        break;
       case 'status':
         if (msg.text) connectionStatus = msg.text;
         if (msg.models) availableModels = msg.models;
@@ -668,6 +673,7 @@
           {availableModels}
           {currentModel}
           {todos}
+          {avatarUri}
           firstName={settings?.firstName}
           onSend={handleSend}
           onQueryFiles={handleQueryFiles}

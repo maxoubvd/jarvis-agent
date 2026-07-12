@@ -62,6 +62,8 @@
     onPlanProceed?: () => void;
     firstName?: string;
     todos?: TodoItem[];
+    /** Vidéo d'avatar (media/), affichée à la place de l'icône dans le badge "Working…". */
+    avatarUri?: string | null;
   }
 
   let {
@@ -85,7 +87,8 @@
     onModelChange = () => {},
     onPlanProceed = () => {},
     firstName = '',
-    todos = []
+    todos = [],
+    avatarUri = null
   }: Props = $props();
 
   let mode = $state('Automatic');
@@ -495,7 +498,16 @@
               {/if}
 
               {#if isSending && message.id === messages[messages.length - 1].id}
-                <p class="pending"><span class="badge info wavelight"><Icon name="cpu" size={11} /> Working...</span></p>
+                <p class="pending">
+                  <span class="badge info wavelight">
+                    {#if avatarUri}
+                      <video class="avatar" src={avatarUri} autoplay loop muted playsinline></video>
+                    {:else}
+                      <Icon name="cpu" size={11} />
+                    {/if}
+                    Working...
+                  </span>
+                </p>
               {/if}
 
               {#if message.kind === 'plan' && message.id === messages[messages.length - 1].id && dismissedPlanActionsId !== message.id}
@@ -748,6 +760,13 @@
   .badge.warning {
     border-color: var(--vscode-terminal-ansiYellow);
     color: var(--vscode-terminal-ansiYellow);
+  }
+
+  .avatar {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    object-fit: cover;
   }
 
   p {

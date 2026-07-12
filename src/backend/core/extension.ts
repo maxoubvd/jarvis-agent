@@ -287,7 +287,10 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
 
     webviewView.webview.options = {
       enableScripts: true,
-      localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'webview')]
+      localResourceRoots: [
+        vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'webview'),
+        vscode.Uri.joinPath(this.context.extensionUri, 'media')
+      ]
     };
 
     webviewView.webview.html = this.getWebviewContent(webviewView.webview);
@@ -690,6 +693,16 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     this.tokenCounter.setLimit(model ? configManager?.getContextLength(model) ?? null : null);
     // Persistance de session : restaure la jauge de la dernière session (reload/redémarrage).
     this.tokenCounter.restore(this.context.workspaceState.get<TokenSnapshot>(TOKEN_STATE_KEY));
+
+    // Avatar vidéo (media/), best-effort : l'UI retombe sur l'icône statique si absent.
+    try {
+      const avatarUri = webview.asWebviewUri(
+        vscode.Uri.joinPath(this.context.extensionUri, 'media', 'Jarvis Avatar Animation.mp4')
+      );
+      this.post(webview, { type: 'avatarUri', uri: avatarUri.toString() });
+    } catch {
+      /* best-effort */
+    }
 
     this.post(webview, {
       type: 'status',
@@ -2250,6 +2263,7 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     <meta http-equiv="Content-Security-Policy"
           content="default-src 'none';
                    img-src ${webview.cspSource} https: data:;
+                   media-src ${webview.cspSource};
                    script-src ${webview.cspSource} 'nonce-${nonce}';
                    style-src ${webview.cspSource} 'unsafe-inline';
                    font-src ${webview.cspSource};">
