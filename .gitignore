@@ -1,16 +1,31 @@
 node_modules/
-.dist/
 dist/
-.vscode/
+out/
+
+# Ignore user-specific VSCode settings, but keep shared ones
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+
+# Environment files
 .env
+*.env
+!.env.example
+
+# Log files
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .DS_Store
 
-# Internal testing and AI config
+# Other AI tool configs
 .claude/
 .continuerc.json
-.CLAUDE.md
-jarvis/
+CLAUDE.md
+.jarvis/
+jarvis-*.json
+
+# Packaged extension
+*.vsix

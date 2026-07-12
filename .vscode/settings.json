@@ -1,0 +1,8 @@
+{
+  // Disables inline autocomplete (ghost text) from other AI extensions in this
+  // workspace only, to prevent them from conflicting with Jarvis autocomplete
+  // (jarvis.autocomplete.enabled). See CLAUDE.md.
+  "github.copilot.enable": { "*": false },
+  "continue.enableTabAutocomplete": false,
+  "geminicodeassist.inlineSuggestions.enableAuto": false
+}
