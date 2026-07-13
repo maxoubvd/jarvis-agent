@@ -29,6 +29,11 @@ CONTRIBUTING.md
 CODE_OF_CONDUCT.md
 CLAUDE.md
 media/jarvis-icon-source.svg
+# Unreferenced leftovers from the SVG->PNG icon migration (icon fields in package.json
+# now point to .png) -- excluded so no .svg ships at all, removing any ambiguity around
+# vsce's "will not publish extensions that contain user-provided SVG images" check.
+media/jarvis-icon.svg
+media/jarvis.svg
 **/.DS_Store
 
 # Extension host is bundled by esbuild (build-extension.mjs) into a single

@@ -12,7 +12,7 @@
 
 <div align="center" style="margin: 20px 0;">
   <video controls width="800" style="border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
-    <source src="media/user_guide_jarvis.mp4" type="video/mp4">
+    <source src="https://github.com/maxoubvd/extension-VS-code/raw/HEAD/media/user_guide_jarvis.mp4" type="video/mp4">
     Your browser does not support the video tag.
   </video>
   <p><strong>Here is an example of what you can do with Jarvis Agent.</strong></p>
