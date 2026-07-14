@@ -110,6 +110,11 @@
   let listEl: HTMLUListElement | undefined = $state();
   let textareaEl: HTMLTextAreaElement | undefined = $state();
 
+  // Up/Down history recall (like a shell / Claude Code CLI).
+  let historyIndex = $state(-1);
+  let draftBeforeHistory = $state('');
+  let userHistory = $derived(messages.filter((m) => m.role === 'user').map((m) => m.content));
+
   // `/` command and `@` mention autocompletion.
   let showMenu = $state(false);
   let menuItems = $state<CommandItem[]>([]);
@@ -208,6 +213,7 @@
   }
 
   function handleInput() {
+    if (historyIndex !== -1) historyIndex = -1;
     selectedIndex = 0;
     refreshMenu();
   }
@@ -355,6 +361,47 @@
     }
   });
 
+  function isCaretOnFirstLine(): boolean {
+    const caret = textareaEl?.selectionStart ?? 0;
+    return inputText.lastIndexOf('\n', caret - 1) === -1;
+  }
+
+  function isCaretOnLastLine(): boolean {
+    const caret = textareaEl?.selectionEnd ?? inputText.length;
+    return inputText.indexOf('\n', caret) === -1;
+  }
+
+  /** Steps through `userHistory`, returning false (no-op) when there's nothing further to recall. */
+  function recallHistory(direction: 'up' | 'down'): boolean {
+    if (direction === 'up') {
+      if (userHistory.length === 0 || historyIndex === 0) return false;
+      if (historyIndex === -1) {
+        draftBeforeHistory = inputText;
+        historyIndex = userHistory.length - 1;
+      } else {
+        historyIndex--;
+      }
+      inputText = userHistory[historyIndex];
+    } else {
+      if (historyIndex === -1) return false;
+      if (historyIndex < userHistory.length - 1) {
+        historyIndex++;
+        inputText = userHistory[historyIndex];
+      } else {
+        historyIndex = -1;
+        inputText = draftBeforeHistory;
+      }
+    }
+    // Repositions the caret at the end (on the next tick).
+    queueMicrotask(() => {
+      if (textareaEl) {
+        textareaEl.focus();
+        textareaEl.setSelectionRange(inputText.length, inputText.length);
+      }
+    });
+    return true;
+  }
+
   function handleKeydown(event: KeyboardEvent) {
     if (showMenu && menuItems.length > 0) {
       if (event.key === 'ArrowDown') {
@@ -377,6 +424,12 @@
         showMenu = false;
         return;
       }
+    } else if (event.key === 'ArrowUp' && isCaretOnFirstLine() && recallHistory('up')) {
+      event.preventDefault();
+      return;
+    } else if (event.key === 'ArrowDown' && isCaretOnLastLine() && recallHistory('down')) {
+      event.preventDefault();
+      return;
     }
 
     if (event.key === 'Enter' && !event.shiftKey) {
@@ -390,6 +443,8 @@
     if (!text || isSending) return;
     showMenu = false;
     inputText = '';
+    historyIndex = -1;
+    draftBeforeHistory = '';
     onSend(`${mode}|${text}`);
   }
 </script>
