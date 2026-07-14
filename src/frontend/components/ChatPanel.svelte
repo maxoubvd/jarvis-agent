@@ -104,6 +104,14 @@
     }
   });
 
+  const MODE_ORDER = ['Automatic', 'Fast', 'Plan'];
+
+  function cycleMode() {
+    const order = isSmallModel ? MODE_ORDER.filter((m) => m !== 'Plan') : MODE_ORDER;
+    const idx = order.indexOf(mode);
+    mode = order[(idx + 1) % order.length];
+  }
+
   let inputText = $state('');
   /** id of the plan message for which Proceed/Review was already clicked — hides the actions until a new plan arrives. */
   let dismissedPlanActionsId = $state<string | null>(null);
@@ -403,6 +411,12 @@
   }
 
   function handleKeydown(event: KeyboardEvent) {
+    if (event.key === 'Tab' && event.shiftKey) {
+      event.preventDefault();
+      cycleMode();
+      return;
+    }
+
     if (showMenu && menuItems.length > 0) {
       if (event.key === 'ArrowDown') {
         event.preventDefault();
@@ -634,7 +648,9 @@
         {/if}
         <textarea
           class="input"
-          placeholder="Ask anything… (@ to mention, / for action)"
+          class:mode-quick={mode === 'Fast'}
+          class:mode-plan={mode === 'Plan'}
+          placeholder="Ask anything… (@ to mention, / for action · Shift+Tab to switch mode)"
           rows={2}
           disabled={isSending}
           bind:this={textareaEl}
@@ -1203,6 +1219,24 @@
   .input:focus {
     outline: none;
     border-color: var(--jarvis-accent);
+  }
+
+  .input.mode-quick {
+    border-color: var(--vscode-charts-green, #3fb950);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--vscode-charts-green, #3fb950) 45%, transparent);
+  }
+
+  .input.mode-quick:focus {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--vscode-charts-green, #3fb950) 45%, transparent);
+  }
+
+  .input.mode-plan {
+    border-color: var(--vscode-charts-blue, #4098d7);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--vscode-charts-blue, #4098d7) 45%, transparent);
+  }
+
+  .input.mode-plan:focus {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--vscode-charts-blue, #4098d7) 45%, transparent);
   }
 
   .input:disabled {
