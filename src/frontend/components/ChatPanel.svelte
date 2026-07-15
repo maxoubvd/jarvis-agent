@@ -1053,11 +1053,13 @@
 
   .controls-row {
     display: flex;
+    flex-wrap: wrap;
     gap: var(--jarvis-space-2);
     margin-bottom: var(--jarvis-space-2);
   }
 
   .mode-select, .model-select {
+    flex: 1 1 45%;
     padding: 3px 8px;
     background: var(--vscode-dropdown-background, var(--vscode-input-background));
     color: var(--vscode-dropdown-foreground, var(--vscode-input-foreground));

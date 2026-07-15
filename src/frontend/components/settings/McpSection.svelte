@@ -427,6 +427,7 @@
 
   .tool-row {
     display: flex;
+    flex-wrap: wrap;
     align-items: flex-start;
     gap: var(--jarvis-space-2);
     padding: 2px 0;
@@ -437,14 +438,18 @@
   }
 
   .tool-info {
-    flex: 1;
+    /* In a narrow sidebar, the policy select no longer fits on the line and
+       wraps below (flex-wrap) instead of crushing/hiding the description. */
+    flex: 1 1 55%;
     display: flex;
     flex-direction: column;
     min-width: 0;
   }
 
   .tool-policy {
-    flex-shrink: 0;
+    flex: 1 1 auto;
+    min-width: 140px;
+    max-width: 100%;
     padding: 2px 6px;
     font-size: var(--jarvis-text-xs);
   }

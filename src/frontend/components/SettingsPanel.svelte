@@ -563,6 +563,8 @@
 
   .settings-header {
     display: flex;
+    flex-wrap: wrap;
+    row-gap: var(--jarvis-space-2);
     align-items: center;
     justify-content: space-between;
     position: sticky;
@@ -585,6 +587,7 @@
 
   .actions {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 0.6rem;
   }
