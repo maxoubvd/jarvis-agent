@@ -35,7 +35,7 @@
     <span class="gauge-title">
       Context Size <Icon name={showDetails ? 'chevron-up' : 'chevron-down'} size={11} />
     </span>
-    <span>{used.toLocaleString()} / {limit.toLocaleString()} ({percentage}%)</span>
+    <span class="gauge-usage">{used.toLocaleString()} / {limit.toLocaleString()} ({percentage}%)</span>
   </button>
   <div class="gauge">
     <div class="meter {colorClass}" style="width: {percentage}%"></div>
@@ -66,21 +66,23 @@
         {/if}
       </div>
       {#if history.length > 0}
-        <table class="history">
-          <thead>
-            <tr><th>Time</th><th>Model</th><th>In</th><th>Out</th></tr>
-          </thead>
-          <tbody>
-            {#each history as record}
-              <tr>
-                <td>{formatTime(record.timestamp)}</td>
-                <td class="model">{record.model}</td>
-                <td>{record.inputTokens.toLocaleString()}</td>
-                <td>{record.outputTokens.toLocaleString()}</td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
+        <div class="table-scroll">
+          <table class="history">
+            <thead>
+              <tr><th>Time</th><th>Model</th><th>In</th><th>Out</th></tr>
+            </thead>
+            <tbody>
+              {#each history as record}
+                <tr>
+                  <td>{formatTime(record.timestamp)}</td>
+                  <td class="model">{record.model}</td>
+                  <td>{record.inputTokens.toLocaleString()}</td>
+                  <td>{record.outputTokens.toLocaleString()}</td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
       {:else}
         <div class="no-history">No requests yet</div>
       {/if}
@@ -96,6 +98,8 @@
 
   .gauge-header {
     display: flex;
+    flex-wrap: wrap;
+    row-gap: 2px;
     justify-content: space-between;
     width: 100%;
     font-size: var(--jarvis-text-sm);
@@ -112,6 +116,14 @@
     display: inline-flex;
     align-items: center;
     gap: 2px;
+    min-width: 0;
+  }
+
+  .gauge-usage {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
   }
 
   .gauge {

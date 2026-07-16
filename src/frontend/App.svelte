@@ -613,7 +613,7 @@
       </button>
       <JarvisIcon />
       <h1>{APP_NAME}</h1>
-      <div class="header-actions" style="display: flex; gap: 4px; margin-left: 8px;">
+      <div class="header-actions">
         <button
           class="menu-btn"
           title="New Conversation (/new)"
@@ -758,6 +758,8 @@
 
   .app-header {
     display: flex;
+    flex-wrap: wrap;
+    row-gap: 4px;
     align-items: center;
     justify-content: space-between;
     gap: var(--jarvis-space-2);
@@ -768,8 +770,17 @@
 
   .header-left {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--jarvis-space-2);
+    min-width: 0;
+  }
+
+  .header-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-left: 8px;
     min-width: 0;
   }
 
@@ -779,6 +790,9 @@
     font-weight: 600;
     letter-spacing: -0.01em;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 4ch;
   }
 
   .menu-btn {
@@ -819,7 +833,7 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 200px;
+    max-width: min(200px, 40vw);
   }
 
   .status-dot {

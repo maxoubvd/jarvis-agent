@@ -113,6 +113,8 @@
 
   .item {
     display: flex;
+    flex-wrap: wrap;
+    row-gap: var(--jarvis-space-1);
     align-items: center;
     justify-content: space-between;
     gap: var(--jarvis-space-2);
@@ -125,6 +127,7 @@
   .info {
     display: flex;
     flex-direction: column;
+    flex: 1 1 auto;
     gap: 2px;
     min-width: 0;
   }
@@ -170,6 +173,7 @@
 
   .rollback {
     flex-shrink: 0;
+    margin-left: auto;
     background: var(--jarvis-accent);
     color: var(--jarvis-accent-fg);
     border: none;
