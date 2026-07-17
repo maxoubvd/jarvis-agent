@@ -96,6 +96,14 @@ interface AgentAction {
   final?: string;
 }
 
+/** Loose shape some models emit instead of the documented `{action:{tool,args}}` — normalized in the parse fallback below. */
+interface LooseModelAction {
+  name?: string;
+  arguments?: unknown;
+  tool?: string;
+  args?: unknown;
+}
+
 const DEFAULT_MAX_ITERATIONS = 100;
 const DEFAULT_MAX_RESULT_CHARS = 6000;
 
@@ -333,21 +341,21 @@ export class AgentOrchestrator {
 
       // Fallback for models outputting native tool format directly in text JSON
       if (!isNativeTool && parsed.ok) {
-        const asAny = action as any;
+        const loose = action as LooseModelAction;
         if (!action.action?.tool && !action.final) {
-          if (asAny.name && asAny.arguments !== undefined) {
-             let parsedArgs = asAny.arguments;
+          if (loose.name && loose.arguments !== undefined) {
+             let parsedArgs = loose.arguments;
              if (typeof parsedArgs === 'string') {
                try { parsedArgs = JSON.parse(parsedArgs); } catch { /* keep raw string arg */ }
              }
              action = {
                thought: parsed.surroundingText || raw,
-               action: { tool: asAny.name, args: parsedArgs }
+               action: { tool: loose.name, args: parsedArgs as Record<string, unknown> }
              };
-          } else if (asAny.tool && asAny.args !== undefined) {
+          } else if (loose.tool && loose.args !== undefined) {
              action = {
                thought: parsed.surroundingText || raw,
-               action: { tool: asAny.tool, args: asAny.args }
+               action: { tool: loose.tool, args: loose.args as Record<string, unknown> }
              };
           }
         }

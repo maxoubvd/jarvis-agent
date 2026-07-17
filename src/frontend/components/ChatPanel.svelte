@@ -24,6 +24,7 @@
   import Icon from './Icon.svelte';
   import ApprovalCard from './ApprovalCard.svelte';
   import TodoList from './TodoList.svelte';
+  import MessageActions from './MessageActions.svelte';
   import vscode from '../lib/vscode-api';
 
   const BADGE_ICONS: Record<string, string> = {
@@ -64,6 +65,12 @@
     todos?: TodoItem[];
     /** Avatar video (media/), shown in place of the icon in the "Working…" badge. */
     avatarUri?: string | null;
+    onRewindMessage?: (messageId: string) => void;
+    onForkMessage?: (messageId: string) => void;
+    onForkAndRewindMessage?: (messageId: string) => void;
+    /** Text to load into the input (e.g. a forked message, ready to edit/resend). */
+    pendingDraft?: string | null;
+    onDraftConsumed?: () => void;
   }
 
   let {
@@ -88,7 +95,12 @@
     onPlanProceed = () => {},
     firstName = '',
     todos = [],
-    avatarUri = null
+    avatarUri = null,
+    onRewindMessage = () => {},
+    onForkMessage = () => {},
+    onForkAndRewindMessage = () => {},
+    pendingDraft = null,
+    onDraftConsumed = () => {}
   }: Props = $props();
 
   let mode = $state('Automatic');
@@ -113,15 +125,44 @@
   }
 
   let inputText = $state('');
+
   /** id of the plan message for which Proceed/Review was already clicked — hides the actions until a new plan arrives. */
   let dismissedPlanActionsId = $state<string | null>(null);
   let listEl: HTMLUListElement | undefined = $state();
   let textareaEl: HTMLTextAreaElement | undefined = $state();
 
+  // A forked message's text lands back in the input, ready to edit/resend.
+  $effect(() => {
+    if (pendingDraft === null || pendingDraft === undefined) return;
+    inputText = pendingDraft;
+    onDraftConsumed();
+    queueMicrotask(() => {
+      textareaEl?.focus();
+      textareaEl?.setSelectionRange(inputText.length, inputText.length);
+    });
+  });
+
   // Up/Down history recall (like a shell / Claude Code CLI).
   let historyIndex = $state(-1);
   let draftBeforeHistory = $state('');
   let userHistory = $derived(messages.filter((m) => m.role === 'user').map((m) => m.content));
+
+  // Long user messages (big pastes, logs...) collapse by default so they
+  // don't dominate the transcript — expanded on demand, per message id.
+  const LONG_MESSAGE_CHARS = 600;
+  const LONG_MESSAGE_LINES = 8;
+  let expandedMessages = $state<Set<string>>(new Set());
+
+  function isLongMessage(content: string): boolean {
+    return content.length > LONG_MESSAGE_CHARS || content.split('\n').length > LONG_MESSAGE_LINES;
+  }
+
+  function toggleExpanded(id: string) {
+    const next = new Set(expandedMessages);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    expandedMessages = next;
+  }
 
   // `/` command and `@` mention autocompletion.
   let showMenu = $state(false);
@@ -512,6 +553,16 @@
             class:thinking-msg={message.kind === 'thinking'}
             class:inline-edit={message.kind === 'inline'}
           >
+            {#if message.role === 'user' && message.forkable}
+              <MessageActions
+                hasCheckpoint={!!message.checkpointId}
+                disabled={isSending}
+                onRewind={() => onRewindMessage(message.id)}
+                onFork={() => onForkMessage(message.id)}
+                onForkAndRewind={() => onForkAndRewindMessage(message.id)}
+              />
+            {/if}
+
             {#if message.badges?.length}
               <div class="badges">
                 {#each message.badges as badge}
@@ -589,6 +640,16 @@
                     <Icon name="edit" size={14} /> Review
                   </button>
                 </div>
+              {/if}
+            {:else if message.role === 'user'}
+              {@const long = isLongMessage(message.content)}
+              {@const expanded = expandedMessages.has(message.id)}
+              <p class="user-text" class:collapsed={long && !expanded}>{message.content}</p>
+              {#if long}
+                <button class="show-more-btn" onclick={() => toggleExpanded(message.id)}>
+                  <Icon name={expanded ? 'chevron-up' : 'chevron-down'} size={12} />
+                  {expanded ? 'Show less' : 'Show more'}
+                </button>
               {/if}
             {:else if message.kind !== 'tool' && message.kind !== 'step' && message.kind !== 'thinking'}
               <p>{message.content}</p>
@@ -761,6 +822,7 @@
 
   /* User message: compact bubble right-aligned (Le Chat style). */
   .message.user {
+    position: relative;
     align-self: flex-end;
     max-width: 85%;
     padding: var(--jarvis-space-2) var(--jarvis-space-3);
@@ -768,6 +830,32 @@
     border-bottom-right-radius: var(--jarvis-radius-sm);
     background: var(--vscode-input-background);
     border: 1px solid var(--vscode-editorWidget-border);
+  }
+
+  /* Long pasted messages cap their height and fade out, revealed by "Show more". */
+  .user-text.collapsed {
+    max-height: 9.5em;
+    overflow: hidden;
+    mask-image: linear-gradient(to bottom, black 75%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, black 75%, transparent 100%);
+  }
+
+  .show-more-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--jarvis-space-1);
+    margin-top: var(--jarvis-space-1);
+    padding: 0;
+    background: transparent;
+    border: none;
+    color: var(--vscode-textLink-foreground, var(--jarvis-accent));
+    cursor: pointer;
+    font-size: var(--jarvis-text-xs);
+    font-family: inherit;
+  }
+
+  .show-more-btn:hover {
+    text-decoration: underline;
   }
 
   /* Assistant reply: full width, no bubble. */

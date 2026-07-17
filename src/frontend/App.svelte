@@ -95,11 +95,19 @@
   let approvalRequest = $state<ApprovalRequest | null>(null);
   let pendingChanges = $state<PendingFileChange[]>([]);
   let todos = $state<TodoItem[]>([]);
+  /** Text pushed back into the chat input after a fork (see 'forked' handler below). */
+  let pendingDraft = $state<string | null>(null);
 
-  function pushMessage(role: Message['role'], content: string, kind?: Message['kind'], badges?: Badge[]) {
+  function pushMessage(
+    role: Message['role'],
+    content: string,
+    kind?: Message['kind'],
+    badges?: Badge[],
+    id?: string
+  ) {
     messages = [
       ...messages,
-      { id: crypto.randomUUID(), role, content, timestamp: Date.now(), kind, badges }
+      { id: id ?? crypto.randomUUID(), role, content, timestamp: Date.now(), kind, badges }
     ];
   }
 
@@ -201,6 +209,9 @@
       docs?: string[];
       items?: TodoItem[];
       uri?: string;
+      messageId?: string;
+      checkpointId?: string;
+      title?: string;
     };
 
     switch (msg.type) {
@@ -389,7 +400,7 @@
       // Legacy single-shot message (kept for backward compatibility)
       case 'injectUserMessage':
         if (msg.text) {
-          pushMessage('user', msg.text);
+          pushMessage('user', msg.text, undefined, undefined, msg.id);
           isSending = true;
         }
         break;
@@ -397,9 +408,34 @@
         if (msg.prompt) {
           pushMessage('user', msg.prompt, 'inline', [
             { icon: '✎', label: `${msg.file} L${msg.startLine}-${msg.endLine}`, variant: 'info' }
-          ]);
+          ], msg.id);
           isSending = true;
         }
+        break;
+      case 'checkpointLinked':
+        if (msg.messageId && msg.checkpointId) {
+          const linkedId = msg.messageId;
+          const cpId = msg.checkpointId;
+          messages = messages.map(m => (m.id === linkedId ? { ...m, checkpointId: cpId } : m));
+        }
+        break;
+      case 'forkable':
+        if (msg.messageId) {
+          const forkableId = msg.messageId;
+          messages = messages.map(m => (m.id === forkableId ? { ...m, forkable: true } : m));
+        }
+        break;
+      case 'forked':
+        if (msg.messageId) {
+          const idx = messages.findIndex(m => m.id === msg.messageId);
+          if (idx !== -1) {
+            // The forked message is dropped from the transcript and its text
+            // goes back into the input, so the user can edit/resend it.
+            pendingDraft = messages[idx].content;
+            messages = messages.slice(0, idx);
+          }
+        }
+        isSending = false;
         break;
       case 'chatMessage':
         if (msg.text) {
@@ -430,15 +466,29 @@
       text = rawText.slice(separatorIndex + 1);
     }
     
-    pushMessage('user', text.trim());
+    const id = crypto.randomUUID();
+    pushMessage('user', text.trim(), undefined, undefined, id);
     isSending = true;
-    vscode?.postMessage({ type: 'chatMessage', text: text.trim(), mode });
+    vscode?.postMessage({ type: 'chatMessage', text: text.trim(), mode, id });
   }
 
   function handlePlanProceed() {
-    pushMessage('user', "The plan is approved. Proceed with its implementation step by step.");
+    const id = crypto.randomUUID();
+    pushMessage('user', "The plan is approved. Proceed with its implementation step by step.", undefined, undefined, id);
     isSending = true;
-    vscode?.postMessage({ type: 'planProceed' });
+    vscode?.postMessage({ type: 'planProceed', id });
+  }
+
+  function handleRewindMessage(messageId: string) {
+    vscode?.postMessage({ type: 'rewindToMessage', messageId });
+  }
+
+  function handleForkMessage(messageId: string) {
+    vscode?.postMessage({ type: 'forkConversation', messageId });
+  }
+
+  function handleForkAndRewindMessage(messageId: string) {
+    vscode?.postMessage({ type: 'forkAndRewind', messageId });
   }
 
   function persistUiState() {
@@ -554,8 +604,8 @@
     handleTabChange('settings');
   }
 
-  function handleRollback(ref: string) {
-    vscode?.postMessage({ type: 'rollback', ref });
+  function handleRollback(id: string) {
+    vscode?.postMessage({ type: 'rollback', id });
   }
 
   function handleRefreshCheckpoints() {
@@ -684,6 +734,11 @@
           onApprovalRespond={handleApprovalRespond}
           onModelChange={handleModelChange}
           onPlanProceed={handlePlanProceed}
+          onRewindMessage={handleRewindMessage}
+          onForkMessage={handleForkMessage}
+          onForkAndRewindMessage={handleForkAndRewindMessage}
+          {pendingDraft}
+          onDraftConsumed={() => (pendingDraft = null)}
         />
         <TokenGauge
           used={tokensUsed}

@@ -21,6 +21,21 @@ interface RawUsage {
   prompt_cache_hit_tokens?: number;
 }
 
+/** Raw shape of one SSE `data:` chunk from an OpenAI-compatible streaming completion. */
+interface StreamChunk {
+  usage?: RawUsage;
+  choices?: Array<{
+    delta?: {
+      content?: string;
+      tool_calls?: Array<{
+        index: number;
+        id?: string;
+        function?: { name?: string; arguments?: string };
+      }>;
+    };
+  }>;
+}
+
 /** Normalises the `usage` block (OpenAI: `prompt_tokens_details.cached_tokens`, DeepSeek: `prompt_cache_hit_tokens`). */
 function extractUsage(usage: RawUsage | undefined): ProviderUsage | undefined {
   if (!usage) return undefined;
@@ -43,7 +58,10 @@ function buildBody(
   return {
     model: config.model,
     messages: messages.map(m => {
-      const msg: any = { role: m.role, content: m.content || '' };
+      const msg: { role: string; content: string; tool_calls?: NativeToolCall[]; tool_call_id?: string } = {
+        role: m.role,
+        content: m.content || ''
+      };
       if (m.tool_calls) msg.tool_calls = m.tool_calls;
       if (m.tool_call_id) msg.tool_call_id = m.tool_call_id;
       return msg;
@@ -144,7 +162,7 @@ export async function openaiCompatibleStream(
         }
 
         try {
-          const parsed = JSON.parse(payload) as any;
+          const parsed = JSON.parse(payload) as StreamChunk;
           // With `include_usage`, the API emits a final chunk `choices: []` + `usage`.
           if (parsed.usage) usage = extractUsage(parsed.usage);
           const delta = parsed.choices?.[0]?.delta;

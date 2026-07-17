@@ -41,7 +41,10 @@ export class OllamaProvider implements IModelProvider {
       body: JSON.stringify({
         model: this.model,
         messages: messages.map(m => {
-          const msg: any = { role: m.role, content: m.content || '' };
+          const msg: { role: string; content: string; tool_calls?: NativeToolCall[] } = {
+            role: m.role,
+            content: m.content || ''
+          };
           if (m.tool_calls) msg.tool_calls = m.tool_calls;
           return msg;
         }),
@@ -81,7 +84,10 @@ export class OllamaProvider implements IModelProvider {
         body: JSON.stringify({
           model: this.model,
           messages: messages.map(m => {
-            const msg: any = { role: m.role, content: m.content || '' };
+            const msg: { role: string; content: string; tool_calls?: NativeToolCall[] } = {
+              role: m.role,
+              content: m.content || ''
+            };
             if (m.tool_calls) msg.tool_calls = m.tool_calls;
             return msg;
           }),

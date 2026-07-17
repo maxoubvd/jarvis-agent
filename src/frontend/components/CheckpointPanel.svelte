@@ -11,7 +11,7 @@
 
   interface Props {
     checkpoints?: Checkpoint[];
-    onRollback?: (ref: string) => void;
+    onRollback?: (id: string) => void;
     onRefresh?: () => void;
   }
 
@@ -33,13 +33,13 @@
     </div>
   {:else}
     <ul class="list">
-      {#each checkpoints as cp (cp.ref)}
+      {#each checkpoints as cp (cp.id)}
         <li class="item">
           <div class="info">
             <span class="desc"><span class="dot {cp.type}"></span>{cp.description}</span>
             <span class="ref">{cp.ref} · {cp.type}</span>
           </div>
-          <button class="rollback" onclick={() => onRollback(cp.ref)}>
+          <button class="rollback" onclick={() => onRollback(cp.id)}>
             Rollback
           </button>
         </li>

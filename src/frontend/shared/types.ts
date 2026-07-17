@@ -28,6 +28,15 @@ export interface Message {
   kind?: MessageKind;
   badges?: Badge[];
   processSteps?: ProcessStep[];
+  /** Set once the backend confirms a checkpoint was captured for this message's turn. */
+  checkpointId?: string;
+  /** Set once the backend confirms this message's id was actually recorded in its
+   *  tracked history (message `forkable`) — only then can Fork/Rewind act on it.
+   *  Stays false for turns the backend doesn't track (e.g. /tdd, /workflow, /agent,
+   *  /init) and for messages rehydrated via `chatHistory` on reload, so the
+   *  rewind/fork menu never appears on a message it can't actually act on.
+   */
+  forkable?: boolean;
 }
 
 export interface RequestTokenRecord {
