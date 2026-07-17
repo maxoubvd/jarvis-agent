@@ -73,42 +73,46 @@
 
     {#if typeEntries.length > 0}
       <h3>Actions by type</h3>
-      <table>
-        <thead>
-          <tr><th>Type</th><th>Total</th><th>Success</th></tr>
-        </thead>
-        <tbody>
-          {#each typeEntries as [type, info]}
-            <tr>
-              <td>{type}</td>
-              <td>{info.count}</td>
-              <td>{info.successCount}</td>
-            </tr>
-          {/each}
-        </tbody>
-      </table>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>Type</th><th>Total</th><th>Success</th></tr>
+          </thead>
+          <tbody>
+            {#each typeEntries as [type, info]}
+              <tr>
+                <td>{type}</td>
+                <td>{info.count}</td>
+                <td>{info.successCount}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
     {/if}
 
     {#if stats.recentActions.length > 0}
       <h3>Recent actions</h3>
-      <table>
-        <thead>
-          <tr><th>Time</th><th>Type</th><th>Model</th><th>Tokens</th><th>Status</th></tr>
-        </thead>
-        <tbody>
-          {#each stats.recentActions.slice(0, 10) as action (action.id)}
-            <tr>
-              <td>{formatTime(action.timestamp)}</td>
-              <td>{action.type}</td>
-              <td class="model">{action.model}</td>
-              <td>{(action.inputTokens + action.outputTokens).toLocaleString()}</td>
-              <td class:ok={action.status === 'success'} class:ko={action.status !== 'success'}>
-                <Icon name={action.status === 'success' ? 'check' : 'error'} size={12} />
-              </td>
-            </tr>
-          {/each}
-        </tbody>
-      </table>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>Time</th><th>Type</th><th>Model</th><th>Tokens</th><th>Status</th></tr>
+          </thead>
+          <tbody>
+            {#each stats.recentActions.slice(0, 10) as action (action.id)}
+              <tr>
+                <td>{formatTime(action.timestamp)}</td>
+                <td>{action.type}</td>
+                <td class="model">{action.model}</td>
+                <td>{(action.inputTokens + action.outputTokens).toLocaleString()}</td>
+                <td class:ok={action.status === 'success'} class:ko={action.status !== 'success'}>
+                  <Icon name={action.status === 'success' ? 'check' : 'error'} size={12} />
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
     {/if}
   {/if}
 </section>
@@ -180,7 +184,7 @@
 
   .tiles {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
     gap: 0.5rem;
   }
 
@@ -193,7 +197,7 @@
   }
 
   .tile-value {
-    font-size: 1.25rem;
+    font-size: clamp(1rem, 5vw, 1.25rem);
     font-weight: 700;
   }
 
@@ -211,7 +215,7 @@
 
   .bar-row {
     display: grid;
-    grid-template-columns: minmax(80px, 160px) 1fr auto;
+    grid-template-columns: minmax(50px, 1fr) minmax(0, 2fr) auto;
     align-items: center;
     gap: 0.5rem;
     font-size: 0.78rem;

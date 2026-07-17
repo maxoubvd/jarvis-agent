@@ -166,3 +166,113 @@ describe('CheckpointManager.rollbackToLastCheckpoint', () => {
     expect(executeTerminalCommand).toHaveBeenNthCalledWith(4, 'git stash apply stash@{0}');
   });
 });
+
+describe('CheckpointManager id round-trip (createCheckpoint -> listCheckpoints)', () => {
+  beforeEach(() => {
+    executeTerminalCommand.mockReset();
+  });
+
+  it('a realistic multi-word description survives sanitize() + the listCheckpoints() regex intact', async () => {
+    executeTerminalCommand
+      .mockResolvedValueOnce(ok()) // git add -A
+      .mockResolvedValueOnce(ok('deadbeef')) // git stash create
+      .mockResolvedValueOnce(ok()) // git reset
+      .mockResolvedValueOnce(ok()); // git stash store
+
+    const manager = new CheckpointManager();
+    const created = await manager.createCheckpoint('action', 'Fix the login bug! (urgent)');
+    expect(created).not.toBeNull();
+
+    executeTerminalCommand.mockReset();
+    executeTerminalCommand.mockResolvedValueOnce(
+      ok(`stash@{0}: On main: ${created!.id}`)
+    );
+    const [listed] = await manager.listCheckpoints();
+
+    expect(listed.id).toBe(created!.id);
+    expect(listed.type).toBe('action');
+  });
+});
+
+describe('CheckpointManager.restoreToCheckpoint', () => {
+  beforeEach(() => {
+    executeTerminalCommand.mockReset();
+  });
+
+  it('re-resolves the ref by stable id via a fresh listCheckpoints() call, then hard-resets and applies', async () => {
+    const stashList = [
+      'stash@{0}: On main: jarvis/checkpoint-2026-07-16T10-00-00-000Z-action-newer-change',
+      'stash@{1}: On main: jarvis/checkpoint-2026-07-16T09-00-00-000Z-action-older-change'
+    ].join('\n');
+
+    executeTerminalCommand
+      .mockResolvedValueOnce(ok(stashList)) // git stash list
+      .mockResolvedValueOnce(ok()) // git checkout -- .
+      .mockResolvedValueOnce(ok()) // git clean -fd
+      .mockResolvedValueOnce(ok()) // git stash apply
+      .mockResolvedValueOnce(ok()); // git reset (unstage)
+
+    const manager = new CheckpointManager();
+    // Target the OLDER checkpoint (stash@{1}), not stash@{0} — this is exactly the
+    // case a stale, previously-captured `ref` would get wrong.
+    const result = await manager.restoreToCheckpoint(
+      'jarvis/checkpoint-2026-07-16T09-00-00-000Z-action-older-change'
+    );
+
+    expect(result.success).toBe(true);
+    expect(executeTerminalCommand).toHaveBeenNthCalledWith(2, 'git checkout -- .');
+    expect(executeTerminalCommand).toHaveBeenNthCalledWith(3, 'git clean -fd');
+    expect(executeTerminalCommand).toHaveBeenNthCalledWith(4, 'git stash apply stash@{1}');
+  });
+
+  it('returns an error without touching the working tree when the id is not found', async () => {
+    executeTerminalCommand.mockResolvedValueOnce(ok('')); // git stash list (empty)
+
+    const manager = new CheckpointManager();
+    const result = await manager.restoreToCheckpoint('jarvis/checkpoint-does-not-exist');
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/not found/);
+    expect(executeTerminalCommand).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('CheckpointManager.listAndRestore', () => {
+  beforeEach(() => {
+    executeTerminalCommand.mockReset();
+  });
+
+  it('returns the checkpoint list alongside the result from the single listCheckpoints() call it made', async () => {
+    const stashList = 'stash@{0}: On main: jarvis/checkpoint-2026-07-16T10-00-00-000Z-action-fix-bug';
+
+    executeTerminalCommand
+      .mockResolvedValueOnce(ok(stashList)) // git stash list
+      .mockResolvedValueOnce(ok()) // git checkout -- .
+      .mockResolvedValueOnce(ok()) // git clean -fd
+      .mockResolvedValueOnce(ok()) // git stash apply
+      .mockResolvedValueOnce(ok()); // git reset (unstage)
+
+    const manager = new CheckpointManager();
+    const { result, checkpoints } = await manager.listAndRestore(
+      'jarvis/checkpoint-2026-07-16T10-00-00-000Z-action-fix-bug'
+    );
+
+    expect(result.success).toBe(true);
+    expect(checkpoints).toHaveLength(1);
+    expect(checkpoints[0].id).toBe('jarvis/checkpoint-2026-07-16T10-00-00-000Z-action-fix-bug');
+    // Exactly one `git stash list` call — a caller (e.g. a UI refresh right
+    // after the restore) can reuse `checkpoints` instead of listing again.
+    expect(executeTerminalCommand.mock.calls.filter(c => c[0] === 'git stash list')).toHaveLength(1);
+  });
+
+  it('still returns the fetched list when the id is not found', async () => {
+    const stashList = 'stash@{0}: On main: jarvis/checkpoint-2026-07-16T10-00-00-000Z-action-fix-bug';
+    executeTerminalCommand.mockResolvedValueOnce(ok(stashList));
+
+    const manager = new CheckpointManager();
+    const { result, checkpoints } = await manager.listAndRestore('jarvis/checkpoint-does-not-exist');
+
+    expect(result.success).toBe(false);
+    expect(checkpoints).toHaveLength(1);
+  });
+});

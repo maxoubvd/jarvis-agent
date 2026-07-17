@@ -3,7 +3,6 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { SandboxManager } from '../../src/backend/core/utils/sandbox.js';
-import * as vscode from 'vscode';
 
 vi.mock('vscode', () => ({
   workspace: {

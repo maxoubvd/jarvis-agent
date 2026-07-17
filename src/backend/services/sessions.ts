@@ -80,18 +80,25 @@ export class SessionStore {
     return this.data.sessions[0];
   }
 
-  /** Rewrites the current session from the chat history, then persists. */
-  public updateCurrent(messages: ChatMessage[]): void {
-    const current = this.getCurrent();
-    current.messages = messages.map(m => ({
+  private toStoredMessages(messages: ChatMessage[]): ChatMessage[] {
+    return messages.map(m => ({
       role: m.role,
       content: m.content.length > MAX_MESSAGE_CHARS ? m.content.slice(0, MAX_MESSAGE_CHARS) + '…' : m.content
     }));
+  }
+
+  private syncCurrentMessages(current: DiscussionSession, messages: ChatMessage[]): void {
+    current.messages = this.toStoredMessages(messages);
     const firstUser = current.messages.find(m => m.role === 'user');
     if (!current.title && firstUser) {
       current.title = firstUser.content.slice(0, TITLE_MAX_CHARS);
     }
     current.updatedAt = new Date().toISOString();
+  }
+
+  /** Rewrites the current session from the chat history, then persists. */
+  public updateCurrent(messages: ChatMessage[]): void {
+    this.syncCurrentMessages(this.getCurrent(), messages);
     void this.save();
   }
 
@@ -103,6 +110,25 @@ export class SessionStore {
       return current;
     }
     const session = newSession(title);
+    this.data.sessions.unshift(session);
+    this.data.sessions = this.data.sessions.slice(0, MAX_SESSIONS);
+    void this.save();
+    return session;
+  }
+
+  /**
+   * Forks the current session at a point, in one write: `currentMessages`
+   * (the full pre-fork conversation) syncs onto the current session so it
+   * survives intact as its own past session, then a NEW current session is
+   * seeded with a full-fidelity (not summarized, not empty) copy of
+   * `truncatedMessages` — unlike `startNew()`, always creates a distinct new
+   * slot since a fork always has real content to preserve.
+   */
+  public forkCurrent(currentMessages: ChatMessage[], truncatedMessages: ChatMessage[], title?: string): DiscussionSession {
+    this.syncCurrentMessages(this.getCurrent(), currentMessages);
+
+    const session = newSession(title ?? '');
+    session.messages = this.toStoredMessages(truncatedMessages);
     this.data.sessions.unshift(session);
     this.data.sessions = this.data.sessions.slice(0, MAX_SESSIONS);
     void this.save();

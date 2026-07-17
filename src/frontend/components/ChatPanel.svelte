@@ -24,6 +24,7 @@
   import Icon from './Icon.svelte';
   import ApprovalCard from './ApprovalCard.svelte';
   import TodoList from './TodoList.svelte';
+  import MessageActions from './MessageActions.svelte';
   import vscode from '../lib/vscode-api';
 
   const BADGE_ICONS: Record<string, string> = {
@@ -64,6 +65,12 @@
     todos?: TodoItem[];
     /** Avatar video (media/), shown in place of the icon in the "Working…" badge. */
     avatarUri?: string | null;
+    onRewindMessage?: (messageId: string) => void;
+    onForkMessage?: (messageId: string) => void;
+    onForkAndRewindMessage?: (messageId: string) => void;
+    /** Text to load into the input (e.g. a forked message, ready to edit/resend). */
+    pendingDraft?: string | null;
+    onDraftConsumed?: () => void;
   }
 
   let {
@@ -88,7 +95,12 @@
     onPlanProceed = () => {},
     firstName = '',
     todos = [],
-    avatarUri = null
+    avatarUri = null,
+    onRewindMessage = () => {},
+    onForkMessage = () => {},
+    onForkAndRewindMessage = () => {},
+    pendingDraft = null,
+    onDraftConsumed = () => {}
   }: Props = $props();
 
   let mode = $state('Automatic');
@@ -104,11 +116,53 @@
     }
   });
 
+  const MODE_ORDER = ['Automatic', 'Fast', 'Plan'];
+
+  function cycleMode() {
+    const order = isSmallModel ? MODE_ORDER.filter((m) => m !== 'Plan') : MODE_ORDER;
+    const idx = order.indexOf(mode);
+    mode = order[(idx + 1) % order.length];
+  }
+
   let inputText = $state('');
+
   /** id of the plan message for which Proceed/Review was already clicked — hides the actions until a new plan arrives. */
   let dismissedPlanActionsId = $state<string | null>(null);
   let listEl: HTMLUListElement | undefined = $state();
   let textareaEl: HTMLTextAreaElement | undefined = $state();
+
+  // A forked message's text lands back in the input, ready to edit/resend.
+  $effect(() => {
+    if (pendingDraft === null || pendingDraft === undefined) return;
+    inputText = pendingDraft;
+    onDraftConsumed();
+    queueMicrotask(() => {
+      textareaEl?.focus();
+      textareaEl?.setSelectionRange(inputText.length, inputText.length);
+    });
+  });
+
+  // Up/Down history recall (like a shell / Claude Code CLI).
+  let historyIndex = $state(-1);
+  let draftBeforeHistory = $state('');
+  let userHistory = $derived(messages.filter((m) => m.role === 'user').map((m) => m.content));
+
+  // Long user messages (big pastes, logs...) collapse by default so they
+  // don't dominate the transcript — expanded on demand, per message id.
+  const LONG_MESSAGE_CHARS = 600;
+  const LONG_MESSAGE_LINES = 8;
+  let expandedMessages = $state<Set<string>>(new Set());
+
+  function isLongMessage(content: string): boolean {
+    return content.length > LONG_MESSAGE_CHARS || content.split('\n').length > LONG_MESSAGE_LINES;
+  }
+
+  function toggleExpanded(id: string) {
+    const next = new Set(expandedMessages);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    expandedMessages = next;
+  }
 
   // `/` command and `@` mention autocompletion.
   let showMenu = $state(false);
@@ -208,6 +262,7 @@
   }
 
   function handleInput() {
+    if (historyIndex !== -1) historyIndex = -1;
     selectedIndex = 0;
     refreshMenu();
   }
@@ -355,7 +410,54 @@
     }
   });
 
+  function isCaretOnFirstLine(): boolean {
+    const caret = textareaEl?.selectionStart ?? 0;
+    return inputText.lastIndexOf('\n', caret - 1) === -1;
+  }
+
+  function isCaretOnLastLine(): boolean {
+    const caret = textareaEl?.selectionEnd ?? inputText.length;
+    return inputText.indexOf('\n', caret) === -1;
+  }
+
+  /** Steps through `userHistory`, returning false (no-op) when there's nothing further to recall. */
+  function recallHistory(direction: 'up' | 'down'): boolean {
+    if (direction === 'up') {
+      if (userHistory.length === 0 || historyIndex === 0) return false;
+      if (historyIndex === -1) {
+        draftBeforeHistory = inputText;
+        historyIndex = userHistory.length - 1;
+      } else {
+        historyIndex--;
+      }
+      inputText = userHistory[historyIndex];
+    } else {
+      if (historyIndex === -1) return false;
+      if (historyIndex < userHistory.length - 1) {
+        historyIndex++;
+        inputText = userHistory[historyIndex];
+      } else {
+        historyIndex = -1;
+        inputText = draftBeforeHistory;
+      }
+    }
+    // Repositions the caret at the end (on the next tick).
+    queueMicrotask(() => {
+      if (textareaEl) {
+        textareaEl.focus();
+        textareaEl.setSelectionRange(inputText.length, inputText.length);
+      }
+    });
+    return true;
+  }
+
   function handleKeydown(event: KeyboardEvent) {
+    if (event.key === 'Tab' && event.shiftKey) {
+      event.preventDefault();
+      cycleMode();
+      return;
+    }
+
     if (showMenu && menuItems.length > 0) {
       if (event.key === 'ArrowDown') {
         event.preventDefault();
@@ -377,6 +479,12 @@
         showMenu = false;
         return;
       }
+    } else if (event.key === 'ArrowUp' && isCaretOnFirstLine() && recallHistory('up')) {
+      event.preventDefault();
+      return;
+    } else if (event.key === 'ArrowDown' && isCaretOnLastLine() && recallHistory('down')) {
+      event.preventDefault();
+      return;
     }
 
     if (event.key === 'Enter' && !event.shiftKey) {
@@ -390,6 +498,8 @@
     if (!text || isSending) return;
     showMenu = false;
     inputText = '';
+    historyIndex = -1;
+    draftBeforeHistory = '';
     onSend(`${mode}|${text}`);
   }
 </script>
@@ -443,6 +553,16 @@
             class:thinking-msg={message.kind === 'thinking'}
             class:inline-edit={message.kind === 'inline'}
           >
+            {#if message.role === 'user' && message.forkable}
+              <MessageActions
+                hasCheckpoint={!!message.checkpointId}
+                disabled={isSending}
+                onRewind={() => onRewindMessage(message.id)}
+                onFork={() => onForkMessage(message.id)}
+                onForkAndRewind={() => onForkAndRewindMessage(message.id)}
+              />
+            {/if}
+
             {#if message.badges?.length}
               <div class="badges">
                 {#each message.badges as badge}
@@ -521,6 +641,16 @@
                   </button>
                 </div>
               {/if}
+            {:else if message.role === 'user'}
+              {@const long = isLongMessage(message.content)}
+              {@const expanded = expandedMessages.has(message.id)}
+              <p class="user-text" class:collapsed={long && !expanded}>{message.content}</p>
+              {#if long}
+                <button class="show-more-btn" onclick={() => toggleExpanded(message.id)}>
+                  <Icon name={expanded ? 'chevron-up' : 'chevron-down'} size={12} />
+                  {expanded ? 'Show less' : 'Show more'}
+                </button>
+              {/if}
             {:else if message.kind !== 'tool' && message.kind !== 'step' && message.kind !== 'thinking'}
               <p>{message.content}</p>
             {/if}
@@ -579,7 +709,9 @@
         {/if}
         <textarea
           class="input"
-          placeholder="Ask anything… (@ to mention, / for action)"
+          class:mode-quick={mode === 'Fast'}
+          class:mode-plan={mode === 'Plan'}
+          placeholder="Ask anything… (@ to mention, / for action · Shift+Tab to switch mode)"
           rows={2}
           disabled={isSending}
           bind:this={textareaEl}
@@ -690,6 +822,7 @@
 
   /* User message: compact bubble right-aligned (Le Chat style). */
   .message.user {
+    position: relative;
     align-self: flex-end;
     max-width: 85%;
     padding: var(--jarvis-space-2) var(--jarvis-space-3);
@@ -697,6 +830,32 @@
     border-bottom-right-radius: var(--jarvis-radius-sm);
     background: var(--vscode-input-background);
     border: 1px solid var(--vscode-editorWidget-border);
+  }
+
+  /* Long pasted messages cap their height and fade out, revealed by "Show more". */
+  .user-text.collapsed {
+    max-height: 9.5em;
+    overflow: hidden;
+    mask-image: linear-gradient(to bottom, black 75%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, black 75%, transparent 100%);
+  }
+
+  .show-more-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--jarvis-space-1);
+    margin-top: var(--jarvis-space-1);
+    padding: 0;
+    background: transparent;
+    border: none;
+    color: var(--vscode-textLink-foreground, var(--jarvis-accent));
+    cursor: pointer;
+    font-size: var(--jarvis-text-xs);
+    font-family: inherit;
+  }
+
+  .show-more-btn:hover {
+    text-decoration: underline;
   }
 
   /* Assistant reply: full width, no bubble. */
@@ -998,11 +1157,13 @@
 
   .controls-row {
     display: flex;
+    flex-wrap: wrap;
     gap: var(--jarvis-space-2);
     margin-bottom: var(--jarvis-space-2);
   }
 
   .mode-select, .model-select {
+    flex: 1 1 45%;
     padding: 3px 8px;
     background: var(--vscode-dropdown-background, var(--vscode-input-background));
     color: var(--vscode-dropdown-foreground, var(--vscode-input-foreground));
@@ -1148,6 +1309,24 @@
   .input:focus {
     outline: none;
     border-color: var(--jarvis-accent);
+  }
+
+  .input.mode-quick {
+    border-color: var(--vscode-charts-green, #3fb950);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--vscode-charts-green, #3fb950) 45%, transparent);
+  }
+
+  .input.mode-quick:focus {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--vscode-charts-green, #3fb950) 45%, transparent);
+  }
+
+  .input.mode-plan {
+    border-color: var(--vscode-charts-blue, #4098d7);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--vscode-charts-blue, #4098d7) 45%, transparent);
+  }
+
+  .input.mode-plan:focus {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--vscode-charts-blue, #4098d7) 45%, transparent);
   }
 
   .input:disabled {

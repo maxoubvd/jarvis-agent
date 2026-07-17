@@ -1,11 +1,12 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
+import { randomUUID } from 'crypto';
 import { ModelConfigManager, createProviderFromItem } from '../config/model-config-manager.js';
 import { getConfigManager, normalizeConfig, type JarvisConfig, type DocSite, type ToolPolicy, type ModelItem } from '../config/config-manager.js';
 import { ChatMessage, IModelProvider } from '../models/abstract.js';
 import { SessionStore, buildResumeContext } from '../services/sessions.js';
 import { HITLManager, HITLMode, ApprovalPromptDecision } from '../services/hitl.js';
-import { CheckpointManager } from '../services/checkpoint.js';
+import { CheckpointManager, type Checkpoint } from '../services/checkpoint.js';
 import { AnalyticsCollector } from '../services/analytics.js';
 import { TokenCounter, TokenUsage, TokenSnapshot, estimateTokens } from '../services/token-counter.js';
 import { ResponseCache } from '../services/response-cache.js';
@@ -84,6 +85,14 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
   /** Pending approvals (card in the chat), keyed by HITL prompt id. */
   private pendingApprovals = new Map<string, (d: ApprovalPromptDecision | null) => void>();
   private currentAbortController: AbortController | null = null;
+
+  /** messageId -> checkpoint captured just before that message's turn ran.
+   *  Rewind via `checkpoint.id` (CheckpointManager.restoreToCheckpoint), never `.ref` —
+   *  refs are positional (`stash@{N}`) and go stale as soon as a newer checkpoint exists. */
+  private messageCheckpoints = new Map<string, Checkpoint>();
+  /** messageId -> index into `this.history` where that user turn landed. Cleared/pruned
+   *  whenever `this.history` is wholesale-reassigned or forked. */
+  private historyIndexByMessageId = new Map<string, number>();
 
   /** Notifies the host (status bar) whenever token usage changes. */
   public onTokensChanged: ((usage: TokenUsage) => void) | null = null;
@@ -327,18 +336,34 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
       case 'chatMessage':
         if (typeof message.text === 'string') {
           const mode = typeof message.mode === 'string' ? message.mode : undefined;
-          await this.onChatMessage(webview, message.text, mode);
+          const messageId = typeof message.id === 'string' ? message.id : undefined;
+          await this.onChatMessage(webview, message.text, mode, messageId);
         }
         break;
       case 'planProceed':
-        await this.onPlanProceed(webview);
+        await this.onPlanProceed(webview, typeof message.id === 'string' ? message.id : undefined);
         break;
       case 'listCheckpoints':
         await this.onListCheckpoints(webview);
         break;
       case 'rollback':
-        if (typeof message.ref === 'string') {
-          await this.onRollback(webview, message.ref);
+        if (typeof message.id === 'string') {
+          await this.onRollback(webview, message.id);
+        }
+        break;
+      case 'rewindToMessage':
+        if (typeof message.messageId === 'string') {
+          await this.onRewindToMessage(webview, message.messageId);
+        }
+        break;
+      case 'forkConversation':
+        if (typeof message.messageId === 'string') {
+          this.onForkConversation(webview, message.messageId);
+        }
+        break;
+      case 'forkAndRewind':
+        if (typeof message.messageId === 'string') {
+          await this.onForkAndRewind(webview, message.messageId);
         }
         break;
       case 'getAnalytics':
@@ -521,8 +546,9 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
 
     if (action === 'reject' && rejectedDiff && this._view?.webview) {
       const msg = `I rejected the following change in the file \`${pathStr}\`:\n${rejectedDiff}\n\nPlease propose an alternative directly in the chat (do not use your file-editing tools).`;
-      this.post(this._view.webview, { type: 'injectUserMessage', text: msg });
-      await this.onChatMessage(this._view.webview, msg, 'Automatic');
+      const messageId = randomUUID();
+      this.post(this._view.webview, { type: 'injectUserMessage', text: msg, id: messageId });
+      await this.onChatMessage(this._view.webview, msg, 'Automatic', messageId);
     }
   }
 
@@ -534,8 +560,9 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
 
     if (action === 'reject' && this._view?.webview) {
       const msg = `I rejected ALL changes in the file \`${pathStr}\`. Please propose an alternative directly in the chat (do not use your file-editing tools).`;
-      this.post(this._view.webview, { type: 'injectUserMessage', text: msg });
-      await this.onChatMessage(this._view.webview, msg, 'Automatic');
+      const messageId = randomUUID();
+      this.post(this._view.webview, { type: 'injectUserMessage', text: msg, id: messageId });
+      await this.onChatMessage(this._view.webview, msg, 'Automatic', messageId);
     }
   }
 
@@ -576,8 +603,9 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     if (action === 'reject' && diskActions.length > 0 && this._view?.webview) {
       const paths = diskActions.map(d => `\`${d.path}\``).join(', ');
       const msg = `I rejected ALL pending changes in the following files: ${paths}. Please propose an alternative directly in the chat (do not use your file-editing tools).`;
-      this.post(this._view.webview, { type: 'injectUserMessage', text: msg });
-      await this.onChatMessage(this._view.webview, msg, 'Automatic');
+      const messageId = randomUUID();
+      this.post(this._view.webview, { type: 'injectUserMessage', text: msg, id: messageId });
+      await this.onChatMessage(this._view.webview, msg, 'Automatic', messageId);
     }
   }
 
@@ -1085,6 +1113,23 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     return cleaned;
   }
 
+  /**
+   * Single choke point for recording a user turn: pushes it onto `this.history`
+   * and, if the frontend sent a `messageId` for it, records the resulting index
+   * and tells the webview this message is now fork-capable. Every push site
+   * MUST go through this (rather than pushing to `this.history` directly) —
+   * that's what lets the frontend's rewind/fork menu correctly stay hidden on
+   * turns that don't call this (e.g. /tdd, /workflow, /agent, /init, which
+   * intentionally aren't part of the tracked conversation history).
+   */
+  private recordUserTurn(webview: vscode.Webview, entry: ChatMessage, messageId?: string): void {
+    this.history.push(entry);
+    if (messageId) {
+      this.historyIndexByMessageId.set(messageId, this.history.length - 1);
+      this.post(webview, { type: 'forkable', messageId });
+    }
+  }
+
   private async getSettingsDefaults(): Promise<Record<string, unknown>> {
     const config = getConfigManager().getConfig();
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -1167,7 +1212,7 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
    * and frequently reclassifies it as [PLAN] intention, which would restart `runPlanMode` (and thus
    * regenerate the plan) instead of implementing.
    */
-  private async onPlanProceed(webview: vscode.Webview): Promise<void> {
+  private async onPlanProceed(webview: vscode.Webview, messageId?: string): Promise<void> {
     const text =
       "The plan is validated. Proceed with its implementation step by step, following the steps in the plan " +
       "above. Use update_todo_list to track your progress live on these steps.";
@@ -1189,13 +1234,13 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     }
 
     const recentHistory = this.history.slice(-10);
-    const finalText = await this.runAgent(webview, active, text, undefined, recentHistory);
-    this.history.push({ role: 'user', content: this.maybeScrub(text, active.providerName) });
+    const finalText = await this.runAgent(webview, active, text, undefined, recentHistory, { messageId });
+    this.recordUserTurn(webview, { role: 'user', content: this.maybeScrub(text, active.providerName) }, messageId);
     if (finalText) this.history.push({ role: 'assistant', content: finalText });
     this.getSessions()?.updateCurrent(this.history);
   }
 
-  private async onChatMessage(webview: vscode.Webview, rawText: string, mode: string = 'Automatic'): Promise<void> {
+  private async onChatMessage(webview: vscode.Webview, rawText: string, mode: string = 'Automatic', messageId?: string): Promise<void> {
     operationLogger.log('chat', `Message received [mode: ${mode}]: ${rawText.slice(0, 80)}`);
 
     if (this.currentAbortController) {
@@ -1309,7 +1354,7 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     // Fast Mode: direct chat without tools, immediate text response
     if (mode === 'Fast') {
       operationLogger.log('chat', 'Fast mode: switching to streamChat without tools');
-      await this.streamChat(webview, active, expanded, rawText);
+      await this.streamChat(webview, active, expanded, rawText, messageId);
       return;
     }
 
@@ -1356,7 +1401,7 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
         const decisionUpper = decisionRaw.toUpperCase();
         if (decisionUpper.includes('[CHAT]') && !decisionUpper.includes('[TOOLS]') && !decisionUpper.includes('[PLAN]')) {
           operationLogger.log('chat', 'Routing: Conversational intent detected -> switching to toolless mode');
-          await this.streamChat(webview, active, expanded, rawText);
+          await this.streamChat(webview, active, expanded, rawText, messageId);
           return;
         }
         if (decisionUpper.includes('[PLAN]')) {
@@ -1376,20 +1421,22 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     const chatMode = this.getOptimization().chatMode ?? 'agent';
     if (chatMode === 'agent' || mode === 'Automatic') {
       const recentHistory = this.history.slice(-10);
-      const finalText = await this.runAgent(webview, active, expanded, undefined, recentHistory);
-      this.history.push({ role: 'user', content: this.maybeScrub(expanded, active.providerName) });
+      const finalText = await this.runAgent(webview, active, expanded, undefined, recentHistory, { messageId });
+      this.recordUserTurn(webview, { role: 'user', content: this.maybeScrub(expanded, active.providerName) }, messageId);
       if (finalText) this.history.push({ role: 'assistant', content: finalText });
       this.getSessions()?.updateCurrent(this.history);
       return;
     }
 
-    await this.streamChat(webview, active, expanded, rawText);
+    await this.streamChat(webview, active, expanded, rawText, messageId);
   }
 
   private startNewSession(webview: vscode.Webview): void {
     const store = this.getSessions();
     store?.startNew();
     this.history = [];
+    this.historyIndexByMessageId.clear();
+    this.messageCheckpoints.clear();
     this.tokenCounter.reset();
     this.persistTokenState();
     this.postTokens(webview);
@@ -1445,6 +1492,8 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     store.startNew(`Resumed: ${session.title}`);
     store.updateCurrent([ctx]);
     this.history = [ctx];
+    this.historyIndexByMessageId.clear();
+    this.messageCheckpoints.clear();
     this.tokenCounter.reset();
     this.persistTokenState();
     this.postTokens(webview);
@@ -1457,12 +1506,13 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     webview: vscode.Webview,
     active: { provider: IModelProvider; providerName: string; model: string },
     expandedText: string,
-    rawText: string
+    rawText: string,
+    messageId?: string
   ): Promise<void> {
     const { provider, providerName, model } = active;
     const outgoing = this.maybeScrub(expandedText, providerName);
 
-    this.history.push({ role: 'user', content: outgoing });
+    this.recordUserTurn(webview, { role: 'user', content: outgoing }, messageId);
     const messages: ChatMessage[] = [{ role: 'system', content: this.buildSystemPrompt() }, ...this.history];
     const inputTokens = estimateTokens(messages.map(m => m.content).join(' '));
 
@@ -1691,7 +1741,7 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     task: string,
     persona?: string,
     history?: ChatMessage[],
-    options: { kind?: import('../../frontend/shared/types.js').MessageKind, isSmallModel?: boolean, allowedToolPrefixes?: string[], planOnly?: boolean } = {}
+    options: { kind?: import('../../frontend/shared/types.js').MessageKind, isSmallModel?: boolean, allowedToolPrefixes?: string[], planOnly?: boolean, messageId?: string } = {}
   ): Promise<string | void> {
     this.post(webview, { type: 'chatStart' });
     this.currentAbortController = new AbortController();
@@ -1728,7 +1778,13 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
       const orchestrator = this.buildOrchestrator(active, registry, persona, options.planOnly ? { planOnly: true } : undefined);
 
       // Checkpoint avant action agentique (spec §6.2)
-      await this.getCheckpoints().createCheckpoint('action', task.slice(0, 40)).catch(err => this.reportCheckpointFailure(err));
+      const checkpoint = await this.getCheckpoints()
+        .createCheckpoint('action', task.slice(0, 40))
+        .catch(err => this.reportCheckpointFailure(err));
+      if (checkpoint && options.messageId) {
+        this.messageCheckpoints.set(options.messageId, checkpoint);
+        this.post(webview, { type: 'checkpointLinked', messageId: options.messageId, checkpointId: checkpoint.id });
+      }
 
       result = await orchestrator.run(task, history || [], this.agentEvents(webview));
     } catch (err) {
@@ -2100,16 +2156,18 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     return null;
   }
 
-  private async onRollback(webview: vscode.Webview, ref: string): Promise<void> {
-    const result = await this.getCheckpoints().rollback(ref);
+  private async onRollback(webview: vscode.Webview, id: string): Promise<void> {
+    // Re-resolves the ref by stable id (never trusts a ref the panel captured
+    // on its last refresh — it goes stale the moment a newer checkpoint exists).
+    const { result, checkpoints } = await this.getCheckpoints().listAndRestore(id);
     if (result.success) {
-      vscode.window.showInformationMessage(`Jarvis: rollback completed (${ref})`);
-      operationLogger.log('rollback', ref, 'success');
+      vscode.window.showInformationMessage(`Jarvis: rollback completed (${id})`);
+      operationLogger.log('rollback', id, 'success');
     } else {
       vscode.window.showErrorMessage(`Jarvis: rollback failed — ${result.error}`);
-      operationLogger.log('rollback', `${ref}: ${result.error}`, 'error');
+      operationLogger.log('rollback', `${id}: ${result.error}`, 'error');
     }
-    await this.onListCheckpoints(webview);
+    this.post(webview, { type: 'checkpoints', checkpoints });
   }
 
   // `/rollback` chat shortcut: cancels all file modifications
@@ -2125,6 +2183,93 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     }
     this.post(webview, { type: 'chatDone' });
     await this.onListCheckpoints(webview);
+  }
+
+  /**
+   * Truncates the transcript to right BEFORE `messageId`: that message (and
+   * everything after it) is discarded from history, so the frontend can put
+   * its text back in the input box for the user to edit/resend — it's an
+   * "edit & resend" fork, not a "keep this message, discard the rest" one.
+   * The full pre-fork conversation is preserved intact as its own past
+   * session (reachable via `/resume`). Never touches files on disk.
+   */
+  private performFork(webview: vscode.Webview, messageId: string): boolean {
+    const idx = this.historyIndexByMessageId.get(messageId);
+    if (idx === undefined || idx >= this.history.length) {
+      vscode.window.showErrorMessage('Jarvis: this message is no longer available to fork from.');
+      return false;
+    }
+
+    const store = this.getSessions();
+    if (!store) {
+      vscode.window.showErrorMessage('Jarvis: open a workspace folder to fork conversations.');
+      return false;
+    }
+
+    const originalTitle = store.getCurrent().title;
+    const truncated = this.history.slice(0, idx);
+    // forkCurrent syncs the pre-fork snapshot (this.history, in full) to the
+    // current session AND seeds the new one in a single write — no separate
+    // updateCurrent() call needed even though this.history may have grown
+    // since the last turn-completion write.
+    const forked = store.forkCurrent(this.history, truncated, originalTitle ? `Fork of ${originalTitle}` : undefined);
+
+    this.history = truncated;
+    for (const [mid, i] of this.historyIndexByMessageId) {
+      if (i >= idx) this.historyIndexByMessageId.delete(mid);
+    }
+    for (const mid of this.messageCheckpoints.keys()) {
+      if (!this.historyIndexByMessageId.has(mid)) this.messageCheckpoints.delete(mid);
+    }
+
+    // Fork keeps real prior context (unlike /resume's summarization) — the
+    // token gauge is not reset, it keeps reflecting actual spend so far.
+    this.post(webview, { type: 'forked', messageId, title: forked.title });
+    operationLogger.log('session', `Conversation forked from message ${messageId}`, 'success');
+    return true;
+  }
+
+  private onForkConversation(webview: vscode.Webview, messageId: string): void {
+    this.performFork(webview, messageId);
+  }
+
+  private async onRewindToMessage(webview: vscode.Webview, messageId: string): Promise<boolean> {
+    if (this.currentAbortController) {
+      this.currentAbortController.abort();
+      this.currentAbortController = null;
+    }
+
+    const checkpoint = this.messageCheckpoints.get(messageId);
+    if (!checkpoint) {
+      vscode.window.showErrorMessage('Jarvis: no checkpoint associated with this message.');
+      return false;
+    }
+
+    // listAndRestore fetches the checkpoint list once and returns it alongside
+    // the result — `git stash apply` never mutates the stash list, so that
+    // same list can refresh the Checkpoints panel without a second `git stash
+    // list` shell-out.
+    const { result, checkpoints } = await this.getCheckpoints().listAndRestore(checkpoint.id);
+    if (result.success) {
+      vscode.window.showInformationMessage('Jarvis: code rewound to before this message.');
+      operationLogger.log('rewind', messageId, 'success');
+    } else {
+      vscode.window.showErrorMessage(`Jarvis: rewind failed — ${result.error}`);
+      operationLogger.log('rewind', `${messageId}: ${result.error}`, 'error');
+    }
+    this.post(webview, { type: 'checkpoints', checkpoints });
+    return result.success;
+  }
+
+  private async onForkAndRewind(webview: vscode.Webview, messageId: string): Promise<void> {
+    // Rewind first: performFork prunes messageId's checkpoint link once the
+    // message is excluded from history, so the lookup inside onRewindToMessage
+    // would otherwise come up empty if fork ran first. Only fork if the
+    // rewind actually succeeded — otherwise the chat would move on as if the
+    // code had been restored when it wasn't, leaving the two inconsistent.
+    const rewound = await this.onRewindToMessage(webview, messageId);
+    if (!rewound) return;
+    this.performFork(webview, messageId);
   }
 
   private onGetAnalytics(webview: vscode.Webview): void {
@@ -2200,17 +2345,26 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
           const task = `Modify the file \`${filePath}\` (Lines ${startLine} to ${endLine}) to fulfill the following request:\n"${prompt}"\n\nTarget code:\n\`\`\`\n${selectedText}\n\`\`\``;
           
           if (this._view?.webview) {
-            this.history.push({ role: 'user', content: task });
-            this.getSessions()?.updateCurrent(this.history);
-            // Display the prompt inline in the chat (the backend task is never posted to webview otherwise)
+            // Cmd+K is a native VS Code command, not the chat box — there's no
+            // frontend-generated id to correlate against, so the backend mints one
+            // here and hands it down via `inlinePrompt` for the frontend to reuse
+            // instead of minting its own. (Intentional asymmetry vs. the chat-box
+            // flow, where the frontend always owns the id.)
+            const messageId = randomUUID();
+            // Display the prompt inline in the chat (the backend task is never posted to
+            // webview otherwise) BEFORE recordUserTurn's `forkable` confirmation — the
+            // frontend can only attach that flag to a message bubble that already exists.
             this.post(this._view.webview, {
               type: 'inlinePrompt',
+              id: messageId,
               prompt,
               file: filePath,
               startLine,
               endLine
             });
-            await this.runAgent(this._view.webview, active, task, "INLINE EDIT MODE: Edit only the requested section in the file using your tools. Be direct, no unnecessary explanations.");
+            this.recordUserTurn(this._view.webview, { role: 'user', content: task }, messageId);
+            this.getSessions()?.updateCurrent(this.history);
+            await this.runAgent(this._view.webview, active, task, "INLINE EDIT MODE: Edit only the requested section in the file using your tools. Be direct, no unnecessary explanations.", undefined, { messageId });
           } else {
             vscode.window.showWarningMessage("Please open the Jarvis sidebar at least once to start.");
           }
@@ -2440,7 +2594,9 @@ export class JarvisExtension {
         { title: 'Jarvis Checkpoints — select for rollback' }
       );
       if (pick) {
-        const result = await manager.rollback(pick.description ?? '');
+        // Re-resolves by the stable id (`detail`), not the ref shown in `description`
+        // — a ref captured when the picker opened can go stale by the time it's picked.
+        const result = await manager.restoreToCheckpoint(pick.detail ?? '');
         if (result.success) {
           vscode.window.showInformationMessage(`Rollback completed: ${pick.label}`);
         } else {

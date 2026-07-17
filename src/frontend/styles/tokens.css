@@ -243,3 +243,8 @@ body {
   flex: 1;
   min-width: 0;
 }
+
+/* Horizontal scroll fallback for tables that can't fit a narrow sidebar. */
+.table-scroll {
+  overflow-x: auto;
+}

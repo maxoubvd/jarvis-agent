@@ -137,12 +137,23 @@ export class CheckpointManager {
   }
 
   /**
-   * Discards every change made since the most recent checkpoint and restores
-   * that checkpoint's snapshot exactly (used by the `/rollback` chat shortcut,
-   * one message = one checkpoint). Unlike `rollback()`, which merges an old
+   * Discards every change made since `ref`'s checkpoint and restores that
+   * checkpoint's snapshot exactly. Unlike `rollback()`, which merges an old
    * stash onto whatever is currently on disk, this first resets the tree back
    * to HEAD so the stash re-applies cleanly instead of merging on top of the
    * newer edits it's supposed to undo.
+   */
+  private async hardResetAndApply(ref: string): Promise<RollbackResult> {
+    await executeTerminalCommand('git checkout -- .');
+    await executeTerminalCommand('git clean -fd');
+
+    return this.rollback(ref);
+  }
+
+  /**
+   * Discards every change made since the most recent checkpoint and restores
+   * it exactly (used by the `/rollback` chat shortcut, one message = one
+   * checkpoint).
    */
   public async rollbackToLastCheckpoint(): Promise<RollbackResult> {
     const checkpoints = await this.listCheckpoints();
@@ -150,9 +161,39 @@ export class CheckpointManager {
       return { success: false, error: 'No checkpoint available' };
     }
 
-    await executeTerminalCommand('git checkout -- .');
-    await executeTerminalCommand('git clean -fd');
+    return this.hardResetAndApply(checkpoints[0].ref);
+  }
 
-    return this.rollback(checkpoints[0].ref);
+  /**
+   * Restores an arbitrary (not necessarily most-recent) checkpoint by its
+   * stable `id`. `Checkpoint.ref` is positional (`stash@{N}`) and goes stale
+   * the moment a newer checkpoint is created, so a `ref` captured earlier
+   * must never be reused directly — this always re-resolves it via a fresh
+   * `listCheckpoints()` call first.
+   */
+  public async restoreToCheckpoint(id: string): Promise<RollbackResult> {
+    const { result } = await this.listAndRestore(id);
+    return result;
+  }
+
+  /**
+   * Same as `restoreToCheckpoint`, but also returns the checkpoint list it
+   * already fetched to resolve the ref — `git stash apply` never mutates the
+   * stash list, so a caller that also needs a fresh list right after (e.g. to
+   * refresh the Checkpoints panel) can reuse this one instead of shelling out
+   * to `git stash list` a second time.
+   */
+  public async listAndRestore(id: string): Promise<{ result: RollbackResult; checkpoints: Checkpoint[] }> {
+    const checkpoints = await this.listCheckpoints();
+    const target = checkpoints.find(c => c.id === id);
+    if (!target) {
+      return {
+        result: { success: false, error: `Checkpoint not found (it may have been superseded): ${id}` },
+        checkpoints
+      };
+    }
+
+    const result = await this.hardResetAndApply(target.ref);
+    return { result, checkpoints };
   }
 }

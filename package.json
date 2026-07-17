@@ -3,7 +3,7 @@
   "displayName": "Jarvis Code Agent",
   "publisher": "MaximeBendavid",
   "description": "Agentic VS Code extension - Your autonomous software engineer. Multi-provider agentic chat (local or cloud), inline editing (Cmd+K), Auto-TDD, local RAG, specialized agents, Git checkpoints.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "main": "./dist/extension.js",
   "icon": "media/jarvis-icon.png",
@@ -15,6 +15,7 @@
     "url": "https://github.com/maxoubvd/extension-VS-code/issues"
   },
   "homepage": "https://github.com/maxoubvd/extension-VS-code#readme",
+  "qna": "https://github.com/maxoubvd/extension-VS-code/issues",
   "keywords": [
     "ai",
     "agent",
@@ -35,6 +36,14 @@
     "vscode": "^1.90.0"
   },
   "license": "MIT",
+  "pricing": "Free",
+  "markdown": "github",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "Jarvis Agent's agent tools (terminal execution, file read/write) require a trusted workspace to run."
+    }
+  },
   "scripts": {
     "build:extension": "tsc -p tsconfig.json --noEmit && node build-extension.mjs",
     "build:webview": "vite build",
