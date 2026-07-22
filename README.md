@@ -2,6 +2,9 @@
   <img src="media/jarvis-icon.png" alt="Jarvis Agent Logo" width="128"/>
   <h1>Jarvis Agent</h1>
   <p><strong>Your autonomous software engineer, right inside VS Code.</strong></p>
+  <p>
+    <a href="docs/user-guide/README.md"><strong>📚 Read the full User Guide →</strong></a>
+  </p>
 </div>
 
 ---
@@ -64,6 +67,8 @@ Jarvis is **agnostic**. You choose the brain behind your agent:
 
 ## 📖 Advanced User Guide
 
+> This section is a summary. For the **complete reference** — every command, mention, shortcut, agent, workflow and setting, each with examples — see the **[full User Guide](docs/user-guide/README.md)**.
+
 ### Chat Modes
 - **Automatic**: Jarvis analyzes the model's size and the task's complexity to choose between a plain text answer or a decomposition workflow (Task Decomposer).
 - **Fast**: Quick text-only replies, no tool execution.
@@ -110,6 +115,19 @@ Get the most out of Jarvis and keep your token usage under control:
 - **Use checkpoints as a safety net**: Jarvis stashes a git checkpoint before actions/workflows, so `/rollback` (or the Checkpoints tab) lets you experiment freely and undo anything that goes wrong.
 - **Keep secrets out of the sandbox**: maintain `.jarvisignore` (auto-generated, stricter than `.gitignore`) so credentials and sensitive folders are never read or sent to a cloud model.
 - **Tag model roles deliberately**: in Settings > Models, assign a fast/cheap model to `autocomplete` and a stronger one to `chat`, instead of using a single model for everything.
+
+---
+
+## 📚 Full Documentation
+
+The complete, standalone **[User Guide](docs/user-guide/README.md)** documents every feature with examples:
+
+- **[Getting Started](docs/user-guide/getting-started.md)** — install, connect a model, first message.
+- **[Chat Commands & Mentions](docs/user-guide/chat-commands.md)** — `@read/@list/@write/@run`, `@file:`/`@docs:`, and every `/` command.
+- **[Agents & Workflows](docs/user-guide/agents-and-workflows.md)** — the 5 agents, 6 workflows, and Auto-TDD.
+- **[Keyboard Shortcuts & Controls](docs/user-guide/shortcuts.md)** — every key, CodeLens, and Command Palette command.
+- **[Chat Modes & Settings](docs/user-guide/chat-modes-and-settings.md)** — modes, HITL, all settings, full feature reference.
+- **[Tips & Best Practices](docs/user-guide/tips.md)** — get the most out of Jarvis.
 
 ---
 
