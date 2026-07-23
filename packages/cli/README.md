@@ -3,18 +3,11 @@
 **Jarvis Agent in your terminal.** The same autonomous software engineer as the
 [VS Code extension](../../README.md), driven from the command line.
 
-> **Not yet published to npm.** Install from source:
-
 ```bash
-npm install                              # from the repository root
-npm run build:cli
-npm link --workspace jarvis-agent-cli    # registers the `jarvis` command globally
-
+npm install -g jarvis-agent-cli
 cd your/project
 jarvis
 ```
-
-(Once published: `npm install -g jarvis-agent-cli`.)
 
 ## What it is
 
@@ -87,15 +80,19 @@ The version reported by `jarvis --version` is injected at build time from this `
 
 ## Publishing
 
-The package is **not on npm yet**. When you are ready:
+Published on npm as [`jarvis-agent-cli`](https://www.npmjs.com/package/jarvis-agent-cli). To ship a
+new version:
 
 ```bash
+npm version <patch|minor|major>      # in packages/cli
 npm run build:cli                    # from the repo root
 cd packages/cli
 npm pack --dry-run                   # inspect exactly what will ship
-npm login
 npm publish --access public
 ```
+
+Publishing requires 2FA: either pass a one-time code (`--otp=123456`), complete the browser
+authentication npm opens, or use a granular access token with 2FA bypass.
 
 `prepublishOnly` re-runs the typecheck and the build, so `npm publish` can never ship a stale bundle.
 Only 4 files are published (`dist/cli.js`, `README.md`, `LICENSE`, `package.json`) — roughly 950 kB
