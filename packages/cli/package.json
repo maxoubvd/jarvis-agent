@@ -1,13 +1,13 @@
 {
   "name": "jarvis-agent-cli",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "description": "Jarvis Agent in your terminal — the same agentic engine as the VS Code extension, as a CLI. Multi-provider agentic chat (local or cloud), tools + HITL, checkpoints, RAG, specialized agents, workflows and Auto-TDD.",
   "type": "module",
   "bin": {
-    "jarvis": "./dist/cli.js"
+    "jarvis": "dist/cli.js"
   },
   "files": [
-    "dist"
+    "dist/cli.js"
   ],
   "engines": {
     "node": ">=20"
@@ -27,20 +27,27 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/maxoubvd/extension-VS-code.git"
+    "url": "git+https://github.com/maxoubvd/extension-VS-code.git",
+    "directory": "packages/cli"
   },
+  "bugs": {
+    "url": "https://github.com/maxoubvd/extension-VS-code/issues"
+  },
+  "homepage": "https://github.com/maxoubvd/extension-VS-code/blob/HEAD/docs/cli-guide.md",
   "scripts": {
     "build": "node build-cli.mjs",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "prepublishOnly": "npm run typecheck && npm run build"
   },
   "dependencies": {
-    "@jarvis/core": "*",
+    "@xenova/transformers": "^2.0.1",
+    "web-tree-sitter": "^0.20.0"
+  },
+  "devDependencies": {
     "@inquirer/prompts": "^7.2.0",
+    "@types/marked-terminal": "^6.1.1",
     "marked": "^12.0.0",
     "marked-terminal": "^7.2.0",
     "picocolors": "^1.1.1"
-  },
-  "devDependencies": {
-    "@types/marked-terminal": "^6.1.1"
   }
 }

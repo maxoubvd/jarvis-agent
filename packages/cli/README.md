@@ -3,11 +3,18 @@
 **Jarvis Agent in your terminal.** The same autonomous software engineer as the
 [VS Code extension](../../README.md), driven from the command line.
 
+> **Not yet published to npm.** Install from source:
+
 ```bash
-npm install -g jarvis-agent-cli
+npm install                              # from the repository root
+npm run build:cli
+npm link --workspace jarvis-agent-cli    # registers the `jarvis` command globally
+
 cd your/project
 jarvis
 ```
+
+(Once published: `npm install -g jarvis-agent-cli`.)
 
 ## What it is
 
@@ -63,3 +70,35 @@ npx vitest run --project cli
 The build deliberately does **not** mark `vscode` as external: if anything in the imported graph
 pulled `vscode` in, the CLI build would fail. That is our standing guarantee that the shared core
 stays host-agnostic.
+
+### Dependencies, and why there are so few
+
+esbuild **inlines** `@jarvis/core`, `@inquirer/prompts`, `marked`, `marked-terminal` and `picocolors`
+into `dist/cli.js`, so they are build-time only (`devDependencies`). The only real runtime
+`dependencies` are the two that stay external because they ship native/wasm assets that cannot be
+bundled: `@xenova/transformers` and `web-tree-sitter`.
+
+`@jarvis/core` is deliberately **not** declared at all: it is resolved by an esbuild alias to a file
+path (and tsconfig `paths`), never through `node_modules`. Declaring a private, unpublished package
+would produce a broken reference in the published manifest.
+
+The version reported by `jarvis --version` is injected at build time from this `package.json`
+(esbuild `define`), so it can never drift from what is published.
+
+## Publishing
+
+The package is **not on npm yet**. When you are ready:
+
+```bash
+npm run build:cli                    # from the repo root
+cd packages/cli
+npm pack --dry-run                   # inspect exactly what will ship
+npm login
+npm publish --access public
+```
+
+`prepublishOnly` re-runs the typecheck and the build, so `npm publish` can never ship a stale bundle.
+Only 4 files are published (`dist/cli.js`, `README.md`, `LICENSE`, `package.json`) — roughly 950 kB
+compressed; the sourcemap and all sources are excluded via the `files` allowlist.
+
+Keep this package's `version` in sync with the extension's (root `package.json`) when releasing both.

@@ -27,7 +27,13 @@ import { startRepl } from './repl.js';
 import { runSettings, openConfigInEditor } from './settings-nav.js';
 import { accent, gold, green, dim, bold } from './theme.js';
 
-const VERSION = '1.1.0';
+/**
+ * Injected by esbuild (`define`) from packages/cli/package.json at build time, so the
+ * reported version can never drift from the published one. The fallback only applies
+ * when the sources are run un-bundled (e.g. from a test).
+ */
+declare const __JARVIS_CLI_VERSION__: string | undefined;
+const VERSION = typeof __JARVIS_CLI_VERSION__ === 'string' ? __JARVIS_CLI_VERSION__ : '0.0.0-dev';
 
 marked.use(markedTerminal({ reflowText: true, width: Math.min(process.stdout.columns || 80, 100) }) as never);
 

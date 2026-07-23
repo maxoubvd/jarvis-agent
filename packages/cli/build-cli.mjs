@@ -1,9 +1,13 @@
 import { build } from 'esbuild';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
-import { chmodSync } from 'fs';
+import { chmodSync, readFileSync } from 'fs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// Single source of truth for the version: package.json, injected at build time so
+// `jarvis --version` can never drift from what is actually published.
+const pkg = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf-8'));
 
 await build({
   entryPoints: [resolve(__dirname, 'src/cli.ts')],
@@ -22,6 +26,9 @@ await build({
       // call require(); provide a real binding in this ESM bundle.
       "import { createRequire as __jarvisCreateRequire } from 'module'; const require = __jarvisCreateRequire(import.meta.url);"
     ].join('\n')
+  },
+  define: {
+    __JARVIS_CLI_VERSION__: JSON.stringify(pkg.version)
   },
   // Resolve the shared engine straight from its TypeScript sources.
   alias: {
