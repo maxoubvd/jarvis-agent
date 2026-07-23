@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { RagIndex, isIndexableFile, augmentWithCodeContext, type RagSearchResult } from '../../src/backend/services/context/rag.js';
-import { pruneContext, choosePruneLevel, extractBlocks } from '../../src/backend/services/context/pruner.js';
-import { expandMentions } from '../../src/backend/services/context/mentions.js';
+import { RagIndex, isIndexableFile, augmentWithCodeContext, type RagSearchResult } from '../../packages/core/src/services/context/rag.js';
+import { pruneContext, choosePruneLevel, extractBlocks } from '../../packages/core/src/services/context/pruner.js';
+import { expandMentions } from '../../packages/core/src/services/context/mentions.js';
 
 describe('RagIndex (spec §5.2 — RAG local)', () => {
   it('finds the relevant chunk by lexical similarity', async () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { BackgroundProcessManager } from '../../src/backend/services/background-processes.js';
+import { BackgroundProcessManager } from '../../packages/core/src/services/background-processes.js';
 
 async function waitFor(condition: () => boolean, timeoutMs = 8000): Promise<void> {
   const start = Date.now();

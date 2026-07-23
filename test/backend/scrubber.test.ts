@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SecretScrubber } from '../../src/backend/core/utils/scrubber.js';
+import { SecretScrubber } from '../../packages/core/src/core/utils/scrubber.js';
 
 describe('SecretScrubber', () => {
   const scrubber = new SecretScrubber();

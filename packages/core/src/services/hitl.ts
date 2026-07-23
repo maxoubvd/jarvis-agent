@@ -1,5 +1,3 @@
-import * as vscode from 'vscode';
-
 export type HITLMode = 'strict' | 'moderate' | 'free';
 
 export interface ApprovalResult {
@@ -31,6 +29,13 @@ export interface ApprovalPromptDecision {
  */
 export type ApprovalPromptHandler = (request: ApprovalPromptRequest) => Promise<ApprovalPromptDecision | null>;
 
+/**
+ * Last-resort approval prompt used when the primary handler is unavailable
+ * (returns `null`). The VS Code extension wires a native modal dialog here; the
+ * CLI wires an inquirer prompt. Keeps the core free of any UI dependency.
+ */
+export type ApprovalFallbackHandler = (request: ApprovalPromptRequest) => Promise<ApprovalPromptDecision | null>;
+
 const DANGEROUS_PATTERNS = [
   'del /f', 'rmdir /s',
   'git push', 'git reset --hard', 'git clean',
@@ -53,15 +58,21 @@ export class HITLManager {
   private mode: HITLMode;
   private sessionAllowances = new Set<string>();
   private promptHandler: ApprovalPromptHandler | null = null;
+  private fallbackHandler: ApprovalFallbackHandler | null = null;
   private promptCounter = 0;
 
   constructor(mode: HITLMode = 'moderate') {
     this.mode = mode;
   }
 
-  /** Delegates confirmations to the webview chat (null = native dialog). */
+  /** Delegates confirmations to the webview chat / CLI prompt (null = fallback). */
   public setPromptHandler(handler: ApprovalPromptHandler | null): void {
     this.promptHandler = handler;
+  }
+
+  /** Last-resort prompt when the primary handler is absent or returns null. */
+  public setFallbackHandler(handler: ApprovalFallbackHandler | null): void {
+    this.fallbackHandler = handler;
   }
 
   public setMode(mode: HITLMode): void {
@@ -154,50 +165,44 @@ export class HITLManager {
       .map(([k, v]) => `${k}: ${v}`)
       .join('\n');
 
-    // Approval card in the chat if a handler is wired up.
+    const request: ApprovalPromptRequest = {
+      id: `approval-${++this.promptCounter}`,
+      actionType,
+      description,
+      detail,
+      params
+    };
+
+    // Primary prompt (webview card in the extension, inquirer prompt in the CLI).
     if (this.promptHandler) {
-      const decision = await this.promptHandler({
-        id: `approval-${++this.promptCounter}`,
-        actionType,
-        description,
-        detail,
-        params
-      });
-      if (decision) {
-        if (decision.decision === 'allow') {
-          return { granted: true, reason: 'Approved by user' };
-        }
-        if (decision.decision === 'allow-session') {
-          this.sessionAllowances.add(actionKey);
-          return { granted: true, reason: 'Allowed for the session', sessionAllowed: true };
-        }
-        return {
-          granted: false,
-          reason: 'Denied by user',
-          feedback: decision.feedback?.trim() || undefined
-        };
-      }
-      // null → webview unavailable, falling back to native dialog.
+      const decision = await this.promptHandler(request);
+      if (decision) return this.applyDecision(decision, actionKey);
+      // null → primary handler unavailable, fall back below.
     }
 
-    const result = await vscode.window.showInformationMessage(
-      `Jarvis needs to run an action: ${description}`,
-      { modal: true, detail },
-      'Approve',
-      'Approve for session',
-      'Deny'
-    );
+    // Last-resort prompt (native VS Code modal, or CLI inquirer fallback).
+    if (this.fallbackHandler) {
+      const decision = await this.fallbackHandler(request);
+      if (decision) return this.applyDecision(decision, actionKey);
+    }
 
-    if (result === 'Approve') {
+    return { granted: false, reason: 'No approval handler available — denied by default' };
+  }
+
+  /** Maps a prompt decision to an {@link ApprovalResult}, recording session allowances. */
+  private applyDecision(decision: ApprovalPromptDecision, actionKey: string): ApprovalResult {
+    if (decision.decision === 'allow') {
       return { granted: true, reason: 'Approved by user' };
     }
-
-    if (result === 'Approve for session') {
+    if (decision.decision === 'allow-session') {
       this.sessionAllowances.add(actionKey);
-      return { granted: true, reason: 'Approved for the session', sessionAllowed: true };
+      return { granted: true, reason: 'Allowed for the session', sessionAllowed: true };
     }
-
-    return { granted: false, reason: 'User denied or dismissed prompt' };
+    return {
+      granted: false,
+      reason: 'Denied by user',
+      feedback: decision.feedback?.trim() || undefined
+    };
   }
 
   private describeAction(actionType: string, params: Record<string, unknown>): string {

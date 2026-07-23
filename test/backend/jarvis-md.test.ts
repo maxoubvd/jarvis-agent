@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { loadJarvisMd, renderJarvisMd } from '../../src/backend/services/jarvis-md.js';
+import { loadJarvisMd, renderJarvisMd } from '../../packages/core/src/services/jarvis-md.js';
 
 describe('jarvis-md service', () => {
   it('returns the trimmed content when JARVIS.md exists', async () => {

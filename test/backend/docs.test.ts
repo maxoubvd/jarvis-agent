@@ -8,9 +8,9 @@ import {
   stripHtml,
   extractLinks,
   mergeSearchResults
-} from '../../src/backend/services/context/docs.js';
-import { RagIndex } from '../../src/backend/services/context/rag.js';
-import type { DocSite } from '../../src/backend/config/config-manager.js';
+} from '../../packages/core/src/services/context/docs.js';
+import { RagIndex } from '../../packages/core/src/services/context/rag.js';
+import type { DocSite } from '../../packages/core/src/config/config-manager.js';
 
 describe('stripHtml', () => {
   it('extracts the title and strips scripts/styles/nav/chrome', () => {

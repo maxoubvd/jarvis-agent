@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { TokenCounter } from '../../src/backend/services/token-counter.js';
+import { TokenCounter } from '../../packages/core/src/services/token-counter.js';
 
 describe('TokenCounter cached tokens', () => {
   it('accumulates cachedTokens across requests', () => {

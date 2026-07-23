@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveProfile, effectiveTemperature } from '../../src/backend/services/model-profiles.js';
+import { resolveProfile, effectiveTemperature } from '../../packages/core/src/services/model-profiles.js';
 
 describe('model profiles (spec §7 — small model optimization)', () => {
   it('matches devstral on the API id or the display name', () => {

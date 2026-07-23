@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { TokenCounter, estimateTokens } from '../../src/backend/services/token-counter.js';
-import { ResponseCache } from '../../src/backend/services/response-cache.js';
-import { detectAgentMention, suggestAgent, SPECIALIZED_AGENTS } from '../../src/backend/services/agents.js';
-import { getWorkflow, WORKFLOWS, WorkflowRunner } from '../../src/backend/services/workflows.js';
-import { OperationLogger } from '../../src/backend/services/logger.js';
+import { TokenCounter, estimateTokens } from '../../packages/core/src/services/token-counter.js';
+import { ResponseCache } from '../../packages/core/src/services/response-cache.js';
+import { detectAgentMention, suggestAgent, SPECIALIZED_AGENTS } from '../../packages/core/src/services/agents.js';
+import { getWorkflow, WORKFLOWS, WorkflowRunner } from '../../packages/core/src/services/workflows.js';
+import { OperationLogger } from '../../packages/core/src/services/logger.js';
 
 describe('TokenCounter (spec §3.2)', () => {
   it('tracks input/output separately with history', () => {

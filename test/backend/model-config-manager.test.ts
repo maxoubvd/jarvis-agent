@@ -4,8 +4,8 @@ vi.mock('vscode', () => ({
   workspace: { workspaceFolders: undefined }
 }));
 
-import { ModelConfigManager } from '../../src/backend/config/model-config-manager.js';
-import type { ConfigManager, JarvisConfig, ModelItem } from '../../src/backend/config/config-manager.js';
+import { ModelConfigManager } from '../../packages/core/src/config/model-config-manager.js';
+import type { ConfigManager, JarvisConfig, ModelItem } from '../../packages/core/src/config/config-manager.js';
 
 function fakeConfigManager(items: ModelItem[], defaultModel: string | null = null): ConfigManager {
   const config: JarvisConfig = {

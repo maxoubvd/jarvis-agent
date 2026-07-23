@@ -1,0 +1,19 @@
+{
+  "name": "@jarvis/core",
+  "version": "1.1.0",
+  "description": "Shared engine for Jarvis Agent — agentic orchestrator, model providers, tools, services and config. Host-agnostic (no vscode dependency in the public API).",
+  "type": "module",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./vscode": "./src/vscode.ts"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@xenova/transformers": "^2.0.1",
+    "web-tree-sitter": "^0.20.0"
+  }
+}

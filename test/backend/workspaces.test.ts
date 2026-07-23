@@ -3,8 +3,8 @@ import { describe, it, expect } from 'vitest';
 import {
   getActiveWorkspace,
   renderWorkspaceInstructions
-} from '../../src/backend/services/workspaces.js';
-import type { JarvisConfig, WorkspaceProfile } from '../../src/backend/config/config-manager.js';
+} from '../../packages/core/src/services/workspaces.js';
+import type { JarvisConfig, WorkspaceProfile } from '../../packages/core/src/config/config-manager.js';
 
 function config(partial: Partial<JarvisConfig>): JarvisConfig {
   return { version: 1, models: { default: null, items: [] }, ...partial };

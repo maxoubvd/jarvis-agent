@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { CheckpointManager } from '../../src/backend/services/checkpoint.js';
+import { CheckpointManager } from '../../packages/core/src/services/checkpoint.js';
 
 const { executeTerminalCommand } = vi.hoisted(() => ({
   executeTerminalCommand: vi.fn()
 }));
 
-vi.mock('../../src/backend/core/mcp/tools/terminal.js', () => ({
+vi.mock('../../packages/core/src/core/mcp/tools/terminal.js', () => ({
   executeTerminalCommand
 }));
 

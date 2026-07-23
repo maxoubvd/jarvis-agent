@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { specToTool, CustomToolSpec } from '../../src/backend/core/agent/custom-tools.js';
-import { globToRegex } from '../../src/backend/core/agent/tool-registry.js';
+import { specToTool, CustomToolSpec } from '../../packages/core/src/core/agent/custom-tools.js';
+import { globToRegex } from '../../packages/core/src/core/agent/tool-registry.js';
 
 vi.mock('vscode', () => ({
   workspace: {
@@ -8,7 +8,7 @@ vi.mock('vscode', () => ({
   }
 }));
 
-vi.mock('../../src/backend/core/mcp/tools/terminal.js', () => ({
+vi.mock('../../packages/core/src/core/mcp/tools/terminal.js', () => ({
   executeTerminalCommand: vi.fn(async (command: string) => ({
     success: true,
     stdout: `ran: ${command}`,

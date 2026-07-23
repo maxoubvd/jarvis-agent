@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 /** In-memory file system injected into tool-registry via fileSystem module mock. */
 const files = vi.hoisted(() => new Map<string, string>());
@@ -11,7 +11,7 @@ vi.mock('vscode', () => ({
   window: { activeTextEditor: undefined as unknown }
 }));
 
-vi.mock('../../src/backend/core/mcp/tools/fileSystem.js', () => ({
+vi.mock('../../packages/core/src/core/mcp/tools/fileSystem.js', () => ({
   readFileTool: vi.fn(async (p: string) => {
     if (!files.has(p)) throw new Error(`Fichier introuvable: ${p}`);
     return files.get(p)!;
@@ -28,8 +28,7 @@ vi.mock('../../src/backend/core/mcp/tools/fileSystem.js', () => ({
   setFileChangeListener: vi.fn()
 }));
 
-import * as vscode from 'vscode';
-import { createBuiltinTools, ToolRegistry, type ToolDefinition } from '../../src/backend/core/agent/tool-registry.js';
+import { createBuiltinTools, ToolRegistry, setActiveFileProvider, type ToolDefinition } from '../../packages/core/src/core/agent/tool-registry.js';
 
 function tool(name: string): ToolDefinition {
   const found = createBuiltinTools().find(t => t.name === name);
@@ -131,17 +130,19 @@ describe('ToolRegistry.restrictTo', () => {
 });
 
 describe('read_currently_open_file', () => {
-  it('reads the active editor content', async () => {
-    (vscode.window as { activeTextEditor: unknown }).activeTextEditor = {
-      document: { uri: {}, getText: () => 'contenu ouvert' }
-    };
+  // The "currently open file" is host-injected (setActiveFileProvider): the VS Code
+  // extension backs it with the active editor, the CLI with the last @file opened.
+  afterEach(() => setActiveFileProvider(null));
+
+  it('reads the active file from the injected provider', async () => {
+    setActiveFileProvider(() => ({ path: 'src/open-file.ts', content: 'contenu ouvert' }));
     const result = await tool('read_currently_open_file').execute({});
     expect(result).toContain('src/open-file.ts');
     expect(result).toContain('contenu ouvert');
   });
 
-  it('reports when no editor is open', async () => {
-    (vscode.window as { activeTextEditor: unknown }).activeTextEditor = undefined;
+  it('reports when no file is open (no provider / provider returns undefined)', async () => {
+    setActiveFileProvider(() => undefined);
     expect(await tool('read_currently_open_file').execute({})).toContain('no file open in the editor');
   });
 });

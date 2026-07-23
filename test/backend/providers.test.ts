@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { OllamaProvider } from '../../src/backend/models/providers/ollama.js';
-import { LMStudioProvider } from '../../src/backend/models/providers/lmstudio.js';
-import type { ChatMessage } from '../../src/backend/models/abstract.js';
+import { OllamaProvider } from '../../packages/core/src/models/providers/ollama.js';
+import { LMStudioProvider } from '../../packages/core/src/models/providers/lmstudio.js';
+import type { ChatMessage } from '../../packages/core/src/models/abstract.js';
 
 /** Builds a Response whose body streams the given string chunks. */
 function streamingResponse(chunks: string[]): Response {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractJson, stripThinking, findBalancedJson } from '../../src/backend/core/utils/json-cleaner.js';
+import { extractJson, stripThinking, findBalancedJson } from '../../packages/core/src/core/utils/json-cleaner.js';
 
 describe('JSON Cleaner (spec §8.2)', () => {
   it('parses clean JSON directly', () => {

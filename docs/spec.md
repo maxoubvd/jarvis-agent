@@ -55,6 +55,34 @@ Project: "Agentic" VS Code Extension (Codename: Jarvis / Jarvis-Agent)
   - Orange: 50-80% of the limit
   - Red: > 80% of the limit
 
+### 2.2 CLI Interface (terminal front-end)
+
+The webview is not the only front-end: the same engine is exposed as a standalone command-line tool
+(`jarvis-agent-cli`, command `jarvis`). The extension and the CLI are two presentation layers over the
+shared, host-agnostic `@jarvis/core` package.
+
+**Technical stack**: Node ≥ 20, ESM, bundled with esbuild. `@inquirer/prompts` (menus and approvals),
+`picocolors` + true-color ANSI (design language), `marked` + `marked-terminal` (Markdown rendering).
+
+- **Home page**: running `jarvis` with no arguments prints the branded wordmark, the active model +
+  provider, the workspace path and the approval (HITL) mode, then opens the interactive REPL.
+- **Design language**: reuses the extension's accent colors (`#c1272d` red, `#e8b84b` gold from
+  `styles/tokens.css`) via 24-bit ANSI, falling back to basic ANSI on 16-color terminals.
+- **Parity**: agentic chat (`automatic`/`fast`/`plan`), `/agent`, `/tdd`, `/workflow`, `/init`,
+  `/mode`, `/model`, `/settings`, `/checkpoints`, `/rollback`, `/new`, plus `@file:`, `@docs:` and
+  specialized-agent mentions.
+- **Approvals**: HITL is asked inline in the terminal (Allow once / Allow for session / Deny +
+  guidance), honoring the same `strict`/`moderate`/`free` modes.
+- **Navigation**: `jarvis settings` provides an interactive navigator over `~/.jarvis/config.json`
+  (the same file the extension writes), plus `jarvis config` to open it in `$EDITOR`.
+- **Sub-commands**: `checkpoints`, `rollback`, `init`, `analytics`, `--help`, `--version`, and
+  one-shot execution (`jarvis "<prompt>"` / `-p`).
+
+**Host seam**: the core never imports `vscode`. Workspace root resolution (`JARVIS_WORKSPACE` /
+`process.cwd()`), the "currently open file" provider, the HITL fallback prompt, and analytics export
+are injected by whichever host is running. The CLI build does not mark `vscode` as external, so the
+build fails if that guarantee is ever broken.
+
 ## 3. AI Core and Routing (Backend)
 
 **Technical Stack**:
@@ -126,7 +154,7 @@ Project: "Agentic" VS Code Extension (Codename: Jarvis / Jarvis-Agent)
 
 ### 4.1. System Tools (File System)
 
-**Actually implemented built-in tools** (`src/backend/core/agent/tool-registry.ts`):
+**Actually implemented built-in tools** (`packages/core/src/core/agent/tool-registry.ts`):
 
 - `read_file`: reads the content of an existing file.
 - `create_new_file`: creates a new file (overwrites it if it already exists).
@@ -167,7 +195,7 @@ Additional tools via **MCP servers** (Settings > MCP): builtins (`git`, `filesys
 
 #### Web Search
 
-**Implementation** (`src/backend/core/mcp/tools/webSearch.ts`):
+**Implementation** (`packages/core/src/core/mcp/tools/webSearch.ts`):
 - **Backend**: **DuckDuckGo**'s public HTML endpoint (`https://html.duckduckgo.com/html/`) — entirely free, no API key or account needed.
 - **Configurable sources**: checkable presets (StackOverflow, MDN, GitHub, devdocs.io) + free-form domains, applied by default via `site:` operators; the tool also accepts an explicit `sites` parameter provided by the model, which always takes priority over the default setting.
 - No dedicated cache for now (every model call triggers a request).
@@ -220,7 +248,7 @@ Additional tools via **MCP servers** (Settings > MCP): builtins (`git`, `filesys
 
 **Rule Application** (`services/rules.ts`):
 - Rules defined in Settings (Rules tab), injected into the system prompt of every agent/chat.
-- **Folder-scoped rules**: each rule can have a `scope` (glob, e.g. `src/backend/**`) — a scoped rule only applies if the file currently open in the editor matches the glob; a rule without a `scope` always applies. Known limitation: `/workflow` runs have no notion of an "active file", so scoped rules don't apply there.
+- **Folder-scoped rules**: each rule can have a `scope` (glob, e.g. `packages/core/**`) — a scoped rule only applies if the file currently open in the editor matches the glob; a rule without a `scope` always applies. Known limitation: `/workflow` runs have no notion of an "active file", so scoped rules don't apply there.
 
 #### Project rules file (`JARVIS.md`)
 
@@ -801,6 +829,28 @@ Breakdown into Micro-Tasks:
 - [x] `.vscodeignore`, Marketplace PNG icon, `package.json` metadata (repository/bugs/homepage/keywords/icon), `CHANGELOG.md`, `SECURITY.md` added
 - [ ] Screenshots/demo videos (`docs/media/`) — still to be done manually, see the publication task list
 
+### 9.7. Phase 6: Monorepo + Jarvis CLI
+
+**Goal**: expose the engine outside VS Code (§2.2) without forking the logic — extract a shared,
+host-agnostic core consumed by both the extension and a new terminal front-end.
+
+**Deliverables**:
+- [x] **npm-workspaces monorepo**: `src/backend` → `packages/core` (`@jarvis/core`), new `packages/cli`
+      (`jarvis-agent-cli`, bin `jarvis`). Both front-ends resolve the engine from TypeScript sources
+      via an esbuild alias + tsconfig `paths`, so the `.vsix` packaging is unchanged.
+- [x] **Core made vscode-free** behind a host seam: `getWorkspaceRoot()` (`JARVIS_WORKSPACE`/cwd), a
+      vscode-free `EventEmitter`, `setActiveFileProvider()`, HITL `setFallbackHandler()`, and
+      `analytics.export(onExported)`. The 4 remaining vscode-coupled files (webview host, CodeLens,
+      decorations, inline-completion provider) are excluded from the public barrel.
+- [x] **CLI with full parity** (§2.2): home page, REPL, slash commands, mentions, terminal HITL,
+      settings navigator, checkpoints, one-shot mode; brand colors reproduced in true-color ANSI.
+- [x] **Guarantee**: the CLI build does not mark `vscode` as external — it fails if the core ever
+      regains a vscode dependency.
+- [x] Non-regression: extension typecheck + build unchanged, full test suite green (45 files, 337 tests).
+
+**Validation criteria**: `npm run build` (extension + webview) and `npm run build:cli` both succeed;
+`jarvis` renders the home page with the configured model; a model configured in the CLI is visible in
+the extension and vice-versa (shared `~/.jarvis/config.json`).
 
 ### 10 Resources and References
 

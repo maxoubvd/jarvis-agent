@@ -1,4 +1,4 @@
-import * as vscode from 'vscode';
+import { EventEmitter } from '../core/utils/event.js';
 import { computeHunks, resolveHunk, type DiffHunk } from './diff.js';
 
 /** View of a file pending review, sent to the webview. */
@@ -39,7 +39,7 @@ export class ChangeTracker {
   /** true while applying a resolution: our own writes are not re-tracked. */
   private applying = false;
 
-  public readonly onDidChange = new vscode.EventEmitter<void>();
+  public readonly onDidChange = new EventEmitter<void>();
 
   /** Records an AI write (called by the fileSystem listener). */
   public record(path: string, before: string | null, after: string): void {

@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { SessionStore, MAX_SESSIONS } from '../../src/backend/services/sessions.js';
-import type { ChatMessage } from '../../src/backend/models/abstract.js';
+import { SessionStore, MAX_SESSIONS } from '../../packages/core/src/services/sessions.js';
+import type { ChatMessage } from '../../packages/core/src/models/abstract.js';
 
 let tmpDir: string;
 let filePath: string;

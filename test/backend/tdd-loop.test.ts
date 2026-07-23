@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { AutoTDDLoop, summarizeTestOutput, TestRunResult } from '../../src/backend/services/tdd-loop.js';
-import { ChatMessage, IModelProvider } from '../../src/backend/models/abstract.js';
+import { AutoTDDLoop, summarizeTestOutput, TestRunResult } from '../../packages/core/src/services/tdd-loop.js';
+import { ChatMessage, IModelProvider } from '../../packages/core/src/models/abstract.js';
 
 function fakeProvider(responses: string[]): IModelProvider {
   let call = 0;

@@ -7,10 +7,10 @@ vi.mock('vscode', () => ({
   workspace: { workspaceFolders: undefined }
 }));
 
-import { getBuiltinMcpServers, builtinCommandString } from '../../src/backend/core/mcp/builtin.js';
-import { McpManager } from '../../src/backend/core/mcp/manager.js';
-import type { JarvisMcpClient, McpToolInfo } from '../../src/backend/core/mcp/client.js';
-import type { ConfigManager, JarvisConfig } from '../../src/backend/config/config-manager.js';
+import { getBuiltinMcpServers, builtinCommandString } from '../../packages/core/src/core/mcp/builtin.js';
+import { McpManager } from '../../packages/core/src/core/mcp/manager.js';
+import type { JarvisMcpClient, McpToolInfo } from '../../packages/core/src/core/mcp/client.js';
+import type { ConfigManager, JarvisConfig } from '../../packages/core/src/config/config-manager.js';
 
 // `isGitRepository()` (builtin.ts) does a real `fs.existsSync`, so the
 // old fake "C:\\proj" folders are no longer sufficient to test the

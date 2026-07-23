@@ -46,7 +46,7 @@ vi.mock('vscode', () => {
   };
 });
 
-import { JarvisInlineCompletionProvider } from '../../src/backend/core/autocomplete/provider.js';
+import { JarvisInlineCompletionProvider } from '../../packages/core/src/core/autocomplete/provider.js';
 import * as vscode from 'vscode';
 
 class FakeDocument {

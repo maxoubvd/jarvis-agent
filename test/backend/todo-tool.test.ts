@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
-import { sanitizeTodoItems } from '../../src/backend/core/agent/todo.js';
-import { AgentOrchestrator } from '../../src/backend/core/agent/orchestrator.js';
-import { ToolRegistry, createBuiltinTools } from '../../src/backend/core/agent/tool-registry.js';
-import type { ChatMessage, IModelProvider } from '../../src/backend/models/abstract.js';
+import { sanitizeTodoItems } from '../../packages/core/src/core/agent/todo.js';
+import { AgentOrchestrator } from '../../packages/core/src/core/agent/orchestrator.js';
+import { ToolRegistry, createBuiltinTools } from '../../packages/core/src/core/agent/tool-registry.js';
+import type { ChatMessage, IModelProvider } from '../../packages/core/src/models/abstract.js';
 
 vi.mock('vscode', () => ({
   workspace: { workspaceFolders: [{ uri: { fsPath: '/test-workspace' } }] },

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildCompletionPrompt, extractCompletionText } from '../../src/backend/core/autocomplete/prompt.js';
+import { buildCompletionPrompt, extractCompletionText } from '../../packages/core/src/core/autocomplete/prompt.js';
 
 describe('buildCompletionPrompt', () => {
   it('places the prefix and suffix around a <CURSOR> marker in the user message', () => {

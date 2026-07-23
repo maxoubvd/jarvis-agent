@@ -2,15 +2,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockConfig = vi.hoisted(() => ({ current: {} as Record<string, unknown> }));
 
-vi.mock('../../src/backend/config/config-manager.js', () => ({
+vi.mock('../../packages/core/src/config/config-manager.js', () => ({
   getConfigManager: () => ({
     getConfig: () => mockConfig.current
   }),
   DEFAULT_WEB_SEARCH_SITES: ['stackoverflow.com', 'developer.mozilla.org', 'github.com', 'devdocs.io']
 }));
 
-import { webSearch } from '../../src/backend/core/mcp/tools/webSearch.js';
-import { DEFAULT_WEB_SEARCH_SITES } from '../../src/backend/config/config-manager.js';
+import { webSearch } from '../../packages/core/src/core/mcp/tools/webSearch.js';
+import { DEFAULT_WEB_SEARCH_SITES } from '../../packages/core/src/config/config-manager.js';
 
 function ddgHtml(results: { url: string; title: string; snippet: string }[]): string {
   return results

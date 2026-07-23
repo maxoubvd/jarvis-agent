@@ -1,5 +1,5 @@
 import { spawn } from 'child_process';
-import * as vscode from 'vscode';
+import { getWorkspaceRoot } from '../../utils/workspace.js';
 
 export interface ExecutionResult {
   success: boolean;
@@ -17,7 +17,7 @@ export interface ExecuteOptions {
 }
 
 function getWorkspaceFolder(): string | undefined {
-  return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  return getWorkspaceRoot();
 }
 
 /**

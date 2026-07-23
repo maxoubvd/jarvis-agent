@@ -2,7 +2,7 @@ import * as fs from 'fs/promises';
 import * as fsSync from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import * as vscode from 'vscode';
+import { getWorkspaceRoot } from '../core/utils/workspace.js';
 import type { Workflow } from '../services/workflows.js';
 import type { SpecializedAgent } from '../services/agents.js';
 
@@ -442,7 +442,7 @@ export class ConfigManager {
 
   private resolveWorkspacePath(): string | undefined {
     try {
-      const folder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      const folder = getWorkspaceRoot();
       return folder ? path.join(folder, 'jarvis', 'jarvis-config.json') : undefined;
     } catch {
       return undefined;

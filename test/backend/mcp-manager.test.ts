@@ -4,9 +4,9 @@ vi.mock('vscode', () => ({
   workspace: { workspaceFolders: undefined }
 }));
 
-import { McpManager, parametersFromJsonSchema } from '../../src/backend/core/mcp/manager.js';
-import type { JarvisMcpClient, McpToolInfo } from '../../src/backend/core/mcp/client.js';
-import type { ConfigManager, JarvisConfig, McpServerConfig } from '../../src/backend/config/config-manager.js';
+import { McpManager, parametersFromJsonSchema } from '../../packages/core/src/core/mcp/manager.js';
+import type { JarvisMcpClient, McpToolInfo } from '../../packages/core/src/core/mcp/client.js';
+import type { ConfigManager, JarvisConfig, McpServerConfig } from '../../packages/core/src/config/config-manager.js';
 
 function fakeConfigManager(mcpServers: Record<string, McpServerConfig>): ConfigManager {
   const config: JarvisConfig = {

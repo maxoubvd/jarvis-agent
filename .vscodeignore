@@ -6,6 +6,10 @@ src/**
 test/**
 docs/**
 jarvis/**
+# The shared engine (packages/core) is inlined into dist/extension.js by esbuild, and
+# packages/cli is a separate npm package that has nothing to do with the extension --
+# neither is needed at runtime, so no workspace source ships in the .vsix.
+packages/**
 **/*.test.ts
 **/*.map
 .eslintrc.cjs

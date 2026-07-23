@@ -2,9 +2,9 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { AgentOrchestrator, buildAgentSystemPrompt } from '../../src/backend/core/agent/orchestrator.js';
-import { ToolRegistry, ToolDefinition } from '../../src/backend/core/agent/tool-registry.js';
-import { ChatMessage, IModelProvider } from '../../src/backend/models/abstract.js';
+import { AgentOrchestrator, buildAgentSystemPrompt } from '../../packages/core/src/core/agent/orchestrator.js';
+import { ToolRegistry, ToolDefinition } from '../../packages/core/src/core/agent/tool-registry.js';
+import { ChatMessage, IModelProvider } from '../../packages/core/src/models/abstract.js';
 
 vi.mock('vscode', () => ({
   workspace: {
@@ -213,7 +213,7 @@ describe('AgentOrchestrator', () => {
         JSON.stringify({ action: { tool: 'edit_existing_file', args: { path: tmpFile } } }),
         JSON.stringify({ final: 'done' })
       ]);
-      const changeTracker = { record: vi.fn() } as unknown as import('../../src/backend/services/change-tracker.js').ChangeTracker;
+      const changeTracker = { record: vi.fn() } as unknown as import('../../packages/core/src/services/change-tracker.js').ChangeTracker;
       const onFileEdited = vi.fn();
       const orchestrator = new AgentOrchestrator(provider, registry, { changeTracker, onFileEdited });
       await orchestrator.run('test');

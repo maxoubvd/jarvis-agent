@@ -1,13 +1,34 @@
 import * as vscode from 'vscode';
-import { JarvisExtension } from './backend/core/extension.js';
-import { backgroundProcesses } from './backend/services/background-processes.js';
-import { getSandbox } from './backend/core/mcp/tools/fileSystem.js';
-import { getConfigManager } from './backend/config/config-manager.js';
-import { ModelConfigManager } from './backend/config/model-config-manager.js';
-import { JarvisInlineCompletionProvider } from './backend/core/autocomplete/provider.js';
+import { JarvisExtension, JarvisInlineCompletionProvider } from '@jarvis/core/vscode';
+import {
+  backgroundProcesses,
+  getSandbox,
+  getConfigManager,
+  ModelConfigManager,
+  setActiveFileProvider
+} from '@jarvis/core';
 
 export function activate(context: vscode.ExtensionContext) {
   console.log('Jarvis: activating extension');
+
+  // The shared core is vscode-free and resolves "the current project" from
+  // JARVIS_WORKSPACE (falling back to process.cwd()). Seed it from the active
+  // VS Code workspace folder before anything in core reads config or the sandbox.
+  const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  if (workspaceFolder) {
+    process.env.JARVIS_WORKSPACE = workspaceFolder;
+  }
+
+  // "read_currently_open_file" is a host concept: back it with the active editor.
+  setActiveFileProvider(() => {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) return undefined;
+    return {
+      path: vscode.workspace.asRelativePath(editor.document.uri, false),
+      content: editor.document.getText()
+    };
+  });
+
   const jarvis = new JarvisExtension(context);
 
   const commands = [

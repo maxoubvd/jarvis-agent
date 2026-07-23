@@ -42,21 +42,36 @@ Thanks to the **Model Context Protocol (MCP)**, Jarvis can use external tools. C
 ### 5. Specialized Agents & Project Instructions
 - **5 dedicated agents** (`@QA-Agent`, `@Doc-Agent`, `@Refactor-Agent`, `@Security-Agent`, `@Perf-Agent`), each with tool access genuinely restricted to its role — `@Security-Agent` audits read-only, `@QA-Agent` runs tests without ever editing code.
 - **`JARVIS.md`**: type `/init` (or `Jarvis: Initialize Project` in the command palette) so Jarvis initializes git if needed, analyzes your project, and generates an instructions file versioned with the code — shared with the whole team, unlike personal rules.
-- **Folder-scoped rules**: scope a rule to a subfolder (`src/backend/**`) so it only applies to the relevant files.
+- **Folder-scoped rules**: scope a rule to a subfolder (`packages/core/**`) so it only applies to the relevant files.
 - **Persistent task checklist** above the chat, auto-filled for `/workflow` runs.
 - **Auto-open** of the file being edited, with green/red decorations already in place.
 - **Inline autocomplete (Tab)** — ghost-text suggestions as you type; disabled by default, enable it in Settings > Optimization.
+
+### 6. Jarvis in your terminal (CLI)
+The **exact same engine** as the extension is also available as a standalone command-line tool. Run `jarvis` in any project to get an interactive REPL — agentic chat, tools with terminal approvals, checkpoints, RAG, specialized agents, `/tdd` and `/workflow` — all sharing the same `~/.jarvis/config.json` as the extension. The CLI and the extension are two front-ends over one shared core (`@jarvis/core`), so configuring a model in one configures it for both.
 
 ---
 
 ## 🚀 Installation & Quick Start
 
+### VS Code extension
+
 1. Install **Jarvis Agent** from the VS Code Marketplace.
 2. Click the Jarvis icon in the left sidebar (or run the `Jarvis: Start Chat` command).
 3. The **Welcome screen** will guide you through configuring your first model!
 
+### CLI
+
+```bash
+npm install -g jarvis-agent-cli
+cd your/project
+jarvis                       # home page + interactive chat
+```
+
+Or without a global install: `npx jarvis-agent-cli`. First time? Run `jarvis settings` to add a model — it writes the same `~/.jarvis/config.json` the extension reads. See the full [CLI guide](docs/cli-guide.md).
+
 ### Provider Compatibility
-Jarvis is **agnostic**. You choose the brain behind your agent:
+Jarvis is **agnostic**. You choose the brain behind your agent (same for the extension and the CLI):
 - **Local (Free & Private)**: Connect **Ollama** or **LM Studio** in one click. We recommend recent models like `qwen2.5-coder:7b` or `llama3:8b`.
 - **Cloud (Ultra Performant)**: Connect **OpenRouter**, **Mistral AI**, or any OpenAI-compatible API to use state-of-the-art models. For excellent performance completely free with no latency, we recommend **Mistral AI** models directly from the Mistral provider. Create a free API key [here](https://console.mistral.ai/).
 
@@ -79,6 +94,21 @@ Jarvis is **agnostic**. You choose the brain behind your agent:
 ### Stop Button
 If a task is taking longer than expected or a command is stuck, use the stop button (Square) in the chat panel to interrupt the agent and cancel the current request.
 
+### CLI usage
+Running `jarvis` opens the home page, then an interactive REPL. Everything you do in the sidebar has a terminal equivalent:
+
+| In the terminal | Does |
+|---|---|
+| `jarvis` | Home page + interactive chat REPL |
+| `jarvis "<prompt>"` / `jarvis -p "<prompt>"` | One-shot run, then exit |
+| `jarvis settings` | Navigate & edit `~/.jarvis/config.json` (models, approvals, web search, profile…) |
+| `jarvis config` | Open the config file in `$EDITOR` |
+| `jarvis checkpoints` / `jarvis rollback` | List Git checkpoints / undo the last one |
+| `jarvis init` | Analyze the project and write `JARVIS.md` |
+| `jarvis analytics` | Export usage analytics |
+
+Inside the REPL, the same commands as the extension work: `/agent`, `/tdd`, `/workflow`, `/init`, `/mode automatic\|fast\|plan`, `/model`, `/settings`, `/checkpoints`, `/new`, `/help`, `/exit`, plus the `@file:`, `@docs:` and `@QA-Agent` mentions. Terminal approvals (HITL) are asked inline, matching your `strict`/`moderate`/`free` mode. Full walkthrough: [docs/cli-guide.md](docs/cli-guide.md).
+
 ---
 
 ## ⚙️ Advanced Settings & Configuration
@@ -100,7 +130,7 @@ You can configure Jarvis visually via the **Settings** tab:
 Get the most out of Jarvis and keep your token usage under control:
 
 - **Write a `JARVIS.md`**: run `/init` once per project. It's versioned with the code (unlike personal rules), so the whole team benefits from the same project context on every request.
-- **Scope rules to folders**: instead of one long global rule, give a rule a `scope` glob (e.g. `src/backend/**`) so it only loads for the files it's actually relevant to — shorter prompts, more focused answers.
+- **Scope rules to folders**: instead of one long global rule, give a rule a `scope` glob (e.g. `packages/core/**`) so it only loads for the files it's actually relevant to — shorter prompts, more focused answers.
 - **Save your own prompts as `/shortcuts`**: Settings > Prompts lets you turn any recurring instruction into a `/name` shortcut. Jarvis ships with two disabled examples — a `Commentator` rule and an `/explain` prompt — enable them or duplicate them as a starting point for your own.
 - **Reach for `@file` and `@docs` before pasting code**: `@file:path` pulls in exactly the file you mean, and `@docs:query` searches your indexed documentation semantically — both are cheaper and more accurate than dropping large code blocks into the chat.
 - **Match the chat mode to the task**: use **Fast** for quick text-only questions (no tool calls, no token overhead), **Automatic** for everyday coding, and **Plan** when you want to validate the approach before Jarvis touches any files.

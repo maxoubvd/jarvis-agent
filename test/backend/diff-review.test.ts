@@ -8,8 +8,8 @@ vi.mock('vscode', () => ({
   }
 }));
 
-import { computeHunks, resolveHunk } from '../../src/backend/services/diff.js';
-import { ChangeTracker } from '../../src/backend/services/change-tracker.js';
+import { computeHunks, resolveHunk } from '../../packages/core/src/services/diff.js';
+import { ChangeTracker } from '../../packages/core/src/services/change-tracker.js';
 
 const BEFORE = ['line1', 'line2', 'line3', 'line4', 'line5'].join('\n');
 // Two hunks: line2 modified, and an insertion after line4.

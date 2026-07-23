@@ -47,7 +47,7 @@ One section per configuration domain, all following the same pattern (`items`/`c
 
 ### `src/frontend/shared/`
 
-- `types.ts` — **hand-maintained mirror** of the backend config types (`src/backend/config/config-manager.ts`): `JarvisConfig`, `ModelItem`, `RuleItem`, `SpecializedAgent`, `TodoItem`, `WebSearchConfig`, etc. Keep it manually in sync every time a config field is added on the backend side.
+- `types.ts` — **hand-maintained mirror** of the backend config types (`packages/core/src/config/config-manager.ts`): `JarvisConfig`, `ModelItem`, `RuleItem`, `SpecializedAgent`, `TodoItem`, `WebSearchConfig`, etc. Keep it manually in sync every time a config field is added on the backend side.
 - `commands.ts` — registry of `/` commands and `@` mentions offered by chat autocompletion (`SLASH_COMMANDS`, `AT_MENTIONS`, `matchTrigger`, `filterCommands`).
 - `constants.ts` — `APP_NAME` and global constants.
 - `utils.ts` — shared utilities.

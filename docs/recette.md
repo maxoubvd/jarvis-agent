@@ -245,11 +245,11 @@ Scenarios covering the 9 finalization workstreams from `docs/audit-2026-07-11.md
 
 ### 13.5 Folder-scoped rules
 
-- [X] **Action**: In Settings > Rules, create a "Backend only" rule with the content "Always use relative imports with a .js suffix" and a scope of `src/backend/**`.
-- [X] **Action**: Open a file in `src/backend/`, ask the agent a general question (any one, to verify the prompt injection).
+- [X] **Action**: In Settings > Rules, create a "Backend only" rule with the content "Always use relative imports with a .js suffix" and a scope of `packages/core/**`.
+- [X] **Action**: Open a file in `packages/core/src/`, ask the agent a general question (any one, to verify the prompt injection).
 - [X] **Expected result**: The rule applies (visible if you ask the agent to quote its instructions, or observable in the style of the generated code).
 - [X] **Action**: Open a file in `src/frontend/` instead, ask a question again.
-- [X] **Expected result**: The rule scoped to `src/backend/**` no longer applies.
+- [X] **Expected result**: The rule scoped to `packages/core/**` no longer applies.
 
 ### 13.6 Visual TODO checklist
 
@@ -287,4 +287,49 @@ Scenarios covering the 9 finalization workstreams from `docs/audit-2026-07-11.md
 
 ---
 
-**Test book closed.** If all these steps work as expected, the extension is robust, **ready for publication on the VS Code Marketplace (V1.0)**, and for optimal use with any LLM.
+## 14. Jarvis CLI (terminal front-end)
+
+Prerequisite: `npm install && npm run build:cli`, then run from a project directory
+(`node packages/cli/dist/cli.js`, or `jarvis` once installed globally).
+
+### 14.1 Home page & navigation
+- [ ] **Action**: Run `jarvis` with no arguments.
+- [ ] **Expected result**: The red JARVIS wordmark + gold subtitle appear, followed by the active model & provider, the workspace path, the HITL mode, and the command hints. Then the REPL prompt is shown.
+- [ ] **Action**: With no model configured, run `jarvis`.
+- [ ] **Expected result**: A red "no model configured" status and a prompt to run `jarvis settings`.
+- [ ] **Action**: Run `jarvis --help` then `jarvis --version`.
+- [ ] **Expected result**: The command list / the version, then a clean exit (no REPL).
+
+### 14.2 Config parity with the extension
+- [ ] **Action**: Run `jarvis settings` > Models > add a model and set it as default.
+- [ ] **Expected result**: `~/.jarvis/config.json` is updated; **opening the extension's Settings tab shows the same model**, and vice-versa.
+- [ ] **Action**: In `jarvis settings` > Approvals, switch to `strict`.
+- [ ] **Expected result**: The change persists and the next terminal command in the REPL asks for approval.
+
+### 14.3 Chat, agent & tools
+- [ ] **Action**: In the REPL, ask a question that requires reading a file.
+- [ ] **Expected result**: Tool calls stream live (gold `⚙` lines with ✓/✗ results), then the final answer is rendered as formatted Markdown, followed by a token count.
+- [ ] **Action**: `/mode fast` then ask a plain question.
+- [ ] **Expected result**: The answer streams directly with no tool calls.
+- [ ] **Action**: Run a request that triggers a terminal command.
+- [ ] **Expected result**: An inline approval prompt offers **Allow once / Allow for this session / Deny**; denying lets you type guidance that the agent then follows.
+- [ ] **Action**: Use `@file:<path>` and an `@QA-Agent` mention.
+- [ ] **Expected result**: The file content is injected as context; the specialized agent runs with its restricted tool set.
+
+### 14.4 Sub-commands
+- [ ] **Action**: `jarvis "list the top-level folders of this project"` (one-shot).
+- [ ] **Expected result**: It runs once, prints the answer, and exits without entering the REPL.
+- [ ] **Action**: `jarvis checkpoints`, then `/rollback` inside the REPL.
+- [ ] **Expected result**: Checkpoints are listed; rollback reports success or a clear error.
+- [ ] **Action**: `/tdd <small task>` and `/workflow dev-feature <task>`.
+- [ ] **Expected result**: The TDD loop reports attempts and pass/fail; the workflow announces each step.
+
+### 14.5 Host isolation (non-regression of the extraction)
+- [ ] **Action**: Run `npm run build:cli`.
+- [ ] **Expected result**: The build **succeeds** — proving no `vscode` import leaked into the shared core (the build intentionally does not mark `vscode` as external).
+- [ ] **Action**: Run `npm run build` and press `F5`.
+- [ ] **Expected result**: The extension still builds and behaves exactly as before the monorepo extraction (chat, agent, tools, diff review, checkpoints).
+
+---
+
+**Test book closed.** If all these steps work as expected, the extension is robust, **ready for publication on the VS Code Marketplace (V1.0)**, and for optimal use with any LLM. Section 14 additionally covers the Jarvis CLI front-end.

@@ -9,8 +9,8 @@ import {
   BUILTIN_MCP_EQUIVALENTS,
   isBuiltinShadowed,
   type ActiveMcpTools
-} from '../../src/backend/core/agent/builtin-dedup.js';
-import { createBuiltinTools } from '../../src/backend/core/agent/tool-registry.js';
+} from '../../packages/core/src/core/agent/builtin-dedup.js';
+import { createBuiltinTools } from '../../packages/core/src/core/agent/tool-registry.js';
 
 function active(entries: Record<string, string[]>): ActiveMcpTools {
   return new Map(Object.entries(entries).map(([server, tools]) => [server, new Set(tools)]));

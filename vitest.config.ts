@@ -28,7 +28,26 @@ export default defineConfig({
           exclude: ['node_modules', 'dist']
         },
         resolve: {
-          alias: { '@': resolve(__dirname, 'src') }
+          alias: {
+            '@': resolve(__dirname, 'src'),
+            '@jarvis/core/vscode': resolve(__dirname, 'packages/core/src/vscode.ts'),
+            '@jarvis/core': resolve(__dirname, 'packages/core/src/index.ts')
+          }
+        }
+      },
+      {
+        test: {
+          name: 'cli',
+          globals: true,
+          environment: 'node',
+          include: ['packages/cli/test/**/*.test.ts'],
+          exclude: ['node_modules', 'dist']
+        },
+        resolve: {
+          alias: {
+            '@jarvis/core/vscode': resolve(__dirname, 'packages/core/src/vscode.ts'),
+            '@jarvis/core': resolve(__dirname, 'packages/core/src/index.ts')
+          }
         }
       },
       {

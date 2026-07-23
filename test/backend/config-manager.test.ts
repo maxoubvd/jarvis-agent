@@ -15,7 +15,7 @@ import {
   normalizeModelsSection,
   EMPTY_CONFIG,
   type JarvisConfig
-} from '../../src/backend/config/config-manager.js';
+} from '../../packages/core/src/config/config-manager.js';
 
 let tmpDir: string;
 let globalPath: string;

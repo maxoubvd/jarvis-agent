@@ -1,18 +1,22 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   readFileTool,
   writeFileTool,
   assertPathWithinWorkspace
-} from '../../src/backend/core/mcp/tools/fileSystem.js';
-import * as vscode from 'vscode';
+} from '../../packages/core/src/core/mcp/tools/fileSystem.js';
 
-vi.mock('vscode', () => ({
-  workspace: {
-    workspaceFolders: [{ uri: { fsPath: '/test-workspace' } }]
-  }
-}));
+// The core is host-agnostic: the workspace root comes from JARVIS_WORKSPACE
+// (the VS Code extension seeds it at activation; the CLI relies on process.cwd()).
+// There is no longer a "workspace not found" state — a root always resolves.
 
 describe('FileSystem Tools', () => {
+  beforeEach(() => {
+    process.env.JARVIS_WORKSPACE = '/test-workspace';
+  });
+  afterEach(() => {
+    delete process.env.JARVIS_WORKSPACE;
+  });
+
   describe('assertPathWithinWorkspace', () => {
     it('should allow paths within workspace', () => {
       expect(() =>
@@ -28,33 +32,16 @@ describe('FileSystem Tools', () => {
   });
 
   describe('readFileTool', () => {
-    it('should throw error if workspace not found', async () => {
-      vi.spyOn(vscode.workspace, 'workspaceFolders', 'get').mockReturnValue(undefined);
-      await expect(readFileTool('test.txt')).rejects.toThrow('Workspace not found');
-    });
-
-    it('should prevent path traversal', async () => {
-      vi.spyOn(vscode.workspace, 'workspaceFolders', 'get').mockReturnValue([
-        { uri: { fsPath: '/test-workspace' }, name: 'test', index: 0 }
-      ]);
+    it('resolves paths against the JARVIS_WORKSPACE root and blocks traversal', async () => {
       await expect(readFileTool('../../../etc/passwd')).rejects.toThrow(/Access denied/);
     });
   });
 
   describe('writeFileTool', () => {
-    beforeEach(() => {
-      vi.restoreAllMocks();
-    });
-
-    it('should prevent path traversal', async () => {
+    it('resolves paths against the JARVIS_WORKSPACE root and blocks traversal', async () => {
       await expect(writeFileTool('../../../etc/passwd', 'test content'))
         .rejects
         .toThrow(/Access denied/);
-    });
-
-    it('should throw error if workspace not found', async () => {
-      vi.spyOn(vscode.workspace, 'workspaceFolders', 'get').mockReturnValue(undefined);
-      await expect(writeFileTool('test.txt', 'content')).rejects.toThrow('Workspace not found');
     });
   });
 });

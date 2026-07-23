@@ -5,18 +5,22 @@
     "moduleResolution": "node16",
     "lib": ["ES2020", "DOM"],
     "outDir": "dist",
-    "rootDir": "src",
     "strict": true,
     "sourceMap": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "types": ["node", "vscode"]
+    "types": ["node", "vscode"],
+    "baseUrl": ".",
+    "paths": {
+      "@jarvis/core": ["packages/core/src/index.ts"],
+      "@jarvis/core/vscode": ["packages/core/src/vscode.ts"]
+    }
   },
   "include": [
     "src/extension.ts",
-    "src/backend/**/*.ts"
+    "packages/core/src/**/*.ts"
   ],
   "exclude": ["node_modules", "dist", "**/*.test.ts", "src/frontend/**"]
 }

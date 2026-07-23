@@ -1,7 +1,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import * as vscode from 'vscode';
 import { SandboxManager } from '../../utils/sandbox.js';
+import { getWorkspaceRoot } from '../../utils/workspace.js';
 
 let sandbox: SandboxManager | null = null;
 
@@ -39,7 +39,7 @@ function notifyChange(workspaceFolder: string, resolvedPath: string, before: str
 }
 
 function getWorkspaceFolder(): string {
-  const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const workspaceFolder = getWorkspaceRoot();
   if (!workspaceFolder) {
     throw new Error('Workspace not found');
   }

@@ -107,6 +107,22 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
       this.hitl.setMode(mode);
     }
 
+    // Native modal fallback: used when the webview approval card is unavailable
+    // (the primary prompt handler returns null). Core is vscode-free, so the
+    // extension supplies the actual VS Code dialog here.
+    this.hitl.setFallbackHandler(async request => {
+      const result = await vscode.window.showInformationMessage(
+        `Jarvis needs to run an action: ${request.description}`,
+        { modal: true, detail: request.detail },
+        'Approve',
+        'Approve for session',
+        'Deny'
+      );
+      if (result === 'Approve') return { decision: 'allow' };
+      if (result === 'Approve for session') return { decision: 'allow-session' };
+      return { decision: 'deny' };
+    });
+
     this.changeTracker.onDidChange.event(() => {
       this.onChangesChanged?.();
       if (this._view) {
@@ -370,7 +386,10 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
         this.onGetAnalytics(webview);
         break;
       case 'exportAnalytics':
-        await this.getAnalytics()?.export().catch(() => undefined);
+        await this.getAnalytics()?.export(async exportPath => {
+          const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(exportPath));
+          await vscode.window.showTextDocument(doc, { preview: false });
+        }).catch(() => undefined);
         break;
       case 'setHitlMode':
         if (typeof message.mode === 'string') {
@@ -1741,7 +1760,7 @@ export class JarvisSidebarProvider implements vscode.WebviewViewProvider {
     task: string,
     persona?: string,
     history?: ChatMessage[],
-    options: { kind?: import('../../frontend/shared/types.js').MessageKind, isSmallModel?: boolean, allowedToolPrefixes?: string[], planOnly?: boolean, messageId?: string } = {}
+    options: { kind?: 'text' | 'tool' | 'thinking' | 'step' | 'plan' | 'inline', isSmallModel?: boolean, allowedToolPrefixes?: string[], planOnly?: boolean, messageId?: string } = {}
   ): Promise<string | void> {
     this.post(webview, { type: 'chatStart' });
     this.currentAbortController = new AbortController();
@@ -2616,7 +2635,10 @@ export class JarvisExtension {
         vscode.window.showWarningMessage('Jarvis: analytics unavailable (workspace required).');
         return;
       }
-      await analytics.export();
+      await analytics.export(async exportPath => {
+        const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(exportPath));
+        await vscode.window.showTextDocument(doc, { preview: false });
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       vscode.window.showErrorMessage(`Jarvis export: ${msg}`);

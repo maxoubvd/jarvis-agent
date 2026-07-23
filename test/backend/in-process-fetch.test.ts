@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { createFetchServer, htmlToMarkdown } from '../../src/backend/core/mcp/in-process.js';
+import { createFetchServer, htmlToMarkdown } from '../../packages/core/src/core/mcp/in-process.js';
 
 function stubFetch(body: string, init: { ok?: boolean; status?: number; contentType?: string } = {}) {
   const { ok = true, status = 200, contentType = 'text/html; charset=utf-8' } = init;

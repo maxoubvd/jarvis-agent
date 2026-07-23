@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { loadRules, renderRules } from '../../src/backend/services/rules.js';
-import type { JarvisConfig } from '../../src/backend/config/config-manager.js';
+import { loadRules, renderRules } from '../../packages/core/src/services/rules.js';
+import type { JarvisConfig } from '../../packages/core/src/config/config-manager.js';
 
 function config(rules: JarvisConfig['rules']): JarvisConfig {
   return { version: 1, models: { default: null, items: [] }, rules };

@@ -3,8 +3,8 @@ import {
   loadPrompts,
   expandPrompt,
   normalizePromptName
-} from '../../src/backend/services/prompts.js';
-import type { JarvisConfig, PromptItem } from '../../src/backend/config/config-manager.js';
+} from '../../packages/core/src/services/prompts.js';
+import type { JarvisConfig, PromptItem } from '../../packages/core/src/config/config-manager.js';
 
 function config(prompts: PromptItem[] | undefined): JarvisConfig {
   return { version: 1, models: { default: null, items: [] }, prompts };

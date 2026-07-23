@@ -5,7 +5,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), ver
 
 ## [Unreleased]
 
-_No unreleased changes yet._
+### Added
+- **Jarvis CLI (`jarvis-agent-cli`).** The extension's engine is now also a standalone terminal tool. `jarvis` opens a home page + interactive REPL with full parity: agentic chat (automatic/fast/plan), `/agent`, `/tdd`, `/workflow`, `/init`, tools with **terminal** HITL approvals (inquirer), checkpoints, RAG, `@file:`/`@docs:`/`@Agent` mentions, and a `jarvis settings` navigator — all over the same `~/.jarvis/config.json` the extension uses. The terminal UI reuses the extension's red (`#c1272d`) + gold (`#e8b84b`) design language via true-color ANSI. See `docs/cli-guide.md`.
+
+### Changed
+- **Monorepo with a shared `@jarvis/core` package.** `src/backend` moved to `packages/core` and was made **host-agnostic (no `vscode` import in its public API)** behind a small host seam: `getWorkspaceRoot()` (`JARVIS_WORKSPACE`/`process.cwd()`), a vscode-free `EventEmitter`, an injectable "currently open file" provider (`setActiveFileProvider`), an injectable HITL fallback (`setFallbackHandler`), and an `onExported` callback for analytics. The extension (`src/extension.ts` + the Svelte webview) and the new `packages/cli` are two front-ends over this one core; the extension bundles it from source via an esbuild alias, so packaging is unchanged.
 
 ## [1.1.0] - 2026-07-17
 

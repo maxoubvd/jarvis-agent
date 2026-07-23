@@ -1,7 +1,7 @@
 import * as fs from 'fs/promises';
 import * as fsSync from 'fs';
 import * as path from 'path';
-import * as vscode from 'vscode';
+import { getWorkspaceRoot } from '../core/utils/workspace.js';
 
 export interface ActionMetadata {
   type: string;
@@ -47,7 +47,7 @@ export class AnalyticsCollector {
   private stats: JarvisStats;
 
   constructor() {
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    const workspaceFolder = getWorkspaceRoot();
     if (!workspaceFolder) {
       throw new Error('Workspace introuvable');
     }
@@ -117,16 +117,20 @@ export class AnalyticsCollector {
     return this.stats;
   }
 
-  /** Writes a formatted export and opens it in the editor. */
-  public async export(): Promise<void> {
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-    if (!workspaceFolder) return;
+  /**
+   * Writes a formatted export to disk and returns its path. Opening/surfacing it
+   * is a host concern: the VS Code extension passes an `onExported` that opens the
+   * file in the editor; the CLI passes one that prints the path.
+   */
+  public async export(onExported?: (path: string) => void | Promise<void>): Promise<string | undefined> {
+    const workspaceFolder = getWorkspaceRoot();
+    if (!workspaceFolder) return undefined;
 
     const exportPath = path.join(workspaceFolder, '.vscode', `jarvis-analytics-export-${Date.now()}.json`);
     await fs.mkdir(path.dirname(exportPath), { recursive: true });
     await fs.writeFile(exportPath, JSON.stringify(this.stats, null, 2), 'utf-8');
 
-    const doc = await vscode.workspace.openTextDocument(exportPath);
-    await vscode.window.showTextDocument(doc);
+    await onExported?.(exportPath);
+    return exportPath;
   }
 }

@@ -1,7 +1,7 @@
 import * as fs from 'fs/promises';
 import * as fsSync from 'fs';
 import * as path from 'path';
-import * as vscode from 'vscode';
+import { getWorkspaceRoot } from './workspace.js';
 
 export interface AccessResult {
   allowed: boolean;
@@ -14,7 +14,7 @@ export class SandboxManager {
   private ignorePath: string;
 
   constructor(workspaceRoot?: string) {
-    const folder = workspaceRoot ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    const folder = workspaceRoot ?? getWorkspaceRoot();
     if (!folder) {
       throw new Error('Workspace not found');
     }
@@ -109,8 +109,7 @@ export class SandboxManager {
     ].join('\n');
 
     try {
-      const uri = vscode.Uri.file(this.ignorePath);
-      await vscode.workspace.fs.writeFile(uri, new TextEncoder().encode(content));
+      await fs.writeFile(this.ignorePath, content, 'utf-8');
     } catch (e) {
       console.error('Failed to create .jarvisignore', e);
     }
@@ -180,7 +179,7 @@ export class SandboxManager {
   /** Ensure the ignore file exists asynchronously */
   public async ensureIgnoreFile(): Promise<void> {
     try {
-      await vscode.workspace.fs.stat(vscode.Uri.file(this.ignorePath));
+      await fs.stat(this.ignorePath);
     } catch {
       // File does not exist
       await this.generateDefaultIgnoreAsync();

@@ -45,7 +45,7 @@ vi.mock('@modelcontextprotocol/sdk/inMemory.js', () => ({
   InMemoryTransport: { createLinkedPair: () => [{}, {}] }
 }));
 
-import { JarvisMcpClient } from '../../src/backend/core/mcp/client.js';
+import { JarvisMcpClient } from '../../packages/core/src/core/mcp/client.js';
 
 describe('JarvisMcpClient stderr capture', () => {
   beforeEach(() => {

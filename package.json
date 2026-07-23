@@ -44,10 +44,16 @@
       "description": "Jarvis Agent's agent tools (terminal execution, file read/write) require a trusted workspace to run."
     }
   },
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
+    "typecheck:core": "tsc -p packages/core/tsconfig.json --noEmit",
     "build:extension": "tsc -p tsconfig.json --noEmit && node build-extension.mjs",
     "build:webview": "vite build",
+    "build:cli": "npm run build --workspace=jarvis-agent-cli",
     "build": "npm run build:extension && npm run build:webview",
+    "build:all": "npm run build && npm run build:cli",
     "watch:webview": "vite build --watch",
     "package": "npm run build && node copy-static.js && node strip-vendor-assets.mjs && vsce package",
     "publish": "vsce publish",

@@ -4,13 +4,24 @@ import {
   editFileTool,
   listDirectoryTool
 } from '../mcp/tools/fileSystem.js';
-import * as vscode from 'vscode';
 import { executeTerminalCommand } from '../mcp/tools/terminal.js';
 import { backgroundProcesses } from '../../services/background-processes.js';
 import { gitStatus, gitDiff, gitLog } from '../mcp/tools/git.js';
 import { webSearch } from '../mcp/tools/webSearch.js';
 import { globToRegex } from '../utils/glob.js';
+import { getWorkspaceRoot } from '../utils/workspace.js';
 import { sanitizeTodoItems } from './todo.js';
+
+/**
+ * The file "currently open" is a host concept. The VS Code extension injects a
+ * reader backed by `vscode.window.activeTextEditor`; the CLI can inject the last
+ * `@file:` it opened, or leave it unset (the tool then reports no open file).
+ */
+export type ActiveFileProvider = () => { path: string; content: string } | undefined;
+let activeFileProvider: ActiveFileProvider | null = null;
+export function setActiveFileProvider(fn: ActiveFileProvider | null): void {
+  activeFileProvider = fn;
+}
 
 /** @deprecated import from `core/utils/glob.js` — re-exported here for backward compat. */
 export { globToRegex };
@@ -203,12 +214,11 @@ export function createBuiltinTools(): ToolDefinition[] {
       parameters: [],
       hitlAction: 'read_file',
       execute: async () => {
-        const editor = vscode.window.activeTextEditor;
-        if (!editor) return '(no file open in the editor)';
-        const relPath = vscode.workspace.asRelativePath(editor.document.uri, false);
-        const text = editor.document.getText();
+        const active = activeFileProvider?.();
+        if (!active) return '(no file open in the editor)';
+        const text = active.content;
         const truncated = text.length > 20_000 ? text.slice(0, 20_000) + '\n… (truncated)' : text;
-        return `Open file: ${relPath}\n\n${truncated}`;
+        return `Open file: ${active.path}\n\n${truncated}`;
       }
     },
     {
@@ -308,7 +318,7 @@ export function createBuiltinTools(): ToolDefinition[] {
       ],
       hitlAction: 'terminal',
       execute: async args => {
-        const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+        const cwd = getWorkspaceRoot();
         const status = backgroundProcesses.start(str(args, 'command'), cwd);
         return `Background process started: id=${status.id}, pid=${status.pid ?? '?'} — ${status.command}`;
       }

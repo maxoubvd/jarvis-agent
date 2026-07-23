@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { HITLManager } from '../../src/backend/services/hitl.js';
+import { HITLManager } from '../../packages/core/src/services/hitl.js';
 
 vi.mock('vscode', () => ({
   window: {
