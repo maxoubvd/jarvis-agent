@@ -21,10 +21,26 @@ Then, from inside any project:
 jarvis
 ```
 
-No global install needed for a quick try: `npx jarvis-agent-cli`.
+No global install needed for a quick try: `npx jarvis-agent-cli`. To verify: `jarvis --version`.
 
-> The CLI bundles the local RAG stack (`@xenova/transformers`, `web-tree-sitter`), so the first
-> install pulls a sizeable dependency — this is the price of on-device embeddings with no cloud.
+> The CLI relies on the local RAG stack (`@xenova/transformers`, `web-tree-sitter`), which stays
+> external to the bundle — so the install pulls a sizeable dependency. That is the price of
+> on-device embeddings with no cloud.
+
+### Working on the CLI itself
+
+If you're developing it rather than just using it, work from the repository instead:
+
+```bash
+git clone https://github.com/maxoubvd/extension-VS-code.git
+cd extension-VS-code
+npm install
+npm run build:cli
+npm link --workspace jarvis-agent-cli   # `jarvis` now points at your local build
+```
+
+Re-run `npm run build:cli` after each change — the link picks up the new build automatically.
+`npm unlink -g jarvis-agent-cli` restores the published version.
 
 ## First run
 

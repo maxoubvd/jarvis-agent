@@ -3,7 +3,7 @@
   "displayName": "Jarvis Code Agent",
   "publisher": "MaximeBendavid",
   "description": "Agentic VS Code extension - Your autonomous software engineer. Multi-provider agentic chat (local or cloud), inline editing (Cmd+K), Auto-TDD, local RAG, specialized agents, Git checkpoints.",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "type": "module",
   "main": "./dist/extension.js",
   "icon": "media/jarvis-icon.png",
